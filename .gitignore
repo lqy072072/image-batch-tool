@@ -3,30 +3,58 @@
 图片批处理工具.exe.WebView2/
 WebViewApp.pdb
 
-# WebView2 SDK DLLs (redistributable, user installs WebView2 runtime)
+# WebView2 SDK / native binaries (provided by installer or local build deps)
+/webview2/
 Microsoft.Web.WebView2.*.dll
 WebView2Loader.dll
+/onnxruntime.dll
+/imgproc.dll
+/gpu_imgproc.dll
+/native/*.dll
 
-# Build/packaging work
-installer_work/
+# Large runtime assets: shipped in the installer, not tracked in source
+/luts/
+/ai/models/
+/ai/ort/
+/ai/ort_extracted/
+/ai/ort-managed/
+/ai/genedit/
+/ai/models/genedit/
+/ai/models/cnclip/
+/ai/models/ocr/
+/ai/models/yolox/
+/ai/models/codeformer.onnx
+/ai/models/yunet_test.onnx
 
-# ONNX runtime C# NuGet packages (we use Python's onnxruntime)
-ai/ort/
-ai/ort_extracted/
-ai/ort-managed/
-
-# Rejected model (CodeFormer, not used)
-ai/models/codeformer.onnx
-ai/models/yunet_test.onnx
-
-# 大体积人脸模型：随 Release 资产发布，不入仓库
-ai/models/bisenet_resnet18.onnx
-ai/models/face_mesh_468.onnx
-ai/models/depth_vits.onnx
-ai/models/depth_vits.onnx.part
-
-# 本地嵌入式 Python 目录联接（由安装包/打包流程提供）
+# Build/packaging work and local embedded Python
+/installer_work/
 /python/
+/release_v*/
+
+# Installers and checksums
+/图片批处理工具_v*.exe
+/安装图片批处理工具.exe
+/*_安装包.exe
+/*.sha256
+
+# Release drafts, historical test reports, screenshots and promo material
+/.release_body*.md
+/v2.*_回归测试报告.md
+/v2.12_拆分与测试报告.md
+/AI功能候选清单_*.md
+/工程清理报告.md
+/人工清理报告.md
+/docs/
+/promo_*/
+/ScreenShot_*.jpg
+/_qa_*
+
+# Runtime state and generated skins
+/skin.txt
+/skins/*.png
+
+# Local shortcuts
+/*.lnk
 
 # Debug/test files
 crop_debug.log
@@ -59,38 +87,5 @@ ai_out_*.json
 Thumbs.db
 Desktop.ini
 
-# Root-level preview exports (canonical copies live in docs/screenshots)
-/美颜效果对比.png
-/下巴修复对比.png
-/AI增强对比.png
-/美颜示例_全套.jpg
-
-# Broken LUT backups (not distributed)
-luts/_失效文件备份/
-
-# 本地发布说明草稿
-/.release_body.md
+# Release id
 /.release_id
-
-# 本地 AI 模型目录（随 Release 安装包发布，不入源码仓库）
-/ai/models/cnclip/
-/ai/models/ocr/
-/ai/models/yolox/
-
-# 生成式修图运行时与大模型：随 Release 或首次下载，不入源码仓库
-/ai/genedit/
-/ai/models/genedit/
-
-# 本地发布产物（安装包不重复入库）
-/release_v*/
-
-# 演示相册与截图缓存（仅本机测试用）
-/docs/_demo_cache/
-/docs/demo_album_ai/
-/docs/screenshots/_demo_*.png
-/docs/screenshots/_topbar.png
-
-# 安装包与安装器产物
-/图片批处理工具_v*.exe
-/安装图片批处理工具.exe
-/*_安装包.exe
