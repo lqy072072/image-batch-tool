@@ -3272,7 +3272,10 @@ function albToggleTree(){
   if(!A.treeOpen){ A.folderPath=''; A.folderRoot=''; A.vDirty=true; A.vList=null; albRender(); }
   else { post('albfolders'); albRenderTree(); }
 }
-function albTreeNorm(s){ return String(s==null?'':s).replace(/\//g,'\\'); }
+function albTreeNorm(s){ return String(s==null?'':s).replace(/\//g,'\\').replace(/^\\+|\\+$/g,''); }
+function albTreeRel(s){ return albTreeNorm(s==='.'?'':s); }
+function albTreeKeyRoot(r){ return 'r|'+albTreeNorm(r).toLowerCase(); }
+function albTreeKeyDir(r,f){ return 'd|'+albTreeNorm(r).toLowerCase()+'|'+albTreeRel(f).toLowerCase(); }
 function albTreeToggle(ev,key){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   const A=window._alb; A.treeFold=A.treeFold||{};
@@ -3280,17 +3283,44 @@ function albTreeToggle(ev,key){
   albRenderTree();
 }
 function albTreeHidden(A,r,f){
-  const fold=A.treeFold||{}, rootKey='r|'+r;
+  const fold=A.treeFold||{}, rootKey=albTreeKeyRoot(r);
   if(fold[rootKey]) return true;
-  const parts=albTreeNorm(f).split('\\').filter(Boolean);
-  for(let i=1;i<parts.length;i++){
-    if(fold['d|'+r+'|'+parts.slice(0,i).join('\\')]) return true;
-  }
-  return false;
+  const rel=albTreeRel(f).toLowerCase(); if(!rel) return false;
+  const prefix='d|'+albTreeNorm(r).toLowerCase()+'|';
+  return Object.keys(fold).some(function(k){
+    if(!fold[k] || k.indexOf(prefix)!==0) return false;
+    const base=k.slice(prefix.length);
+    if(!base) return true;
+    return rel.indexOf(base+'\\')===0;
+  });
 }
-function albTreeHasChild(fs,r,f){
-  const base=albTreeNorm(f); if(!base) return false;
-  return fs.some(function(y){ return (y.r||'')===r && albTreeNorm(y.f).indexOf(base+'\\')===0; });
+function albTreeHasChild(nodes,f){
+  const rel=albTreeRel(f).toLowerCase();
+  return Object.keys(nodes).some(function(k){
+    return !!k && (rel ? k.indexOf(rel+'\\')===0 : true);
+  });
+}
+function albTreeBuild(fs){
+  const roots=[], map={};
+  (fs||[]).forEach(function(x){
+    const rk=albTreeNorm(x.r||'').toLowerCase();
+    let root=map[rk];
+    if(!root){ root={r:x.r||'',n:0,nodes:{}}; map[rk]=root; roots.push(root); }
+    const rel=albTreeRel(x.f==='.'?'':x.f);
+    const parts=rel?rel.split('\\').filter(Boolean):[];
+    const n=parseInt(x.n,10)||0;
+    root.n+=n;
+    let node=root.nodes['']; if(!node){ node={f:'',n:0}; root.nodes['']=node; }
+    node.n+=n;
+    let path='';
+    parts.forEach(function(part){
+      path=path?path+'\\'+part:part;
+      const k=path.toLowerCase();
+      node=root.nodes[k]; if(!node){ node={f:path,n:0}; root.nodes[k]=node; }
+      node.n+=n;
+    });
+  });
+  return roots;
 }
 function albRenderTree(){
   const A=window._alb, t=document.getElementById('albTree'); if(!t) return;
@@ -3298,19 +3328,19 @@ function albRenderTree(){
   A.treeFold=A.treeFold||{};
   let html='<div class="tr-row'+(A.folderPath?'':' sel')+'" onclick="albPickFolder(\'\',\'\')">全部文件夹</div>';
   if(!fs.length) html+='<div class="tr-none">暂无文件夹统计，先扫描相册</div>';
-  const groups={}; fs.forEach(function(x){ const r=x.r||''; if(!groups[r]) groups[r]=[]; groups[r].push(x); });
-  Object.keys(groups).forEach(function(r){
-    const rootCollapsed=!!A.treeFold['r|'+r];
-    html+='<div class="tr-root" data-k="'+escAttr('r|'+r)+'" title="'+escAttr(r)+'" onclick="albTreeToggle(event,this.dataset.k)"><span class="tr-caret">'+(rootCollapsed?'▸':'▾')+'</span><span class="tr-name">'+escHtml(r)+'</span></div>';
-    groups[r].sort(function(a,b){ return String(a.f||'').localeCompare(String(b.f||'')); }).forEach(function(x){
-      const f=x.f==='.'?'':x.f; const depth=f?f.split(/[\\/]/).length:0;
+  albTreeBuild(fs).forEach(function(root){
+    const r=root.r, rootCollapsed=!!A.treeFold[albTreeKeyRoot(r)];
+    html+='<div class="tr-root" data-k="'+escAttr(albTreeKeyRoot(r))+'" title="'+escAttr(r)+'" onclick="albTreeToggle(event,this.dataset.k)"><span class="tr-caret">'+(rootCollapsed?'▸':'▾')+'</span><span class="tr-name">'+escHtml(r)+'</span></div>';
+    Object.keys(root.nodes).sort(function(a,b){ return a.localeCompare(b); }).forEach(function(k){
+      const x=root.nodes[k], f=x.f;
       if(albTreeHidden(A,r,f)) return;
       const sel=(A.folderPath && A.folderRoot===r && A.folderPath===f)?' sel':'';
-      const hasChild=albTreeHasChild(fs,r,f);
-      const dirKey='d|'+r+'|'+f;
+      const hasChild=albTreeHasChild(root.nodes,f);
+      const dirKey=albTreeKeyDir(r,f);
       const dirCollapsed=!!A.treeFold[dirKey];
       const caret=hasChild?'<span class="tr-caret" data-k="'+escAttr(dirKey)+'" title="折叠 / 展开" onclick="albTreeToggle(event,this.dataset.k)">'+(dirCollapsed?'▸':'▾')+'</span>':'<span class="tr-caret empty">▾</span>';
-      html+='<div class="tr-row'+sel+'" style="padding-left:'+(8+depth*12)+'px" title="'+escAttr((r?r+'\\':'')+(f||''))+'" onclick="albPickFolder(\''+escAttr(albJs(r))+'\',\''+escAttr(albJs(f))+'\')">'+caret+'<span>'+(f?escHtml(f.split(/[\\/]/).pop()):'根目录')+'</span><span class="n">'+(x.n||0)+'</span></div>';
+      const depth=f?f.split('\\').length:0;
+      html+='<div class="tr-row'+sel+'" data-f="'+escAttr(f)+'" data-r="'+escAttr(r)+'" style="padding-left:'+(8+depth*12)+'px" title="'+escAttr((r?r+'\\':'')+(f||''))+'" onclick="albPickFolder(\''+escAttr(albJs(r))+'\',\''+escAttr(albJs(f))+'\')">'+caret+'<span>'+(f?escHtml(f.split('\\').pop()):'根目录')+'</span><span class="n">'+(x.n||0)+'</span></div>';
     });
   });
   t.innerHTML=html;

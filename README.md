@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.47-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.48-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.47**：相册顶栏「相册」入口、左侧「我的相册」面板以及选择/右键「加入相册…」全部移除；设置和选择菜单里的「批量移动…」也移除。v2.46 的编辑分隔条、文件夹树折叠、三皮肤修复和「去重」移位保持不变。
+> 当前版本 **v2.48**：相册文件夹侧边栏按真实目录层级补齐中间目录，任意父目录折叠时会收起该目录下的全部子目录；v2.47 对「相册」入口和「批量移动」的移除保持不变。
 
 直接下载最新安装包（约 1.21GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.47_setup.exe`；本地构建文件名为 `图片批处理工具_v2.47_安装包.exe`（1,297,490,764 字节，约 1.21 GB）；SHA256 `B7B52798538C542F5E42380E462279C7C86C6A5BC1805BB2E0436EB0732A4EC4`，完整测试记录见 [`v2.47_回归测试报告.md`](v2.47_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.48_setup.exe`；本地构建文件名为 `图片批处理工具_v2.48_安装包.exe`（1,297,491,065 字节，约 1.21 GB）；SHA256 `E1B2219EC29790DAF3B6DBC4B817037399D5021F47151AF45DDEA5D5CD555EE5`，完整测试记录见 [`v2.48_回归测试报告.md`](v2.48_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -69,6 +69,17 @@ GitHub Release 资产名为 `image-batch-tool_v2.47_setup.exe`；本地构建文
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.48 更新
+
+![v2.48 文件夹侧边栏：按真实目录层级显示，中间目录也可折叠](docs/screenshots/v248_album_tree.png)
+
+![v2.48 折叠父目录：该目录下全部子目录一起收起](docs/screenshots/v248_album_tree_collapsed.png)
+
+- **修复文件夹折叠**：侧边栏按真实相对路径补齐所有中间目录，不再只显示含图片的叶子目录；父目录、任意中间目录和根目录行都能直接折叠。
+- **整棵子树一起收起**：折叠时按完整路径前缀隐藏该目录下所有层级子目录，展开后恢复；路径分隔符、大小写和深浅层级不再导致漏折叠或只折一层。
+- **只动文件夹侧边栏**：缩略图、选择/删除、搜索、去重、私密相册、回收站、人物/地图、编辑分隔条和 v2.47 的精简结果均未改。
+- **回归**：文件夹树专项 13/13 PASS；v2.47 相册 UI 8/8 PASS；安装版编辑分隔条 5/5 PASS。详见 [`v2.48_回归测试报告.md`](v2.48_回归测试报告.md)。
 
 ### v2.47 更新
 
