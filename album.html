@@ -344,6 +344,8 @@ body.skin-light .dup-cell .nm { color:#222; }
 body.mode-album .main { display:none; }
 body.mode-album #titlebar { display:none; }
 body.mode-album .alb-overlay { display:flex !important; }
+body.mode-album .alb-overlay { bottom:36px; }
+body.mode-album #albumExportBar { position:fixed; left:0; right:0; bottom:0; z-index:700; display:flex!important; visibility:visible!important; height:36px; min-height:36px; padding:4px 10px; gap:6px; flex-wrap:nowrap; overflow-x:auto; }
 .alb-titlebar { border-bottom:1px solid #1a1a1a !important; }
 .alb-head { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid #333; background:#2b2b2b; flex-shrink:0; flex-wrap:wrap; position:relative; z-index:20; }
 .alb-search-row { display:none; flex:0 0 100%; align-items:center; gap:10px; padding-top:2px; }
@@ -1093,7 +1095,7 @@ window.addEventListener('mouseup', function(e) {
   </div>
 </div>
 
-<div class="bottombar">
+<div class="bottombar" id="albumExportBar">
   <span class="bottom-label">预览</span>
   <select class="bottom-select" id="previewSize" onchange="setParam('preview_max',this.value)" title="预览分辨率（不影响导出质量）">
     <option value="800">流畅 800</option>
