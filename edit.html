@@ -822,6 +822,7 @@ window.addEventListener('mouseup', function(e) {
   <div class="right">
     <div class="right-sticky">
       <div class="edx-groups" id="edxGroups">
+        <span class="edx-gr" data-g="lut" onclick="edxGroup('lut')">LUT</span>
         <span class="edx-gr on" data-g="basic" onclick="edxGroup('basic')">调整</span>
         <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
         <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
@@ -841,7 +842,7 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
-    <div class="right-section">
+    <div class="right-section" id="lutParamSection">
       <div class="section-header"><span>LUT 参数</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div id="currentLut" style="margin-bottom:10px;padding:8px 10px;background:#1a1a1a;border:1px solid #3c3c3c;border-radius:4px;font-size:11px;color:#888">未选择 LUT</div>
@@ -863,7 +864,7 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
-    <div class="right-section">
+    <div class="right-section" id="edxColorSection">
       <div class="section-header"><span>色彩调整</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div style="display:flex;gap:6px;margin-bottom:10px">
@@ -981,7 +982,7 @@ window.addEventListener('mouseup', function(e) {
     </div>
 
     <div class="right-section" id="aiToolsSection">
-      <div class="section-header"><span>AI 工具箱 <span class="gen-badge">10 项</span></span><span class="arrow">▼</span></div>
+      <div class="section-header"><span>AI 工具箱 <span class="gen-badge" id="aiToolsBadge">10 项</span></span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div class="ai-progress" id="aiProgress" style="display:none"><span class="gen-spin"></span><span id="aiProgressText">处理中…</span></div>
 
@@ -1127,7 +1128,7 @@ window.addEventListener('mouseup', function(e) {
     </div>
 
     <div class="right-section" id="aiPortraitSection">
-      <div class="section-header"><span>人像 AI <span class="gen-badge">FLUX</span></span><span class="arrow">▼</span></div>
+      <div class="section-header"><span>人像 AI <span class="gen-badge" id="aiPortraitBadge">FLUX</span></span><span class="arrow">▼</span></div>
       <div class="section-body">
         <details class="ai-tool">
           <summary><b>眼神光 / 微笑强化</b><span class="ai-tag">FLUX</span></summary>
@@ -5540,8 +5541,26 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
-<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='tsPanel'||s.id==='aiStyleSection'||s.id==='fxEnhanceSection') grp='fx'; else if(s.id==='aiPortraitSection') grp='portrait'; else if(s.id==='genEditSection'||s.id==='aiToolsSection') grp='gen'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(window._lastHist); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
-try{ edxGroup('basic'); }catch(e){}
+<script>function edxUiMigrate(){
+  var pro=document.getElementById('edxProSection'), color=document.getElementById('edxColorSection');
+  if(pro && color && color.parentNode===pro.parentNode){ color.parentNode.insertBefore(pro, color); }
+  var src=document.getElementById('aiToolsSection'), dst=document.getElementById('aiPortraitSection');
+  if(src && dst){
+    var dstBody=dst.querySelector('.section-body');
+    var portraitTitles=['换背景 / 换天空','面部局部精修','智能裁切构图','老照片修复 / 上色'];
+    var moved=0;
+    src.querySelectorAll('details.ai-tool').forEach(function(d){
+      var b=d.querySelector('summary b'), t=b?(b.textContent||'').trim():'';
+      if(portraitTitles.indexOf(t)>=0){ if(dstBody) dstBody.appendChild(d); moved++; }
+    });
+    var remain=src.querySelectorAll('details.ai-tool').length;
+    var all=dst.querySelectorAll('details.ai-tool').length;
+    var sb=document.getElementById('aiToolsBadge'); if(sb) sb.textContent=remain+' 项';
+    var pb=document.getElementById('aiPortraitBadge'); if(pb) pb.textContent=all+' 项';
+  }
+}
+function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='lutParamSection') grp='lut'; else if(s.id==='tsPanel'||s.id==='aiStyleSection'||s.id==='fxEnhanceSection') grp='fx'; else if(s.id==='aiPortraitSection') grp='portrait'; else if(s.id==='genEditSection'||s.id==='aiToolsSection') grp='gen'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'||g==='lut'){ try{ if(window.drawHist) drawHist(window._lastHist); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
+try{ edxUiMigrate(); edxGroup('basic'); }catch(e){}
 </script>
 <style>
 .edx-groups{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #33363d;background:#202226;position:static;z-index:auto}
@@ -5687,18 +5706,18 @@ body.skin-light .ai-match,body.skin-frost .ai-match,body.skin-aurora .ai-match{b
 body.skin-light .ai-match b,body.skin-frost .ai-match b,body.skin-aurora .ai-match b{color:#14612f}
 body.skin-light .ai-group-title,body.skin-frost .ai-group-title,body.skin-aurora .ai-group-title{color:#14527f}
 /* 用 ID 压过皮肤后加载的 !important 规则，保证 AI 工具箱提示文字在浅色皮肤上不发白 */
-body.skin-light #aiToolsSection .ai-hint,body.skin-frost #aiToolsSection .ai-hint,body.skin-aurora #aiToolsSection .ai-hint{color:#3f4a59 !important;background:#f5f8fc !important;border-color:#dde3eb !important}
-body.skin-light #aiToolsSection .ai-topstatus,body.skin-frost #aiToolsSection .ai-topstatus,body.skin-aurora #aiToolsSection .ai-topstatus{color:#36414f !important}
-body.skin-light #aiToolsSection .ai-tool-status,body.skin-frost #aiToolsSection .ai-tool-status,body.skin-aurora #aiToolsSection .ai-tool-status{color:#22303f !important}
-body.skin-light #aiToolsSection .ai-tool-status.ok,body.skin-frost #aiToolsSection .ai-tool-status.ok,body.skin-aurora #aiToolsSection .ai-tool-status.ok{color:#14612f !important}
-body.skin-light #aiToolsSection .ai-tool-status.err,body.skin-frost #aiToolsSection .ai-tool-status.err,body.skin-aurora #aiToolsSection .ai-tool-status.err{color:#a81818 !important}
-body.skin-light #aiToolsSection .ai-boundary,body.skin-frost #aiToolsSection .ai-boundary,body.skin-aurora #aiToolsSection .ai-boundary{color:#2c3a49 !important;border-color:#b8c2cf !important}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-hint,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-hint,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-hint{color:#3f4a59 !important;background:#f5f8fc !important;border-color:#dde3eb !important}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-topstatus,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-topstatus,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-topstatus{color:#36414f !important}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status{color:#22303f !important}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.ok,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.ok,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.ok{color:#14612f !important}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.err,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.err,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.err{color:#a81818 !important}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-boundary,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-boundary,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-boundary{color:#2c3a49 !important;border-color:#b8c2cf !important}
 body.skin-light .ai-tool .mini-sel,body.skin-frost .ai-tool .mini-sel,body.skin-aurora .ai-tool .mini-sel{background:#fff;color:#222;border-color:#cfd6df}
 body.skin-light .ai-progress,body.skin-frost .ai-progress,body.skin-aurora .ai-progress{background:#eef6ff;border-color:#c9def2;color:#31516d}
 body.skin-light #genEditSection .chk,body.skin-frost #genEditSection .chk,body.skin-aurora #genEditSection .chk{color:#1c2733 !important}
 body.skin-light #genEditSection .gen-help,body.skin-frost #genEditSection .gen-help,body.skin-aurora #genEditSection .gen-help{color:#33404f !important}
-body.skin-light #aiToolsSection .ai-actions button,body.skin-frost #aiToolsSection .ai-actions button,body.skin-aurora #aiToolsSection .ai-actions button{background:linear-gradient(180deg,#2f7fc4,#24649c) !important;border:1px solid #205c91 !important;color:#fff !important;text-shadow:0 1px 1px rgba(0,0,0,.18);box-shadow:0 1px 2px rgba(20,50,80,.22)}
-body.skin-light #aiToolsSection .ai-actions .ai-alt-sm,body.skin-frost #aiToolsSection .ai-actions .ai-alt-sm,body.skin-aurora #aiToolsSection .ai-actions .ai-alt-sm{background:linear-gradient(180deg,#eef2f7,#dfe6ee) !important;border-color:#b9c4d1 !important;color:#22303f !important;text-shadow:none}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-actions button,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-actions button,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-actions button{background:linear-gradient(180deg,#2f7fc4,#24649c) !important;border:1px solid #205c91 !important;color:#fff !important;text-shadow:0 1px 1px rgba(0,0,0,.18);box-shadow:0 1px 2px rgba(20,50,80,.22)}
+body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm{background:linear-gradient(180deg,#eef2f7,#dfe6ee) !important;border-color:#b9c4d1 !important;color:#22303f !important;text-shadow:none}
 /* 透明底结果用棋盘格背景，避免误以为白底 */
 .gen-result-pane img.alpha{background-color:#2a2d31;background-image:linear-gradient(45deg,#3a3e43 25%,transparent 25%,transparent 75%,#3a3e43 75%,#3a3e43),linear-gradient(45deg,#3a3e43 25%,transparent 25%,transparent 75%,#3a3e43 75%,#3a3e43);background-size:16px 16px;background-position:0 0,8px 8px}
 </style>

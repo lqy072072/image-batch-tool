@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using System.Web.Script.Serialization;
 
-// 相册的用户数据层：收藏/评分/旗标/隐藏/标签、自定义相册、智能相册、人物名称、保存搜索、私密相册。
+// 相册的用户数据层：收藏/评分/旗标/标签、自定义相册、智能相册、人物名称、保存搜索。
 // 独立于扫描索引，避免升级时破坏 alb_index.dat；只保存被用户标记过的照片，空库时文件极小。
 public sealed class AlbumMeta
 {
@@ -67,8 +67,6 @@ public sealed class AlbumMeta
             people["names"] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         if (!people.ContainsKey("hidden") || !(people["hidden"] is IEnumerable) || people["hidden"] is string) people["hidden"] = new List<object>();
         else people["hidden"] = ArrayState(people["hidden"]);
-        if (!state.ContainsKey("private") || !(state["private"] is Dictionary<string, object>))
-            state["private"] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
     }
 
     void Load()

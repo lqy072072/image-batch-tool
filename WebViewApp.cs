@@ -4442,9 +4442,6 @@ namespace ImageBatchTool
                     case "albfaceadmin":
                         if (parts.Length > 1) AlbumFaceAdmin(B64Text(parts[1]));
                         break;
-                    case "albprivhash":
-                        if (parts.Length > 2) SendPrivHash(B64Text(parts[1]), B64Text(parts[2]));
-                        break;
                     case "albdelete":
                         if (parts.Length > 1) AlbumDelete(parts[1].Split('\n'));
                         break;
@@ -7998,21 +7995,6 @@ namespace ImageBatchTool
         void SendAlbMeta()
         {
             try { Send("{\"type\":\"albmeta\",\"data\":" + (albMeta == null ? "{}" : albMeta.ToJson()) + "}"); }
-            catch { }
-        }
-
-        void SendPrivHash(string token, string password)
-        {
-            try
-            {
-                using (var sha = SHA256.Create())
-                {
-                    byte[] d = sha.ComputeHash(Encoding.UTF8.GetBytes(password ?? ""));
-                    var sb = new StringBuilder("sha256_");
-                    foreach (byte b in d) sb.Append(b.ToString("x2"));
-                    Send("{\"type\":\"albprivhash\",\"token\":" + JsonStr(token) + ",\"hash\":" + JsonStr(sb.ToString()) + "}");
-                }
-            }
             catch { }
         }
 

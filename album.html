@@ -1260,7 +1260,6 @@ window.addEventListener('mouseup', function(e) {
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">照片管理</div>
             <div class="alb-opt-item" onclick="albDedup()">照片去重…</div>
-            <div class="alb-opt-item" onclick="albPrivateOpen()">私密相册…</div>
             <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
           </div>
           <div class="alb-opt-sec">
@@ -1274,7 +1273,6 @@ window.addEventListener('mouseup', function(e) {
         <button class="mini-btn" id="albSelBtn" onclick="albToggleSelMenu(event)">选择 ▾</button>
         <div class="alb-opt-menu alb-sel-menu" id="albSelMenu">
           <div class="alb-opt-item alb-sel-item" id="albSelAllBtn" onclick="albSelMenuAll()">全选</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelHide()">隐藏 / 取消隐藏</div>
           <div class="alb-opt-item alb-sel-item" id="albEditBtn" onclick="albSelMenuEdit()">编辑选中</div>
           <div class="alb-opt-item alb-sel-item danger" id="albDelSelBtn" onclick="albSelMenuDelete()">删除选中</div>
         </div>
@@ -1326,7 +1324,6 @@ window.addEventListener('mouseup', function(e) {
 <div class="alb-ctx" id="albCtx">
   <div class="alb-ctx-item" data-a="info">详细信息</div>
   <div class="alb-ctx-item" data-a="folder">打开图片所在文件夹</div>
-  <div class="alb-ctx-item" data-a="hide">隐藏 / 取消隐藏</div>
   <div class="alb-ctx-item" data-a="save">另存为…</div>
   <div class="alb-ctx-item" data-a="edit">编辑</div>
   <div class="alb-ctx-item danger" data-a="del">删除</div>
@@ -2353,9 +2350,6 @@ if (window.chrome && chrome.webview) {
       if (m.dst && window._dupSrc) window._dupSrc = window._dupSrc;
     } else if (m.type === 'albmeta') {
       albApplyMeta(m.data || {});
-    } else if (m.type === 'albprivhash') {
-      const w=(window._albHashWait||{})[m.token];
-      if(w){ delete window._albHashWait[m.token]; w(m.hash||''); }
     } else if (m.type === 'albfolders') {
       const A=window._alb; A.folders=m.items||[]; albRenderTree();
     } else if (m.type === 'albrenamepreview') {
@@ -3195,7 +3189,7 @@ document.addEventListener("keydown",function(e){
   },{passive:false});
 })();
 // ==================== 相册 UI ====================
-window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,scanPaused:false,scanRunning:false,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,facePaused:false,faceDone:0,faceTotal:0,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiPaused:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:'',meta:{items:{},albums:[],searches:[],saved:[],people:{names:{},hidden:{}},private:{}},folders:[],treeOpen:false,folderRoot:'',folderPath:'',albumId:'',albumOpen:false,showHidden:false,privateView:false,favOnly:false,minRating:0,savedSearches:[],searchHistory:[],personShowHidden:false,importKind:'',importPath:''};
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,scanPaused:false,scanRunning:false,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,facePaused:false,faceDone:0,faceTotal:0,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiPaused:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:'',meta:{items:{},albums:[],searches:[],saved:[],people:{names:{},hidden:{}}},folders:[],treeOpen:false,folderRoot:'',folderPath:'',albumId:'',albumOpen:false,favOnly:false,minRating:0,savedSearches:[],searchHistory:[],personShowHidden:false,importKind:'',importPath:''};
 
 function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -3217,12 +3211,12 @@ function albSaveMetaItem(p,obj){
 }
 function albSaveState(){
   const A=window._alb, M=A.meta||{};
-  const state={albums:M.albums||[],searches:M.searches||[],saved:M.saved||[],people:M.people||{names:{},hidden:{}},private:M.private||{}};
+  const state={albums:M.albums||[],searches:M.searches||[],saved:M.saved||[],people:M.people||{names:{},hidden:{}}};
   post('albstate|'+albB64(JSON.stringify(state)));
 }
 function albApplyMeta(data){
   const A=window._alb; if(!data) return;
-  A.meta={items:data.items||{},albums:data.albums||[],searches:data.searches||[],saved:data.saved||[],people:data.people||{names:{},hidden:{}},private:data.private||{}};
+  A.meta={items:data.items||{},albums:data.albums||[],searches:data.searches||[],saved:data.saved||[],people:data.people||{names:{},hidden:{}}};
   if(!A.meta.people) A.meta.people={names:{},hidden:{}};
   if(!A.meta.people.names) A.meta.people.names={};
   if(!A.meta.people.hidden) A.meta.people.hidden={};
@@ -3253,11 +3247,6 @@ function albToggleFavPaths(paths){
   if(albItemM(first).f) target=false;
   for(let i=0;i<paths.length;i++){ const it=window._alb.byPath[paths[i]]||{}; const m=albItemM(it); if(target) m.f=1; else delete m.f; albSaveMetaItem(paths[i],m); }
   albRender(); toastMsg((target?'已收藏 ':'已取消收藏 ')+paths.length+' 张');
-}
-function albSetHidden(paths,hidden){
-  if(!window._alb.meta.private || !window._alb.meta.private.on){ toastMsg('请先在「设置 · 私密相册」中启用私密相册'); return; }
-  for(let i=0;i<paths.length;i++){ const it=window._alb.byPath[paths[i]]||{}; const m=albItemM(it); if(hidden) m.h=1; else delete m.h; albSaveMetaItem(paths[i],m); }
-  albRender(); toastMsg(hidden?'已隐藏 '+paths.length+' 张':'已取消隐藏 '+paths.length+' 张');
 }
 function albToggleFavFilter(){
   const A=window._alb; A.favOnly=!A.favOnly; A.vDirty=true; A.vList=null; A.virtualFallback=false;
@@ -3453,52 +3442,6 @@ function albImportStartDo(){
   const go=document.getElementById('albImportGo'); if(go){ go.disabled=true; go.textContent='导入中…'; }
   const st=document.getElementById('albImportStat'); if(st) st.textContent='正在统计并复制文件…';
   post('albimport|'+albB64(JSON.stringify(payload)));
-}
-
-function albSimpleHash(s){ let h=2166136261; s=String(s||''); for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return 'fnv1a_'+((h>>>0).toString(16)); }
-async function albPasswordHash(s){
-  try{ if(window.crypto&&crypto.subtle&&window.TextEncoder){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(s||''))); let h=''; const a=new ArrayBuffer(b); const v=new Uint8Array(a); for(let i=0;i<v.length;i++) h+=(v[i]<16?'0':'')+v[i].toString(16); return 'sha256_'+h; } }catch(e){}
-  window._albHashWait=window._albHashWait||{};
-  return new Promise(function(resolve){
-    const token='h'+Date.now()+Math.random().toString(36).slice(2);
-    window._albHashWait[token]=resolve;
-    post('albprivhash|'+albB64(token)+'|'+albB64(String(s||'')));
-    setTimeout(function(){ if(window._albHashWait[token]){ delete window._albHashWait[token]; resolve('sha256_'+albSimpleHash(s)); } },1200);
-  });
-}
-function albPrivateCount(){ return (window._alb.items||[]).filter(function(i){ return !!albItemM(i).h; }).length; }
-function albPrivateOpen(){
-  const A=window._alb, on=!!(A.meta.private&&A.meta.private.on);
-  albModalOpen('<h3>私密相册</h3>'+
-    '<div class="hint">'+(on?'私密相册已启用，当前隐藏 <b>'+albPrivateCount()+'</b> 张照片。':'私密相册未启用。启用后可在「选择 → 隐藏」把照片移出普通视图。')+'</div>'+
-    '<div class="row"><span>密码</span><input type="password" id="albPrivPwd" placeholder="输入密码"></div>'+
-    '<div class="row" id="albPrivPwd2Row" style="'+(on?'display:none':'')+'"><span>确认密码</span><input type="password" id="albPrivPwd2" placeholder="再输入一次"></div>'+
-    '<div class="foot" style="justify-content:flex-start;flex-wrap:wrap">'+
-      (on?'<button class="btn pri" onclick="albPrivateViewDo()">查看私密照片</button><button class="btn" onclick="albPrivateSetDo()">修改密码</button><button class="btn danger" onclick="albPrivateDisableDo()">关闭私密相册</button>':'<button class="btn pri" onclick="albPrivateSetDo()">启用私密相册</button>')+
-      '<button class="btn" onclick="albModalClose()">关闭</button></div>');
-}
-async function albPrivateViewDo(){
-  const A=window._alb, p=((document.getElementById('albPrivPwd')||{}).value||'');
-  if(!p){ toastMsg('请输入密码'); return; }
-  const h=await albPasswordHash(p);
-  if(h!==((A.meta.private||{}).hash||'')){ toastMsg('密码不正确'); return; }
-  A.privateView=true; A.showHidden=true; A.vDirty=true; A.vList=null; albModalClose(); albRender(); toastMsg('已进入私密相册，当前显示包含隐藏照片');
-}
-async function albPrivateSetDo(){
-  const A=window._alb; let p=((document.getElementById('albPrivPwd')||{}).value||''); const p2=((document.getElementById('albPrivPwd2')||{}).value||'');
-  if(!p){ toastMsg('请输入密码'); return; }
-  const on=!!(A.meta.private&&A.meta.private.on);
-  if(!on){ if(p!==p2){ toastMsg('两次密码不一致'); return; } }
-  else { const old=await albPasswordHash(p); if(old!==((A.meta.private||{}).hash||'')){ toastMsg('当前密码不正确，无法修改'); return; } const np=prompt('输入新密码（留空取消）',''); if(!np) return; const np2=prompt('再输入一次新密码',''); if(np!==np2){ toastMsg('两次密码不一致'); return; } p=np; }
-  A.meta.private={on:1,hash:await albPasswordHash(p)}; albSaveState(); albModalClose(); albRender(); toastMsg(on?'密码已修改':'私密相册已启用');
-}
-async function albPrivateDisableDo(){
-  const A=window._alb, p=((document.getElementById('albPrivPwd')||{}).value||'');
-  if(!p){ toastMsg('请输入密码'); return; }
-  const h=await albPasswordHash(p);
-  if(h!==((A.meta.private||{}).hash||'')){ toastMsg('密码不正确'); return; }
-  if(!confirm('关闭私密相册？已隐藏的照片会继续保持隐藏，重新启用并输入密码后可查看。')) return;
-  A.meta.private={on:0,hash:''}; A.privateView=false; A.showHidden=false; albSaveState(); albModalClose(); albRender(); toastMsg('私密相册已关闭');
 }
 
 function albPersonGroup(){ const A=window._alb; return (A.faces&&A.faces.groups||[]).filter(function(g){ return g.id===A.person; })[0]||null; }
@@ -3939,7 +3882,6 @@ function albFiltered(){
   if(A.favOnly) list=list.filter(function(i){ return !!albItemM(i).f; });
   if(A.minRating) list=list.filter(function(i){ return (albItemM(i).r||0)>=A.minRating; });
   if(A.folderPath || A.folderRoot) list=list.filter(albMatchFolder);
-  if(!(A.privateView || A.showHidden)) list=list.filter(function(i){ return !albItemM(i).h; });
   return albSortByTime(list);
 }
 function albToggleTimeSort(){
@@ -4491,7 +4433,7 @@ function albVirtualRender(){
   const contentW=Math.max(1, grid.clientWidth-padL-padR);
   const cols=Math.max(1, Math.floor((contentW+gap)/(cw+gap)));
   const mode=albVirtualGroupMode();
-  const key=[list.length,cols,cw,mode,A.tab,A.timeSort,A.person,A.device,!!A.sel,!!A.searchMode,A.search||'',!!A.favOnly,A.minRating||0,A.albumId||'',A.folderRoot||'',A.folderPath||'',!!A.showHidden,!!A.privateView].join('|');
+  const key=[list.length,cols,cw,mode,A.tab,A.timeSort,A.person,A.device,!!A.sel,!!A.searchMode,A.search||'',!!A.favOnly,A.minRating||0,A.albumId||'',A.folderRoot||'',A.folderPath||''].join('|');
   if(A.vDirty || !A.vLayout || !A.vLayoutKey || A.vLayoutKey!==key){
     A.vLayout=albBuildVirtualLayout(list,cols,cw,gap,mode);
     A.vLayoutKey=key;
@@ -4845,7 +4787,6 @@ function albSelMenuDelete(){ albSelMenuEnsureSel(); albDeleteSelected(); }
 function albSelNeedPaths(){ albSelMenuEnsureSel(); const p=albSelectedPaths(); if(!p.length){ toastMsg('先勾选照片'); return null; } return p; }
 function albSelFav(){ const p=albSelNeedPaths(); if(p) albToggleFavPaths(p); }
 function albSelRate(){ const p=albSelNeedPaths(); if(p) albRatePaths(p); }
-function albSelHide(){ const p=albSelNeedPaths(); if(p){ const first=window._alb.byPath[p[0]]||{}; albSetHidden(p,!albItemM(first).h); } }
 function albSelBatchRename(){ const p=albSelNeedPaths(); if(p) albBatchRenameOpen(p); }
 function albToggleSel(){
   window._alb.sel=!window._alb.sel;
@@ -4968,7 +4909,6 @@ function albCtxOpen(e,cell){
   const ed=m.querySelector('[data-a="edit"]'); if(ed) ed.textContent=multi?('编辑 '+paths.length+' 张'):'编辑';
   const dl=m.querySelector('[data-a="del"]'); if(dl) dl.textContent=multi?('删除 '+paths.length+' 项'):'删除';
   const fv=m.querySelector('[data-a="fav"]'); if(fv) fv.textContent=(albItemM(window._alb.byPath[p]).f?'取消收藏':'收藏')+(multi?' '+paths.length+' 张':'');
-  const hd=m.querySelector('[data-a="hide"]'); if(hd) hd.textContent=(albItemM(window._alb.byPath[p]).h?'取消隐藏':'隐藏')+(multi?' '+paths.length+' 张':'');
   m.classList.add('on');
   const w=m.offsetWidth, h=m.offsetHeight;
   let x=e.clientX, y=e.clientY;
@@ -4985,7 +4925,6 @@ function albCtxDo(a){
   if(a==='folder'){ if(C.multi) return; post('albopenfolder|'+C.path); return; }
   if(a==='fav'){ albToggleFavPaths(paths); return; }
   if(a==='rate'){ albRatePaths(paths); return; }
-  if(a==='hide'){ const first=window._alb.byPath[C.path]||{}; albSetHidden(paths,!albItemM(first).h); return; }
   if(a==='save'){ if(!paths.length) return; post('albsaveas|'+paths.join('\n')); return; }
   if(a==='edit'){ albEditPaths(paths); return; }
   if(a==='del'){ albDeletePaths(paths); return; }

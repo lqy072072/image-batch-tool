@@ -64,7 +64,7 @@ namespace ImageBatchInstaller
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = BgColor;
             ForeColor = TextColor;
-            Text = "图片批处理工具 v2.49";
+            Text = "图片批处理工具 v2.50";
             DoubleBuffered = true;
 
             ApplyWindowRoundedRegion();
@@ -104,7 +104,7 @@ namespace ImageBatchInstaller
             AddCloseCircle(16, 12);
 
             var titleText = new Label();
-            titleText.Text = "图片批处理工具 v2.49 安装向导";
+            titleText.Text = "图片批处理工具 v2.50 安装向导";
             titleText.ForeColor = SubTextColor;
             titleText.Font = new Font("微软雅黑", 9f);
             titleText.AutoSize = false;
@@ -570,7 +570,7 @@ namespace ImageBatchInstaller
         void WriteRootReadme(string targetPath, bool album, bool edit)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("图片批处理工具 v2.49");
+            sb.AppendLine("图片批处理工具 v2.50");
             sb.AppendLine();
             if (album) sb.AppendLine("相册：相册\\相册.exe");
             if (edit) sb.AppendLine("图片编辑：图片编辑\\图片编辑.exe");
@@ -600,8 +600,8 @@ namespace ImageBatchInstaller
             using (RegistryKey k = Registry.CurrentUser.CreateSubKey(baseKey + "\\" + keyName))
             {
                 if (k == null) return;
-                k.SetValue("DisplayName", "图片批处理工具 v2.49（" + component + "）");
-                k.SetValue("DisplayVersion", "2.49");
+                k.SetValue("DisplayName", "图片批处理工具 v2.50（" + component + "）");
+                k.SetValue("DisplayVersion", "2.50");
                 k.SetValue("Publisher", "純潔の工口君");
                 k.SetValue("InstallLocation", targetPath);
                 k.SetValue("DisplayIcon", iconPath);
