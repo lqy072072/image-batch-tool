@@ -657,7 +657,7 @@ body.skin-light .alb-vexif { border-color:#ddd; }
 body.skin-light .alb-vexif .v { color:#222; }
 /* v2.19 编辑器专业调整 */
 .edx-tabs { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
-.edx-tab { flex:1 1 28%; padding:4px 5px; font-size:10px; color:#bbb; background:#262626; border:1px solid #444; border-radius:4px; cursor:pointer; white-space:nowrap; }
+.edx-tab { flex:1 1 0; min-width:0; padding:4px 5px; font-size:10px; color:#bbb; background:#262626; border:1px solid #444; border-radius:4px; cursor:pointer; white-space:nowrap; }
 .edx-tab.on { color:#fff; background:#315f9e; border-color:#4e8ad8; }
 .edx-pane { display:none; }
 .edx-pane.on { display:block; }
@@ -672,19 +672,10 @@ body.skin-light .alb-vexif .v { color:#222; }
 .edx-mini { display:flex; gap:5px; margin-top:6px; }
 .edx-mini button { flex:1; padding:4px; font-size:10px; background:#2c2c2c; color:#ddd; border:1px solid #4a4a4a; border-radius:4px; cursor:pointer; }
 .edx-mini button:hover { border-color:#7fb0ff; }
-.edx-badge { display:inline-block; margin-left:6px; padding:1px 6px; font-size:10px; border-radius:8px; background:#2c4a6e; color:#b9dcff; }
-.edx-badge.off { background:#3a3a3a; color:#888; }
-.edx-xmp input[type=text], .edx-xmp input[type=password], .edx-xmp textarea { width:100%; box-sizing:border-box; margin-bottom:6px; background:#1a1a1a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:11px; padding:5px; }
-.edx-xmp textarea { min-height:54px; resize:vertical; }
-.edx-video-row { display:flex; gap:5px; align-items:center; margin-bottom:6px; font-size:10px; }
-.edx-video-row span { flex:0 0 34px; white-space:nowrap; }
-.edx-video-row input[type=text] { flex:1; min-width:0; background:#1a1a1a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; padding:4px; }
-.edx-xmp .chk { white-space:nowrap; font-size:10px; }
 body.skin-light .edx-tab { background:#f1f2f5; border-color:#d5d8df; color:#555; }
 body.skin-light .edx-tab.on { background:#e3efff; border-color:#7fb0ff; color:#174a85; }
 body.skin-light .edx-curve-wrap { background:#fff; border-color:#d7d9e0; }
 body.skin-light .edx-hsl-row { color:#444; }
-body.skin-light .edx-xmp input[type=text], body.skin-light .edx-xmp input[type=password], body.skin-light .edx-xmp textarea, body.skin-light .edx-video-row input { background:#fff; color:#222; border-color:#d7d9e0; }
 </style>
 <script src="skins/skin-core.js?v=2410"></script>
 <style>body:not(.mode-album) .top-right span[onclick="openAlbum()"]{display:none!important;}</style></head>
@@ -766,61 +757,6 @@ window.addEventListener('mouseup', function(e) {
     </div>
 
     <div class="left-section" style="padding:0;flex-shrink:0">
-      <div class="section-header"><span>输出与批处理</span><span class="arrow">▼</span></div>
-      <div class="section-body">
-        <div class="row-line"><span>重名策略</span>
-          <select class="mini-sel" id="dupSel" onchange="setParam('dup_mode',this.value)">
-            <option value="1" selected>加序号</option>
-            <option value="0">覆盖</option>
-            <option value="2">跳过</option>
-          </select>
-        </div>
-        <div class="row-line"><span>命名模板</span>
-          <input id="outTpl" class="mini-input" style="flex:1;min-width:0" placeholder="{name}_{date}_{seq}"
-                 oninput="setStr('out_template', this.value)" title="留空则用「原名_out」">
-        </div>
-        <div style="font-size:10px;color:#666;margin:-3px 0 6px 2px">占位符：{name} {seq} {date} {time} {folder}</div>
-        <label class="chk"><input type="checkbox" onchange="setParam('out_subdir',this.checked?1:0)"> 保留来源子目录</label>
-        <label class="chk"><input type="checkbox" onchange="setParam('skip_existing',this.checked?1:0)"> 断点续跑（已导出则跳过）</label>
-        <label class="chk"><input type="checkbox" checked onchange="setParam('exif_keep',this.checked?1:0)"> 保留 EXIF / ICC</label>
-        <label class="chk"><input type="checkbox" onchange="setParam('icc_convert',this.checked?1:0)"> 统一转 sRGB（去相机 ICC 偏色）</label>
-        <label class="chk"><input type="checkbox" onchange="setParam('dither',this.checked?1:0)"> 8bit 抖动（消渐变断层）</label>
-        <label class="chk"><input type="checkbox" onchange="setParam('lut_linear',this.checked?1:0)"> 线性空间套 LUT</label>
-        <div class="row-line" style="gap:6px">
-          <button class="mini-btn" style="flex:1" onclick="post('retryfails')" title="只重跑上次失败的照片">重试失败</button>
-          <button class="mini-btn" style="flex:1" onclick="post('openfailcsv')" title="打开失败清单 CSV">失败清单</button>
-        </div>
-        <div class="row-line"><span>导出线程并发数量</span>
-          <select class="mini-sel" id="wrkSel" onchange="setParam('workers',this.value)" style="flex:1;min-width:0">
-            <option value="0" selected>自动</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="4">4</option>
-            <option value="8">8</option>
-          </select>
-        </div>
-        <div class="row-line"><span>预设</span>
-          <select class="mini-sel" id="presetSel" style="flex:1;min-width:0"></select>
-          <button class="mini-btn" style="flex-shrink:0;white-space:nowrap" onclick="loadPreset()">读取</button>
-        </div>
-        <div class="row-line">
-          <input id="presetName" class="mini-input" placeholder="预设名" style="flex:1;min-width:0">
-          <button class="mini-btn" style="flex-shrink:0;white-space:nowrap" onclick="savePreset()">保存</button>
-          <button class="mini-btn" style="flex-shrink:0;white-space:nowrap;padding:4px 10px" onclick="delPreset()">删除</button>
-        </div>
-        <div class="row-line" style="gap:6px">
-          <button class="mini-btn" style="flex:1" onclick="edxPresetExport()" title="把当前全部调整导出为 .json">导出预设</button>
-          <button class="mini-btn" style="flex:1" onclick="document.getElementById('edxPresetFile').click()" title="读取 .json 预设并应用">导入预设</button>
-          <input id="edxPresetFile" type="file" accept=".json,application/json" style="display:none" onchange="edxPresetImport(this)">
-        </div>
-        <div id="edxPresetInfo" class="edx-tip"></div>
-        <div class="fx-row">
-          <div class="fx-thumb" onclick="showFx('linear')" title="8bit 抖动：渐变断层对比"><img src="assets/previews/fx_linear.jpg" alt="8bit 抖动"><span>8bit 抖动</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="left-section" style="padding:0;flex-shrink:0">
       <div class="section-header"><span>辅助工具</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div class="row-line" style="gap:6px">
@@ -852,10 +788,6 @@ window.addEventListener('mouseup', function(e) {
       </select>
       <div class="tool-btn" id="cropToggle" onclick="toggleCrop()">✂ 裁切</div>
       <div class="tool-btn" onclick="cropReset()" title="重置裁切框">⟲ 重置</div>
-      <div class="tool-btn" onclick="edxUndo()" title="撤销 (Ctrl+Z)">↶</div>
-      <div class="tool-btn" onclick="edxRedo()" title="重做 (Ctrl+Shift+Z)">↷</div>
-      <div class="tool-btn" onclick="edxVersionMenu()" title="非破坏性编辑版本栈">版本 <span class="edx-badge" id="edxVerBadge">0</span></div>
-      <span class="zoom-label" id="edxPerBadge" title="当前照片的参数独立保存">逐张</span>
       <div class="spacer"></div>
       <div class="tool-btn" onclick="zoomOut()">−</div>
       <span class="zoom-label" id="zoomLabel">适应</span>
@@ -895,19 +827,7 @@ window.addEventListener('mouseup', function(e) {
       <span class="edx-gr on" data-g="basic" onclick="edxGroup('basic')">调整</span>
       <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
       <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
-      <span class="edx-gr" data-g="create" onclick="edxGroup('create')">专业</span>
       <span class="edx-gr" data-g="gen" onclick="edxGroup('gen')">AI</span>
-    </div>
-    <div class="right-section" id="proHubSection">
-      <div class="section-header"><span>专业工作台 <span style="font-weight:400;color:#888;font-size:10px">HDR / AI 修复 / 输出</span></span><span class="arrow">▼</span></div>
-      <div class="section-body">
-        <div class="pro-hub-grid">
-          <button class="pro-btn" onclick="proOpen('hdr')">HDR / 堆栈</button>
-          <button class="pro-btn" onclick="proOpen('restore')">AI 修复中心</button>
-          <button class="pro-btn" onclick="proOpen('output')">专业输出中心</button>
-        </div>
-        <div class="edx-tip" style="margin-top:8px">独立窗口，不改动现有调整参数；输出写到 _pro/_restored 文件夹。</div>
-      </div>
     </div>
     <div class="right-section" id="histSection">
       <div class="section-header"><span>直方图</span><span class="arrow">▼</span></div>
@@ -951,34 +871,21 @@ window.addEventListener('mouseup', function(e) {
           <button id="aiOptBtn" onclick="toggleAiOpt()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">开启AI优化</button>
         </div>
         <div id="colorSliders"></div>
-        <div class="panel-divider">
-          <div class="sub-title">AI 增强（超分 / 景深）</div>
-          <label class="chk"><input type="checkbox" onchange="setParam('sr_on',this.checked?1:0)"> 全图超分 2×（Real-ESRGAN）</label>
-          <label class="chk"><input type="checkbox" onchange="setParam('dof_on',this.checked?1:0)"> 景深虚化（深度模型）</label>
-          <div id="dofSliders"></div>
-        </div>
         <div class="fx-row">
           <div class="fx-thumb" onclick="showFx('color')" title="色彩调整前后"><img src="assets/previews/fx_color.jpg" alt="色彩"><span>色彩调整</span></div>
           <div class="fx-thumb" onclick="showFx('sharpen')" title="清晰度加强"><img src="assets/previews/fx_sharpen.jpg" alt="清晰度"><span>清晰度</span></div>
-          <div class="fx-thumb" onclick="showFx('sr')" title="全图超分 2×"><img src="assets/previews/fx_sr.jpg" alt="超分"><span>超分 2×</span></div>
-          <div class="fx-thumb" onclick="showFx('dof')" title="景深虚化"><img src="assets/previews/fx_dof.jpg" alt="景深"><span>景深</span></div>
         </div>
       </div>
     </div>
 
     <div class="right-section" id="edxProSection">
-      <div class="section-header"><span>专业调整 <span style="font-weight:400;color:#888;font-size:10px">曲线 / HSL / 局部</span></span><span class="arrow">▼</span></div>
+      <div class="section-header"><span>专业调整 <span style="font-weight:400;color:#888;font-size:10px">曲线 / HSL / 镜头 / 水平</span></span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div class="edx-tabs">
           <div class="edx-tab on" data-p="curve" onclick="edxTab('curve')">曲线</div>
           <div class="edx-tab" data-p="hsl" onclick="edxTab('hsl')">HSL</div>
           <div class="edx-tab" data-p="lens" onclick="edxTab('lens')">镜头</div>
           <div class="edx-tab" data-p="level" onclick="edxTab('level')">水平</div>
-          <div class="edx-tab" data-p="local" onclick="edxTab('local')">局部</div>
-          <div class="edx-tab" data-p="erase" onclick="edxTab('erase')">智能消除</div>
-          <div class="edx-tab" data-p="xmp" onclick="edxTab('xmp')">关键词/XMP</div>
-          <div class="edx-tab" data-p="video" onclick="edxTab('video')">视频</div>
-          <div class="edx-tab" data-p="cloud" onclick="edxTab('cloud')">云备份</div>
         </div>
 
         <div class="edx-pane on" data-p="curve">
@@ -1026,62 +933,6 @@ window.addEventListener('mouseup', function(e) {
           </div>
         </div>
 
-        <div class="edx-pane" data-p="local">
-          <label class="chk"><input type="checkbox" id="edxLocalOn" onchange="edxToggle('local_on',this.checked,'edxLocalBody')"> 启用局部蒙版</label>
-          <div id="edxLocalBody" style="opacity:.45;pointer-events:none">
-            <div class="edx-mini" style="margin-bottom:6px">
-              <button class="on" id="edxLocTab1" onclick="edxLocSel(1)">蒙版 1</button>
-              <button id="edxLocTab2" onclick="edxLocSel(2)">蒙版 2</button>
-              <button id="edxLocTab3" onclick="edxLocSel(3)">蒙版 3</button>
-            </div>
-            <label class="chk"><input type="checkbox" id="edxLocOn" onchange="edxLocToggle(this.checked)"> 当前蒙版启用</label>
-            <div class="slider-row"><span>中心 X</span><input type="range" min="0" max="100" value="50" id="edxLocX" oninput="edxLocRange('x',this.value)"><span class="val" id="edxLocXV">50</span></div>
-            <div class="slider-row"><span>中心 Y</span><input type="range" min="0" max="100" value="50" id="edxLocY" oninput="edxLocRange('y',this.value)"><span class="val" id="edxLocYV">50</span></div>
-            <div class="slider-row"><span>半径</span><input type="range" min="1" max="100" value="30" id="edxLocR" oninput="edxLocRange('r',this.value)"><span class="val" id="edxLocRV">30</span></div>
-            <div class="slider-row"><span>羽化</span><input type="range" min="0" max="100" value="50" id="edxLocF" oninput="edxLocRange('feather',this.value)"><span class="val" id="edxLocFV">50</span></div>
-            <div class="slider-row"><span>曝光</span><input type="range" min="-100" max="100" value="0" id="edxLocE" oninput="edxLocRange('exp',this.value)"><span class="val" id="edxLocEV">0</span></div>
-            <div class="slider-row"><span>饱和</span><input type="range" min="-100" max="100" value="0" id="edxLocS" oninput="edxLocRange('sat',this.value)"><span class="val" id="edxLocSV">0</span></div>
-            <div class="slider-row"><span>色温</span><input type="range" min="-100" max="100" value="0" id="edxLocT" oninput="edxLocRange('temp',this.value)"><span class="val" id="edxLocTV">0</span></div>
-            <div class="edx-tip">拖动预览上的圆点可移动蒙版中心；滚轮调整半径。</div>
-          </div>
-        </div>
-
-        <div class="edx-pane" data-p="erase">
-          <label class="chk"><input type="checkbox" id="edxEraseOn" onchange="edxToggle('erase_on',this.checked,null)"> 启用智能消除（框选填充）</label>
-          <div class="edx-tip">在预览上拖出矩形，程序用邻近纹理填充并羽化边缘。适合移除小物体、电线、路人局部；大面积或复杂结构建议配合局部修复。</div>
-          <div class="edx-mini"><button onclick="edxEraseMode()">在预览上框选</button><button onclick="edxEraseClear()">清除选区</button></div>
-          <div class="slider-row"><span>边缘羽化</span><input type="range" min="0" max="100" value="20" id="edxEraseF" oninput="edxRange('erase_feather',this.value)"><span class="val" id="edxEraseFV">20</span></div>
-          <div id="edxEraseInfo" class="edx-tip">未选择区域</div>
-        </div>
-
-        <div class="edx-pane edx-xmp" data-p="xmp">
-          <div class="edx-tip">写入同目录同名 .xmp 边车文件（Lightroom / Bridge / digiKam 可读）。</div>
-          <input id="edxXmpTitle" placeholder="标题">
-          <input id="edxXmpKeywords" placeholder="关键词，用逗号分隔">
-          <textarea id="edxXmpNote" placeholder="描述 / 备注"></textarea>
-          <div class="edx-video-row"><span>星级</span><input type="range" min="0" max="5" value="0" id="edxXmpRating" style="flex:1" oninput="document.getElementById('edxXmpRatingV').textContent=this.value"><span id="edxXmpRatingV">0</span></div>
-          <div class="edx-mini"><button onclick="edxXmpSave()">写入 XMP</button><button onclick="edxXmpLoad()">读取已有 XMP</button></div>
-          <div id="edxXmpInfo" class="edx-tip"></div>
-        </div>
-
-        <div class="edx-pane" data-p="video">
-          <div class="edx-tip">对视频抽帧或按时间裁剪（使用内置 OpenCV，输出到同目录 _video_out）。</div>
-          <div class="edx-video-row"><span>视频</span><input type="text" id="edxVideoPath" placeholder="选择视频文件…"><button class="mini-btn" onclick="post('videopick')">选择</button></div>
-          <div class="edx-video-row"><span>抽帧时间</span><input type="text" id="edxVideoTime" value="1.0" style="max-width:70px"><span>秒</span><button class="mini-btn" onclick="edxVideoFrame()">抽帧</button></div>
-          <div class="edx-video-row"><span>裁剪</span><input type="text" id="edxVideoStart" value="0" style="max-width:60px"><span>→</span><input type="text" id="edxVideoEnd" value="10" style="max-width:60px"><span>秒</span><button class="mini-btn" onclick="edxVideoTrim()">裁剪</button></div>
-          <div id="edxVideoInfo" class="edx-tip"></div>
-        </div>
-
-        <div class="edx-pane edx-xmp" data-p="cloud">
-          <div class="edx-tip">备份到 NAS / WebDAV。源目录留空时使用当前导出目录；勾选加密后用 AES-256-CBC 加密为 .enc 再上传。</div>
-          <input id="edxDavUrl" type="text" placeholder="WebDAV 地址，例如 https://nas.local/dav/backup">
-          <div class="edx-video-row"><span>账号</span><input type="text" id="edxDavUser" placeholder="可选"></div>
-          <div class="edx-video-row"><span>密码</span><input type="password" id="edxDavPass" placeholder="可选"></div>
-          <div class="edx-video-row"><span>源目录</span><input type="text" id="edxDavSrc" placeholder="留空=导出目录"></div>
-          <label class="chk"><input type="checkbox" id="edxDavEncrypt"> AES-256 加密备份（.enc）</label>
-          <div class="edx-mini"><button onclick="edxDavStart()">立即备份</button><button onclick="edxDavClear()">清空密码</button></div>
-          <div id="edxDavInfo" class="edx-tip"></div>
-        </div>
       </div>
     </div>
 
@@ -1369,6 +1220,19 @@ window.addEventListener('mouseup', function(e) {
         <div id="tsSliders" style="opacity:0.4;pointer-events:none"></div>
         <div class="fx-row">
           <div class="fx-thumb" onclick="showFx('tilt')" title="移轴：合焦带 + 渐进模糊"><img src="assets/previews/fx_tilt.jpg" alt="移轴"><span>移轴</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-section" id="fxEnhanceSection">
+      <div class="section-header"><span>超分与景深</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <label class="chk"><input type="checkbox" onchange="setParam('sr_on',this.checked?1:0)"> 全图超分 2×（Real-ESRGAN）</label>
+        <label class="chk"><input type="checkbox" onchange="setParam('dof_on',this.checked?1:0)"> 景深虚化（深度模型）</label>
+        <div id="dofSliders"></div>
+        <div class="fx-row">
+          <div class="fx-thumb" onclick="showFx('sr')" title="全图超分 2×"><img src="assets/previews/fx_sr.jpg" alt="超分"><span>超分 2×</span></div>
+          <div class="fx-thumb" onclick="showFx('dof')" title="景深虚化"><img src="assets/previews/fx_dof.jpg" alt="景深"><span>景深</span></div>
         </div>
       </div>
     </div>
@@ -1952,6 +1816,14 @@ buildSliders('dofSliders', [
   ['dof_focus','焦平面',0,100,50],
 ]);
 
+function copyHex(h) {
+  try { navigator.clipboard.writeText(h); toastMsg('已复制 ' + h); return; } catch(e) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = h; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove(); toastMsg('已复制 ' + h);
+  } catch(e) { post('log|copyHex ' + e); }
+}
 // ---- 单张重做 ----
 function retryOne() {
   const i = (typeof window._selIdx === 'number' && window._selIdx >= 0) ? window._selIdx : -1;
@@ -2045,32 +1917,6 @@ function wipeRangeInput(el) {
   window.addEventListener('pointercancel', end);
   window.addEventListener('resize', () => { if (_wipeOn) renderWipe(); });
 })();
-
-// ---- 预设 ----
-function copyHex(h) {
-  try { navigator.clipboard.writeText(h); document.getElementById('statusBox').textContent = '已复制 ' + h; } catch (e) {}
-}
-function savePreset() {
-  const n = document.getElementById('presetName').value.trim();
-  if (!n) { alert('请输入预设名'); return; }
-  post('savepreset|' + n);
-}
-function loadPreset() {
-  const s = document.getElementById('presetSel');
-  if (s && s.value) { window._edxLastPreset = s.value; post('loadpreset|' + s.value); }
-  else post('presetlist');
-}
-function delPreset() {
-  const s = document.getElementById('presetSel');
-  if (s && s.value) post('delpreset|' + s.value);
-}
-function renderPresets(items) {
-  const s = document.getElementById('presetSel');
-  if (!s) return;
-  s.innerHTML = (items && items.length)
-    ? items.map(n => `<option>${n}</option>`).join('')
-    : '<option value="">无预设</option>';
-}
 
 // ---- 文件列表：只渲染可视窗口（大量文件时避免卡顿） ----
 window._files = [];
@@ -2570,9 +2416,6 @@ if (window.chrome && chrome.webview) {
   } catch(e) {}
   chrome.webview.addEventListener('message', e => {
     const m = e.data;
-    if (m.type === 'protool') { try{ if(window.proOnResult) proOnResult(m); }catch(e){ try{ post('log|proOnResult '+e); }catch(_){} } return; }
-    if (m.type === 'pro_preview') { try{ if(window.proOnPreview) proOnPreview(m); }catch(e){} return; }
-    if (m.type === 'iccpath') { var pi=document.getElementById('proProofIcc'); if(pi)pi.value=m.path||''; return; }
     if (m.type === 'genedit' || m.type === 'genedit_preview' || m.type === 'genedit_status' || m.type === 'genedit_install' || m.type === 'genedit_start') {
       try{ if(window.genHandle) genHandle(m); }catch(e){ try{ post('log|genHandle '+e); }catch(_){} }
       return;
@@ -2592,7 +2435,6 @@ if (window.chrome && chrome.webview) {
       const fl = document.getElementById('fileList');
       if (window._selIdx !== m.selected) { _origSrc = null; }
       window._files = m.files || [];
-      try{ if(window.proSync) proSync(); }catch(e){}
       window._selIdx = (typeof m.selected === 'number') ? m.selected : -1;
       renderFileList();
       document.getElementById('fileCount').textContent = (m.files?m.files.length:0)+' 项';
@@ -3112,7 +2954,7 @@ if (window.chrome && chrome.webview) {
       const newImg = document.createElement('img');
       newImg.draggable = false;
       newImg.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
-      newImg.onload = function() { updateGuide(); renderWipe(); if(window.edxAfterPreview) edxAfterPreview(); };
+      newImg.onload = function() { updateGuide(); renderWipe(); };
       newImg.src = m.data;
       post('glassalpha|250');
       prev.innerHTML = '';
@@ -3132,7 +2974,6 @@ if (window.chrome && chrome.webview) {
         document.getElementById('outInfo').innerHTML =
           `输出: <b>${m.out_w}×${m.out_h}</b> · 约 <b>${sizeStr}</b>`;
       }
-      if(window.edxAfterPreview) edxAfterPreview();
     } else if (m.type === 'progress') {
       const pct = m.done*100/m.total;
       document.getElementById('pbar').style.width = pct+'%';
@@ -3153,43 +2994,10 @@ if (window.chrome && chrome.webview) {
       if (!running) document.getElementById('statusBox').textContent = '就绪';
     } else if (m.type === 'fails') {
       const sb = document.getElementById('statusBox');
-      if (sb) { sb.textContent = m.count + ' 张失败，可点「重试失败」'; sb.style.color = '#ff8f8f'; }
+      if (sb) { sb.textContent = m.count + ' 张失败，请检查输出设置'; sb.style.color = '#ff8f8f'; }
     } else if (m.type === 'orig') {
       _origSrc = m.data;
       renderWipe();
-    } else if (m.type === 'presets') {
-      renderPresets(m.items);
-    } else if (m.type === 'presetapplied') {
-      const v = m.vals || {};
-      Object.keys(v).forEach(k => {
-        window._edx.params[k] = v[k];
-        const sl = document.getElementById('s_'+k);
-        const vl = document.getElementById('v_'+k);
-        if (sl) sl.value = v[k];
-        if (vl) vl.textContent = Math.round(v[k]*((k==='shadows'||k==='highlights')?10:1));
-      });
-      if (m.lut !== undefined) window._edx.lut = m.lut || '';
-      if (m.mode) {
-        window._edx.lutmode = m.mode;
-        document.querySelectorAll('.lut-mode-btn').forEach(b => {
-          const on = b.dataset.mode === m.mode;
-          b.classList.toggle('active', on && m.mode !== 'ai');
-          b.classList.toggle('ai-active', on && m.mode === 'ai');
-        });
-      }
-      const ip = document.getElementById('idPaperSel');
-      if (ip && v.id_paper_w && v.id_paper_h) {
-        const pv = Math.round(v.id_paper_w) + 'x' + Math.round(v.id_paper_h);
-        if (Array.from(ip.options).some(o => o.value === pv)) ip.value = pv;
-      }
-      const ic = document.getElementById('idOnChk');
-      if (ic && typeof v.id_on !== 'undefined') ic.checked = v.id_on > 0.5;
-      const ish = document.getElementById('idSheetChk');
-      if (ish && typeof v.id_sheet !== 'undefined') { ish.checked = v.id_sheet > 0.5; idSheetState(ish.checked); }
-      edxSyncAllUI(); edxDrawCurve(); edxUpdateLocOverlay(); edxUpdateEraseOverlay();
-      const pi = document.getElementById('edxPresetInfo');
-      if (pi) pi.textContent = '已应用预设' + (window._edxLastPreset ? '：' + window._edxLastPreset : '');
-      document.getElementById('statusBox').textContent = '预设已应用';
     } else if (m.type === 'palette') {
       const box = document.getElementById('paletteBox');
       const other = document.getElementById('pickBox');
@@ -3224,14 +3032,6 @@ if (window.chrome && chrome.webview) {
     } else if (m.type === 'toast') {
       const sb3 = document.getElementById('statusBox');
       if (sb3) { sb3.textContent = m.msg || ''; sb3.style.color = '#ffd479'; }
-    } else if (m.type === 'xmpdata') {
-      if(window.edxOnXmpData) edxOnXmpData(m);
-    } else if (m.type === 'videopicked') {
-      if(window.edxVideoPicked) edxVideoPicked(m.path||'');
-    } else if (m.type === 'videodone') {
-      if(window.edxVideoDone) edxVideoDone(m);
-    } else if (m.type === 'davprogress' || m.type === 'davdone') {
-      if(window.edxDavProgress) edxDavProgress(m);
     } else if (m.type === 'reflutfile') {
       const p = prompt('给生成的 LUT 起个名字（不要带 .cube）', '参考_' + Date.now().toString().slice(-4));
       if (p) post('reflut|' + m.path + '|' + p);
@@ -3335,14 +3135,11 @@ if (window.chrome && chrome.webview) {
 })();
 </script>
 <script>
-// ==================== v2.19 编辑器专业调整 / 撤销重做 / 逐张参数 / 版本栈 ====================
+// ==================== v2.19 编辑器专业调整 / 逐张参数 ====================
 window._edx = {
-  path: null, params: {}, lut: '', lutmode: 'log',
-  hist: [], hidx: -1, versions: [], perImage: {},
-  perHist: {}, perHidx: {},
+  path: null, params: {}, lut: '', lutmode: 'log', perImage: {},
   applying: false, pending: 0, timer: 0,
-  curveChan: 'm', locSel: 1, eraseMode: false,
-  baseParams: null
+  curveChan: 'm', baseParams: null
 };
 function edxB64(s){ try{ return btoa(unescape(encodeURIComponent(String(s)))); }catch(e){ return ''; } }
 function edxB64Decode(s){ try{ return decodeURIComponent(escape(atob(s))); }catch(e){ return ''; } }
@@ -3354,11 +3151,6 @@ function edxCurPath(){
 function edxSnapshot(){
   return { params: edxClone(window._edx.params), lut: window._edx.lut||'', lutmode: window._edx.lutmode||'log', at: Date.now() };
 }
-function edxSetBadge(){
-  const b=document.getElementById('edxVerBadge'); if(b) b.textContent=String(Math.max(0,(window._edx.hist||[]).length));
-  const p=document.getElementById('edxPerBadge');
-  if(p){ const n=Object.keys(window._edx.perImage||{}).length; p.textContent='逐张 '+n; p.title='已为 '+n+' 张照片保存独立参数'; }
-}
 function edxOnState(m){
   const E=window._edx;
   if(!m || !Array.isArray(m.files)) return;
@@ -3367,32 +3159,26 @@ function edxOnState(m){
   if(path !== E.path){
     if(E.path){
       E.perImage[E.path] = edxSnapshot();
-      E.perHist[E.path] = edxClone(E.hist); E.perHidx[E.path] = E.hidx;
     }
-    E.path = path; E.hist=[]; E.hidx=-1; E.versions=[]; E.pending=0;
+    E.path = path; E.pending=0;
     const saved = path ? E.perImage[path] : null;
     if(saved){
       E.applying=true;
-      edxApplySnapshot(saved, true);
+      edxApplySnapshot(saved);
       E.applying=false;
       E.baseParams=edxClone(saved.params);
-      E.hist = (E.perHist[path]&&E.perHist[path].length) ? edxClone(E.perHist[path]) : [edxSnapshot()];
-      E.hidx = (typeof E.perHidx[path]==='number') ? E.perHidx[path] : E.hist.length-1;
-      if(E.hidx<0||E.hidx>=E.hist.length) E.hidx=E.hist.length-1;
     } else if(m.par){
       E.params=edxClone(m.par); E.lut=m.lut||''; E.lutmode=m.lutmode||'log';
-      E.baseParams=edxClone(E.params); E.hist=[edxSnapshot()]; E.hidx=0;
+      E.baseParams=edxClone(E.params);
       if(path) E.perImage[path]=edxSnapshot();
     }
     edxSyncAllUI();
     edxDrawCurve();
   } else if(m.par && (!E.params || !Object.keys(E.params).length)){
     E.params=edxClone(m.par); E.lut=m.lut||''; E.lutmode=m.lutmode||'log';
-    E.baseParams=edxClone(E.params); E.hist=[edxSnapshot()]; E.hidx=0;
+    E.baseParams=edxClone(E.params);
     edxSyncAllUI(); edxDrawCurve();
   }
-  edxSetBadge();
-  setTimeout(edxUpdateLocOverlay, 60);
 }
 function edxNoteParam(k,v){
   const E=window._edx;
@@ -3402,52 +3188,17 @@ function edxNoteParam(k,v){
   clearTimeout(E.timer);
   E.timer=setTimeout(edxCommit, 450);
   edxSyncOne(k, E.params[k]);
-  edxSetBadge();
 }
 function edxCommit(){
   const E=window._edx;
   if(E.applying || !E.path) return;
-  const snap=edxSnapshot();
-  const last=E.hist[E.hidx];
-  if(last && JSON.stringify(last.params)===JSON.stringify(snap.params) && last.lut===snap.lut && last.lutmode===snap.lutmode) return;
-  if(E.hidx < E.hist.length-1) E.hist=E.hist.slice(0,E.hidx+1);
-  E.hist.push(snap);
-  if(E.hist.length>60) E.hist.shift();
-  E.hidx=E.hist.length-1;
-  E.perImage[E.path]=snap;
-  E.perHist[E.path]=edxClone(E.hist); E.perHidx[E.path]=E.hidx;
-  edxSetBadge();
+  E.perImage[E.path]=edxSnapshot();
 }
 function edxFlush(){
   clearTimeout(window._edx.timer);
   edxCommit();
 }
-function edxUndo(){
-  const E=window._edx; edxFlush();
-  if(E.hidx<=0){ document.getElementById('statusBox').textContent='没有可撤销的步骤'; return; }
-  E.hidx--; edxApplySnapshot(E.hist[E.hidx], true);
-  E.perHist[E.path]=edxClone(E.hist); E.perHidx[E.path]=E.hidx;
-  document.getElementById('statusBox').textContent='已撤销 · 第 '+(E.hidx+1)+' 版';
-}
-function edxRedo(){
-  const E=window._edx; edxFlush();
-  if(E.hidx>=E.hist.length-1){ document.getElementById('statusBox').textContent='没有可重做的步骤'; return; }
-  E.hidx++; edxApplySnapshot(E.hist[E.hidx], true);
-  E.perHist[E.path]=edxClone(E.hist); E.perHidx[E.path]=E.hidx;
-  document.getElementById('statusBox').textContent='已重做 · 第 '+(E.hidx+1)+' 版';
-}
-function edxVersionMenu(){
-  const E=window._edx; edxFlush();
-  if(!E.hist.length){ alert('还没有版本记录'); return; }
-  const lines=E.hist.map((s,i)=>'#'+(i+1)+(i===E.hidx?'（当前）':'')+'  '+new Date(s.at).toLocaleTimeString()).join('\n');
-  const v=prompt('输入要恢复的版本号（1-'+E.hist.length+'）：\n\n'+lines, String(E.hidx+1));
-  if(!v) return;
-  const n=parseInt(v,10);
-  if(isNaN(n)||n<1||n>E.hist.length) return alert('版本号无效');
-  E.hidx=n-1; edxApplySnapshot(E.hist[E.hidx], true);
-  document.getElementById('statusBox').textContent='已恢复版本 #'+n;
-}
-function edxApplySnapshot(snap, skipHistory){
+function edxApplySnapshot(snap){
   const E=window._edx;
   if(!snap) return;
   E.params=edxClone(snap.params||{});
@@ -3459,34 +3210,29 @@ function edxApplySnapshot(snap, skipHistory){
   if(lutChanged && E.lut) post('selectlut|'+String(E.lut).replace(/^.*[\\\/]/,'').replace(/\.[^.]+$/,''));
   edxSyncAllUI(); edxDrawCurve();
   if(E.path) E.perImage[E.path]=edxSnapshot();
-  if(!skipHistory) { E.hist=[edxSnapshot()]; E.hidx=0; }
-  edxSetBadge();
 }
 function edxToggle(key, on, bodyId){
   setParam(key, on?1:0);
   if(bodyId){ const b=document.getElementById(bodyId); if(b){ b.style.opacity=on?'1':'.45'; b.style.pointerEvents=on?'auto':'none'; } }
-  if(key==='local_on') edxUpdateLocOverlay();
-  if(key==='erase_on' && !on) edxUpdateEraseOverlay();
 }
-function edxRange(k,v){ setParam(k,v); const el=document.getElementById('edx'+k.split('_').map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join('')+'V'); if(el) el.textContent=v; edxUpdateLocOverlay(); }
+function edxRange(k,v){ setParam(k,v); const el=document.getElementById('edx'+k.split('_').map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join('')+'V'); if(el) el.textContent=v; }
 function edxSyncOne(k,v){
   const sl=document.getElementById('s_'+k);
   if(sl){ sl.value=v; const vl=document.getElementById('v_'+k); if(vl) vl.textContent=v; }
-  const map={lens_dist:['edxLensDist','edxLensDistV'],lens_ca:['edxLensCa','edxLensCaV'],lens_vig:['edxLensVig','edxLensVigV'],level_angle:['edxLevelAngle','edxLevelAngleV'],erase_feather:['edxEraseF','edxEraseFV']};
+  const map={lens_dist:['edxLensDist','edxLensDistV'],lens_ca:['edxLensCa','edxLensCaV'],lens_vig:['edxLensVig','edxLensVigV'],level_angle:['edxLevelAngle','edxLevelAngleV']};
   if(map[k]){ const a=document.getElementById(map[k][0]); if(a) a.value=v; const b=document.getElementById(map[k][1]); if(b) b.textContent=v; }
   const h=document.querySelector('[data-hsl="'+k.replace('hsl_s','').replace('hsl_l','')+','+(k.indexOf('hsl_s')===0?'s':'l')+'"]');
   if(h) h.value=v;
-  const cm={curve_on:'edxCurveOn',hsl_on:'edxHslOn',lens_on:'edxLensOn',level_on:'edxLevelOn',local_on:'edxLocalOn',erase_on:'edxEraseOn'};
+  const cm={curve_on:'edxCurveOn',hsl_on:'edxHslOn',lens_on:'edxLensOn',level_on:'edxLevelOn'};
   if(cm[k]){ const c=document.getElementById(cm[k]); if(c){ c.checked=Number(v)>0.5; const body=document.getElementById(cm[k].replace('On','Body')); if(body){body.style.opacity=c.checked?'1':'.45';body.style.pointerEvents=c.checked?'auto':'none';} } }
   if(k.indexOf('curve_')===0) edxDrawCurve();
-  if(k.indexOf('loc')===0){ edxSyncLocControls(); edxUpdateLocOverlay(); }
   if(k==='level_angle'){ const lab=document.getElementById('edxLevelAngleV'); if(lab) lab.textContent=v; }
 }
 function edxSyncAllUI(){
   const p=window._edx.params||{};
   Object.keys(p).forEach(k=>edxSyncOne(k,p[k]));
   edxSyncAutoSwitch();
-  edxSyncLocControls(); edxDrawCurve();
+  edxDrawCurve();
 }
 // ---------- 曲线 ----------
 function edxCurveKey(i){ return 'curve_'+window._edx.curveChan+i; }
@@ -3548,182 +3294,17 @@ function edxCurveResetAll(){
 }
 // ---------- HSL ----------
 function edxHsl(el){ const d=el.dataset.hsl.split(','); const k='hsl_'+d[1]+d[0]; setParam(k,el.value); }
-// ---------- 局部蒙版 ----------
-function edxLocSel(n){ window._edx.locSel=n; [1,2,3].forEach(i=>{ const b=document.getElementById('edxLocTab'+i); if(b)b.classList.toggle('on',i===n); }); edxSyncLocControls(); edxUpdateLocOverlay(); }
-function edxLocToggle(on){ const n=window._edx.locSel; setParam('loc'+n+'_on',on?1:0); edxUpdateLocOverlay(); }
-function edxLocRange(f,v){ const n=window._edx.locSel; setParam('loc'+n+'_'+f,v); const map={x:'edxLocXV',y:'edxLocYV',r:'edxLocRV',feather:'edxLocFV',exp:'edxLocEV',sat:'edxLocSV',temp:'edxLocTV'}; const lab=document.getElementById(map[f]); if(lab)lab.textContent=v; edxSyncLocControls(); edxUpdateLocOverlay(); }
-function edxSyncLocControls(){
-  const n=window._edx.locSel, p=window._edx.params||{};
-  const g=(k,d)=>{ const v=p['loc'+n+'_'+k]; return v===undefined?d:v; };
-  const set=(id,v,vid)=>{ const e=document.getElementById(id); if(e)e.value=v; const l=document.getElementById(vid); if(l)l.textContent=v; };
-  set('edxLocX',g('x',50),'edxLocXV'); set('edxLocY',g('y',50),'edxLocYV'); set('edxLocR',g('r',30),'edxLocRV'); set('edxLocF',g('feather',50),'edxLocFV'); set('edxLocE',g('exp',0),'edxLocEV'); set('edxLocS',g('sat',0),'edxLocSV'); set('edxLocT',g('temp',0),'edxLocTV');
-  const c=document.getElementById('edxLocOn'); if(c)c.checked=Number(g('on',0))>0.5;
-}
 function edxLevelReset(){
   const el=document.getElementById('edxLevelAngle'); if(el) el.value=0;
   edxRange('level_angle',0);
 }
-function edxUpdateLocOverlay(){
-  const prev=document.getElementById('preview'); if(!prev) return;
-  let ov=document.getElementById('edxLocOverlay');
-  const active=document.querySelector('.edx-tab.on[data-p="local"]');
-  const on=Number(window._edx.params.local_on||0)>0.5;
-  const img=prev.querySelector('img');
-  const cur=window._edx.locSel;
-  const mOn=Number(window._edx.params['loc'+cur+'_on']||0)>0.5;
-  if(!active||!on||!mOn||!img){ if(ov)ov.style.display='none'; return; }
-  const ir=img.getBoundingClientRect();
-  if(ir.width<16||ir.height<16){ if(ov)ov.style.display='none'; return; }
-  if(!ov){ ov=document.createElement('div'); ov.id='edxLocOverlay'; ov.style.cssText='position:absolute;border:2px dashed #4ea1ff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.45) inset;pointer-events:none;z-index:20;'; ov.innerHTML='<div style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;background:#4ea1ff;border:2px solid #fff;border-radius:50%;pointer-events:auto;cursor:move"></div>'; prev.appendChild(ov);
-    let drag=null;
-    ov.firstChild.addEventListener('pointerdown',function(e){ drag=true; e.preventDefault(); });
-    window.addEventListener('pointermove',function(e){ if(!drag)return; const r=img.getBoundingClientRect(), pr=prev.getBoundingClientRect(); const x=Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100)), y=Math.max(0,Math.min(100,(e.clientY-r.top)/r.height*100)); setParam('loc'+window._edx.locSel+'_x',Math.round(x*10)/10); setParam('loc'+window._edx.locSel+'_y',Math.round(y*10)/10); edxSyncLocControls(); edxUpdateLocOverlay(); });
-    window.addEventListener('pointerup',function(){ drag=false; });
-    ov.addEventListener('wheel',function(e){ const n=window._edx.locSel; const curR=Number(window._edx.params['loc'+n+'_r']||30); const nr=Math.max(1,Math.min(100,curR+(e.deltaY>0?-2:2))); setParam('loc'+n+'_r',nr); edxSyncLocControls(); edxUpdateLocOverlay(); e.preventDefault(); },{passive:false});
-  }
-  ov.style.display='block';
-  const r=img.getBoundingClientRect(), pr=prev.getBoundingClientRect();
-  const x=r.left-pr.left+r.width*(Number(window._edx.params['loc'+cur+'_x']||50)/100);
-  const y=r.top-pr.top+r.height*(Number(window._edx.params['loc'+cur+'_y']||50)/100);
-  const rad=r.width*(Number(window._edx.params['loc'+cur+'_r']||30)/100);
-  ov.style.left=(x-rad)+'px'; ov.style.top=(y-rad)+'px'; ov.style.width=(rad*2)+'px'; ov.style.height=(rad*2)+'px';
-}
-// ---------- 智能消除框选 ----------
-function edxEraseMode(){
-  window._edx.eraseMode=true;
-  const prev=document.getElementById('preview'); if(prev) prev.style.cursor='crosshair';
-  document.getElementById('statusBox').textContent='在预览图上拖出要消除的区域';
-  edxUpdateEraseOverlay();
-}
-function edxEraseClear(){
-  window._edx.eraseMode=false; const p=document.getElementById('preview'); if(p)p.style.cursor='';
-  setParam('erase_on',0); window._edx.params.erase_w=0; window._edx.params.erase_h=0; setParam('erase_w',0); setParam('erase_h',0);
-  const ov=document.getElementById('edxEraseOverlay'); if(ov)ov.style.display='none';
-  const info=document.getElementById('edxEraseInfo'); if(info)info.textContent='未选择区域';
-}
-let _edxEraseDrag=null;
-(function bindErase(){
-  document.addEventListener('DOMContentLoaded',function(){
-    const prev=document.getElementById('preview'); if(!prev) return;
-    prev.addEventListener('pointerdown',function(e){
-      if(!window._edx.eraseMode) return; const img=prev.querySelector('img'); if(!img) return;
-      const r=img.getBoundingClientRect();
-      if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) return;
-      _edxEraseDrag={x0:e.clientX,y0:e.clientY,r:r,p:prev}; prev.setPointerCapture(e.pointerId); e.preventDefault();
-    });
-    prev.addEventListener('pointermove',function(e){
-      if(!_edxEraseDrag) return; const d=_edxEraseDrag; const ov=edxEnsureEraseOverlay();
-      const x=Math.min(e.clientX,d.r.right), y=Math.min(e.clientY,d.r.bottom);
-      const l=Math.min(d.x0,x), t=Math.min(d.y0,y), w=Math.abs(x-d.x0), h=Math.abs(y-d.y0);
-      ov.style.left=(l-d.r.left)+'px'; ov.style.top=(t-d.r.top)+'px'; ov.style.width=w+'px'; ov.style.height=h+'px'; ov.style.display='block';
-    });
-    prev.addEventListener('pointerup',function(e){
-      if(!_edxEraseDrag) return; const d=_edxEraseDrag; _edxEraseDrag=null;
-      const x=Math.min(e.clientX,d.r.right), y=Math.min(e.clientY,d.r.bottom);
-      const l=Math.min(d.x0,x), t=Math.min(d.y0,y), w=Math.abs(x-d.x0), h=Math.abs(y-d.y0);
-      if(w<4||h<4){ document.getElementById('statusBox').textContent='选区太小，请重新框选'; return; }
-      const nx=(l-d.r.left)/d.r.width*100, ny=(t-d.r.top)/d.r.height*100, nw=w/d.r.width*100, nh=h/d.r.height*100;
-      setParam('erase_x',Math.round(nx*10)/10); setParam('erase_y',Math.round(ny*10)/10); setParam('erase_w',Math.round(nw*10)/10); setParam('erase_h',Math.round(nh*10)/10);
-      const c=document.getElementById('edxEraseOn'); if(c&&!c.checked){c.checked=true;edxToggle('erase_on',true,null);}
-      window._edx.eraseMode=false; d.p.style.cursor='';
-      const info=document.getElementById('edxEraseInfo'); if(info)info.textContent='选区 '+(Math.round(nw*10)/10)+'% × '+(Math.round(nh*10)/10)+'%';
-      document.getElementById('statusBox').textContent='已选择消除区域，正在填充…';
-      edxUpdateEraseOverlay();
-    });
-  });
-})();
-function edxEnsureEraseOverlay(){ const prev=document.getElementById('preview'); let ov=document.getElementById('edxEraseOverlay'); if(!ov){ ov=document.createElement('div'); ov.id='edxEraseOverlay'; ov.style.cssText='position:absolute;border:2px dashed #ff8a65;background:rgba(255,138,101,.16);pointer-events:none;z-index:21;display:none'; prev.appendChild(ov); } return ov; }
-function edxUpdateEraseOverlay(){
-  const prev=document.getElementById('preview'); const img=prev&&prev.querySelector('img');
-  if(!img||Number(window._edx.params.erase_on||0)<0.5){ const o=document.getElementById('edxEraseOverlay'); if(o)o.style.display='none'; return; }
-  const ov=edxEnsureEraseOverlay();
-  const r=img.getBoundingClientRect(), pr=prev.getBoundingClientRect();
-  if(r.width<16||r.height<16){ ov.style.display='none'; return; }
-  const x=r.left-pr.left+r.width*(Number(window._edx.params.erase_x||0)/100), y=r.top-pr.top+r.height*(Number(window._edx.params.erase_y||0)/100);
-  ov.style.left=x+'px'; ov.style.top=y+'px'; ov.style.width=(r.width*Number(window._edx.params.erase_w||0)/100)+'px'; ov.style.height=(r.height*Number(window._edx.params.erase_h||0)/100)+'px'; ov.style.display='block';
-}
-// ---------- XMP ----------
-function edxXmpSave(){
-  if(!window._edx.path){ alert('请先选择照片'); return; }
-  const payload={title:document.getElementById('edxXmpTitle').value||'',keywords:document.getElementById('edxXmpKeywords').value||'',note:document.getElementById('edxXmpNote').value||'',rating:Number(document.getElementById('edxXmpRating').value||0)};
-  post('xmp|'+edxB64(JSON.stringify(payload)));
-  document.getElementById('edxXmpInfo').textContent='正在写入 XMP…';
-}
-function edxXmpLoad(){ if(!window._edx.path){ alert('请先选择照片'); return; } post('xmpread'); }
-function edxOnXmpData(m){
-  if(!m) return;
-  document.getElementById('edxXmpTitle').value=m.title||'';
-  document.getElementById('edxXmpKeywords').value=m.keywords||'';
-  document.getElementById('edxXmpNote').value=m.note||'';
-  document.getElementById('edxXmpRating').value=m.rating||0;
-  document.getElementById('edxXmpRatingV').textContent=m.rating||0;
-  document.getElementById('edxXmpInfo').textContent=m.written?('已写入：'+m.path):(m.exists?('已读取：'+m.path):'没有找到同名 .xmp');
-}
-// ---------- 预设导入导出 ----------
-function edxPresetExport(){
-  edxFlush();
-  const snap=edxSnapshot();
-  const data={format:'image-batch-tool-preset',version:'2.21',created:new Date().toISOString(),params:snap.params,lut:snap.lut,lutmode:snap.lutmode};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  const item=window._files&&window._files[window._selIdx];
-  const nm=(typeof item==='string'?item.split(/[\\/]/).pop():(item&&item.name)||'preset').replace(/\.[^.]+$/,'');
-  a.download=nm+'_v221预设.json'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
-  document.getElementById('statusBox').textContent='预设已导出';
-  const pi=document.getElementById('edxPresetInfo'); if(pi) pi.textContent='已导出 '+nm+'_v221预设.json';
-}
-function edxPresetImport(input){
-  const f=input.files&&input.files[0]; if(!f) return;
-  const rd=new FileReader();
-  rd.onload=function(){
-    try{
-      const d=JSON.parse(String(rd.result));
-      if(!d||!d.params) throw new Error('不是有效的预设文件');
-      const nums={}; Object.keys(d.params).forEach(k=>{ if(typeof d.params[k]==='number') nums[k]=d.params[k]; });
-      const snap={params:nums,lut:d.lut||'',lutmode:d.lutmode||'log',at:Date.now()};
-      window._edx.applying=true; edxApplySnapshot(snap,false); window._edx.applying=false;
-      edxCommit();
-      document.getElementById('statusBox').textContent='预设已导入：'+f.name;
-      const pi=document.getElementById('edxPresetInfo'); if(pi) pi.textContent='已导入 '+f.name+'（'+Object.keys(nums).length+' 项参数）';
-    }catch(e){ alert('导入失败：'+e.message); }
-    input.value='';
-  };
-  rd.readAsText(f,'utf-8');
-}
-// ---------- 视频 ----------
-function edxVideoFrame(){ post('videoframe|'+edxB64(JSON.stringify({path:document.getElementById('edxVideoPath').value||'',time:Number(document.getElementById('edxVideoTime').value||1)}))); document.getElementById('edxVideoInfo').textContent='正在抽帧…'; }
-function edxVideoTrim(){ post('videotrim|'+edxB64(JSON.stringify({path:document.getElementById('edxVideoPath').value||'',start:Number(document.getElementById('edxVideoStart').value||0),end:Number(document.getElementById('edxVideoEnd').value||10)}))); document.getElementById('edxVideoInfo').textContent='正在裁剪…'; }
-function edxVideoPicked(p){ const i=document.getElementById('edxVideoPath'); if(i)i.value=p||''; }
-function edxVideoDone(m){
-  const info=document.getElementById('edxVideoInfo');
-  if(info) info.textContent=(m&&m.msg)||'视频处理完成';
-  if(m&&m.ok&&m.path&&window._edx){
-    // 若视频输出为图片，加入当前文件列表便于继续编辑
-    if(/\.(jpg|jpeg|png|webp|bmp)$/i.test(m.path)) post('addpath|'+m.path);
-  }
-}
-function edxDavStart(){
-  const p={url:document.getElementById('edxDavUrl').value||'',user:document.getElementById('edxDavUser').value||'',pass:document.getElementById('edxDavPass').value||'',source:document.getElementById('edxDavSrc').value||'',encrypt:!!document.getElementById('edxDavEncrypt').checked};
-  if(!p.url){ alert('请填写 WebDAV 地址'); return; }
-  document.getElementById('edxDavInfo').textContent='正在备份…';
-  post('webdav|'+edxB64(JSON.stringify(p)));
-}
-function edxDavClear(){ document.getElementById('edxDavPass').value=''; document.getElementById('edxDavInfo').textContent='密码已清空'; }
-function edxDavProgress(m){ const i=document.getElementById('edxDavInfo'); if(i) i.textContent=(m.msg||'')+(m.total?(' ('+m.done+'/'+m.total+')'):''); }
-// ---------- Tab 与预览钩子 ----------
+// ---------- Tab ----------
 function edxTab(p){
   document.querySelectorAll('.edx-tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
   document.querySelectorAll('.edx-pane').forEach(x=>x.classList.toggle('on',x.dataset.p===p));
-  edxUpdateLocOverlay(); edxUpdateEraseOverlay(); if(p==='curve') edxDrawCurve();
+  if(p==='curve') edxDrawCurve();
 }
-function edxAfterPreview(){ edxUpdateLocOverlay(); edxUpdateEraseOverlay(); }
-window.addEventListener('resize',function(){ edxDrawCurve(); edxUpdateLocOverlay(); edxUpdateEraseOverlay(); });
-document.addEventListener('keydown',function(e){
-  if(!(e.ctrlKey||e.metaKey)) return;
-  const t=e.target; if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-  if(e.key==='z'||e.key==='Z'){ e.preventDefault(); if(e.shiftKey) edxRedo(); else edxUndo(); }
-  else if(e.key==='y'||e.key==='Y'){ e.preventDefault(); edxRedo(); }
-});
+window.addEventListener('resize', edxDrawCurve);
 </script>
 <script>
 // ==================== 照片去重 UI ====================
@@ -5943,72 +5524,16 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
-<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(s.id==='tsPanel'||s.id==='aiStyleSection') grp='fx'; else if(s.id==='aiPortraitSection') grp='portrait'; else if(s.id==='genEditSection'||s.id==='aiToolsSection') grp='gen'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
+<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='tsPanel'||s.id==='aiStyleSection'||s.id==='fxEnhanceSection') grp='fx'; else if(s.id==='aiPortraitSection') grp='portrait'; else if(s.id==='genEditSection'||s.id==='aiToolsSection') grp='gen'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
 try{ edxGroup('basic'); }catch(e){}
 </script>
 <style>
-#proOverlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;padding:24px}
-#proOverlay.on{display:flex}
-.pro-box{width:min(980px,94vw);max-height:90vh;background:#232529;color:#e7e9ee;border:1px solid #42464f;border-radius:12px;box-shadow:0 22px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
-body.skin-light .pro-box{background:#fff;color:#25282e;border-color:#d7d9df}
-.pro-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #383c44;background:#1d1f23}
-body.skin-light .pro-head{background:#f4f5f8;border-color:#e3e4e8}
-.pro-head b{font-size:15px}
-.pro-head .sub{font-size:11px;color:#8f96a3;flex:1}
-.pro-close{border:0;background:transparent;color:#9aa0aa;font-size:22px;line-height:1;cursor:pointer}
-.pro-tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid #383c44;background:#202226}
-body.skin-light .pro-tabs{background:#fafafa;border-color:#e3e4e8}
-.pro-tab{padding:8px 14px;border-radius:7px 7px 0 0;font-size:12px;color:#9aa0aa;cursor:pointer;border:1px solid transparent;border-bottom:0}
-.pro-tab.on{background:#2c3037;color:#fff;border-color:#42464f}
-body.skin-light .pro-tab.on{background:#fff;color:#12558f;border-color:#d7d9df}
-.pro-body{padding:16px 18px 20px;overflow:auto;min-height:280px}
-.pro-pane{display:none}
-.pro-pane.on{display:block}
-.pro-note{font-size:11px;line-height:1.7;color:#9299a5;margin:0 0 12px;padding:9px 11px;background:#1c1e22;border:1px solid #343840;border-radius:7px}
-body.skin-light .pro-note{background:#f6f7fa;border-color:#e1e3e9;color:#5b6270}
-.pro-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
-.pro-row label{font-size:11px;color:#b9bec8;white-space:nowrap}
-body.skin-light .pro-row label{color:#3b414c}
-.pro-row input[type=text],.pro-row select{background:#17191d;color:#e6e8ed;border:1px solid #464b55;border-radius:5px;padding:5px 7px;font-size:11px;outline:none}
-body.skin-light .pro-row input[type=text],body.skin-light .pro-row select{background:#fff;color:#222;border-color:#cfd3db}
-.pro-row input[type=text]{min-width:130px;flex:1}
-.pro-btn{border:1px solid #4b6c93;background:#2f5f8f;color:#fff;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer}
-.pro-btn:hover{background:#386f9f}
-.pro-btn.alt{background:#3b3f47;border-color:#555b66}
-.pro-btn.alt:hover{background:#464b54}
-.pro-btn.green{background:#2d7a50;border-color:#3e9a66}
-.pro-btn:disabled{opacity:.45;cursor:not-allowed}
-.pro-list{margin:10px 0;max-height:160px;overflow:auto;border:1px solid #383c44;border-radius:7px}
-.pro-file{display:flex;align-items:center;gap:8px;padding:6px 9px;font-size:11px;border-bottom:1px solid #30343b;color:#c7ccd5}
-.pro-file:last-child{border-bottom:0}
-.pro-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.pro-file .tp{font-size:10px;color:#7e8795}
-.pro-group{border:1px solid #3b414a;border-radius:8px;padding:9px 11px;margin:8px 0;background:#1e2025}
-body.skin-light .pro-group{background:#fafbfc;border-color:#dde0e6}
-.pro-group-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
-.pro-group .tag{font-size:10px;font-weight:400;color:#8fc7ff;background:#243d55;border-radius:4px;padding:2px 6px}
-body.skin-light .pro-group .tag{background:#e8f2ff;color:#0b62b8}
-.pro-group .paths{font-size:10px;color:#88919e;margin-top:4px;line-height:1.5}
-.pro-status{font-size:11px;line-height:1.6;color:#b9c0cc;margin:10px 0;padding:8px 10px;border-radius:6px;background:#1a1c20;border:1px solid #30343b;white-space:pre-wrap}
-.pro-status.err{color:#ffb4b4;border-color:#6b3333;background:#2a1d1d}
-.pro-preview{display:none;margin-top:12px;text-align:center}
-.pro-preview img{max-width:100%;max-height:360px;border-radius:8px;border:1px solid #414650;background:#111}
-.pro-sec{border:1px solid #3a3f48;border-radius:8px;padding:10px 12px;margin:10px 0;background:#202226}
-body.skin-light .pro-sec{background:#fafbfc;border-color:#dde0e6}
-.pro-sec h4{margin:0 0 6px;font-size:12px;color:#e2e6ed}
-body.skin-light .pro-sec h4{color:#222}
-.pro-split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media(max-width:760px){.pro-split{grid-template-columns:1fr}}
-.pro-kv{font-size:11px;color:#9299a5}
-.pro-badge{display:inline-block;font-size:10px;color:#9dd4a8;border:1px solid #376a47;background:#1d3525;border-radius:4px;padding:1px 5px;margin-left:6px}
 .edx-groups{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #33363d;background:#202226;position:sticky;top:0;z-index:5}
 .edx-gr{font-size:11px;padding:5px 11px;border-radius:5px;color:#9299a5;cursor:pointer;border:1px solid transparent}
 .edx-gr.on{color:#fff;background:#365a7c;border-color:#4d769c}
 body.skin-light .edx-groups{background:#f4f5f8;border-color:#e2e4e9}
 body.skin-light .edx-gr{color:#555}
 body.skin-light .edx-gr.on{color:#12558f;background:#dceaf8;border-color:#b8d3ec}
-.pro-hub-grid{display:grid;grid-template-columns:1fr;gap:6px}
-.pro-hub-grid .pro-btn{padding:9px}
 .gen-badge{font-weight:400;color:#9dd4a8;background:#1d3525;border:1px solid #376a47;border-radius:4px;padding:1px 5px;font-size:9px;vertical-align:1px}
 .gen-status-line{display:flex;align-items:center;gap:6px;font-size:11px;color:#e3eaf3;margin-bottom:8px;line-height:1.45;flex-wrap:wrap}
 .gen-status-line .mini-btn{margin-left:auto;padding:3px 7px;font-size:10px;flex:0 0 auto}
@@ -6161,83 +5686,6 @@ body.skin-light #aiToolsSection .ai-actions .ai-alt-sm,body.skin-frost #aiToolsS
 /* 透明底结果用棋盘格背景，避免误以为白底 */
 .gen-result-pane img.alpha{background-color:#2a2d31;background-image:linear-gradient(45deg,#3a3e43 25%,transparent 25%,transparent 75%,#3a3e43 75%,#3a3e43),linear-gradient(45deg,#3a3e43 25%,transparent 25%,transparent 75%,#3a3e43 75%,#3a3e43);background-size:16px 16px;background-position:0 0,8px 8px}
 </style>
-<div id="proOverlay" onclick="if(event.target===this)proClose()">
-  <div class="pro-box" role="dialog" aria-modal="true" aria-label="专业工具">
-    <div class="pro-head"><b>专业工具</b><span class="sub">HDR / 堆栈 · AI 修复 · 专业输出</span><button class="pro-close" onclick="proClose()" title="关闭">×</button></div>
-    <div class="pro-tabs">
-      <div class="pro-tab on" data-tab="hdr" onclick="proTab('hdr')">HDR / 堆栈</div>
-      <div class="pro-tab" data-tab="restore" onclick="proTab('restore')">AI 修复中心</div>
-      <div class="pro-tab" data-tab="output" onclick="proTab('output')">专业输出中心</div>
-    </div>
-    <div class="pro-body">
-      <div class="pro-pane on" data-pane="hdr">
-        <div class="pro-note">自动识别曝光包围 / 焦点堆栈 / 降噪连拍：依据 EXIF 曝光、拍摄时间、文件名族、尺寸和清晰度差分组。<br>HDR 使用 OpenCV <b>AlignMTB + Mertens 曝光融合</b>，并做中位曝光去鬼影与自动影调；焦点堆栈使用拉普拉斯清晰度权重；降噪堆栈使用对齐后中位数。</div>
-        <div class="pro-row">
-          <button class="pro-btn" onclick="proHdrAnalyze()">① 自动分析分组</button>
-          <label>模式</label>
-          <select id="proHdrMode"><option value="auto">自动</option><option value="hdr">HDR 曝光融合</option><option value="focus">焦点堆栈</option><option value="noise">降噪堆栈</option></select>
-          <label><input type="checkbox" id="proHdrAlign" checked> 对齐</label>
-          <label><input type="checkbox" id="proHdrDeghost" checked> 去鬼影</label>
-          <label><input type="checkbox" id="proHdrTone" checked> 自动影调</label>
-        </div>
-        <div class="pro-row">
-          <label>输出</label>
-          <input id="proHdrOut" type="text" placeholder="留空自动输出到 _pro 文件夹">
-          <label>长边上限</label>
-          <select id="proHdrMax"><option value="0">原尺寸</option><option value="6000">6000</option><option value="4000">4000</option><option value="2400">2400</option></select>
-        </div>
-        <div id="proHdrGroups" class="pro-kv">尚未分析。当前文件列表：<span id="proHdrCount">0</span> 张。</div>
-        <div id="proHdrStatus" class="pro-status">等待操作。建议先点「自动分析分组」；也可以直接按当前模式合成全部文件。</div>
-        <div class="pro-row"><button class="pro-btn green" onclick="proHdrMerge()">② 一键合成</button><button class="pro-btn alt" onclick="proHdrOpenOut()">打开输出文件夹</button></div>
-        <div id="proHdrPreview" class="pro-preview"><img id="proHdrImg" alt="合成结果预览"></div>
-      </div>
-
-      <div class="pro-pane" data-pane="restore">
-        <div class="pro-note">复用安装包内模型：GFPGAN v1.4（人脸细节修复）、YuNet（人脸检测）、Swin2SR x4（超分）、OpenCV 降噪与污点修复。<br>划痕/污点修复只处理小面积高对比缺陷，不会把眼睛、文字和树枝一起抹掉。超分在 CPU 上较慢，建议先小批量试。</div>
-        <div class="pro-row">
-          <label><input type="checkbox" id="proAirFace" checked> GFPGAN 人脸修复</label>
-          <label>强度</label><select id="proAirStrength"><option value="0.5">轻 50%</option><option value="0.7" selected>标准 70%</option><option value="0.85">强 85%</option></select>
-          <label>超分</label><select id="proAirSr"><option value="0">不超分</option><option value="2">2×</option><option value="4">4×</option></select>
-          <label>降噪</label><select id="proAirDenoise"><option value="0">关</option><option value="8">轻</option><option value="16" selected>中</option><option value="28">强</option></select>
-          <label>划痕</label><select id="proAirScratch"><option value="0">关</option><option value="10" selected>轻</option><option value="20">中</option><option value="32">强</option></select>
-          <label><input type="checkbox" id="proAirTone" checked> 自动影调</label>
-        </div>
-        <div class="pro-row"><label>输出目录</label><input id="proAirOut" type="text" placeholder="留空自动输出到 _restored"><button class="pro-btn green" onclick="proAirStart()">开始批量修复</button></div>
-        <div id="proAirStatus" class="pro-status">等待操作。当前文件列表：<span id="proAirCount">0</span> 张。</div>
-        <div id="proAirResults" class="pro-kv"></div>
-        <div id="proAirPreview" class="pro-preview"><img id="proAirImg" alt="修复结果预览"></div>
-      </div>
-
-      <div class="pro-pane" data-pane="output">
-        <div class="pro-note">输出中心把「选片 / 交付 / 打样」分开：联系表用于快速审片，水印用于交付，ICC 软打样用于打印前预览。所有输出写到独立文件夹，不覆盖原片。</div>
-        <div class="pro-split">
-          <div class="pro-sec">
-            <h4>联系表 Contact Sheet</h4>
-            <div class="pro-row"><label>列数</label><select id="proCtCols"><option>3</option><option selected>4</option><option>5</option><option>6</option></select><label>缩略图</label><select id="proCtCell"><option>260</option><option selected>360</option><option>480</option></select></div>
-            <div class="pro-row"><label>标题</label><input id="proCtTitle" type="text" value="联系表"></div>
-            <div class="pro-row"><label>输出</label><input id="proCtOut" type="text" placeholder="留空输出到 _pro\contact.jpg"></div>
-            <button class="pro-btn" onclick="proContact()">生成联系表</button>
-          </div>
-          <div class="pro-sec">
-            <h4>批量水印 / 边框</h4>
-            <div class="pro-row"><label>文字</label><input id="proWmText" type="text" value="图片批处理工具"></div>
-            <div class="pro-row"><label>位置</label><select id="proWmPos"><option value="bottom-right" selected>右下</option><option value="bottom-left">左下</option><option value="bottom-center">底部居中</option><option value="top-right">右上</option><option value="center">居中</option></select><label>透明度</label><select id="proWmOpacity"><option value="0.4">40%</option><option value="0.55" selected>55%</option><option value="0.7">70%</option><option value="0.85">85%</option></select></div>
-            <div class="pro-row"><label>白边</label><select id="proWmBorder"><option value="0">无</option><option value="10">10 px</option><option value="20">20 px</option><option value="40">40 px</option></select><button class="pro-btn" onclick="proWatermark()">批量加水印</button></div>
-          </div>
-        </div>
-        <div class="pro-sec">
-          <h4>ICC 软打样 / 打印预览</h4>
-          <div class="pro-row"><label>当前照片</label><span id="proProofPath" class="pro-kv">未选择</span><button class="pro-btn alt" onclick="proProofPick()">用当前照片</button></div>
-          <div class="pro-row"><label>ICC</label><input id="proProofIcc" type="text" value="C:\Windows\System32\spool\drivers\color\sRGB Color Space Profile.icm"><button class="pro-btn alt" onclick="post('chooseicc')">选择 ICC</button></div>
-          <div class="pro-row"><label>意图</label><select id="proProofIntent"><option value="relative" selected>相对比色</option><option value="perceptual">感知</option></select><label>输出</label><input id="proProofOut" type="text" placeholder="留空输出到 _pro\proof.jpg"><button class="pro-btn" onclick="proProof()">生成软打样</button></div>
-        </div>
-        <div id="proOutStatus" class="pro-status">等待操作。</div>
-        <div id="proOutPreview" class="pro-preview"><img id="proOutImg" alt="输出预览"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div id="aiMaskOverlay" onclick="if(event.target===this)aiMaskClose()">
   <div class="ai-mask-box" role="dialog" aria-modal="true" aria-label="智能消除涂抹">
     <div class="ai-mask-head">
@@ -6729,180 +6177,6 @@ body.skin-light #aiToolsSection .ai-actions .ai-alt-sm,body.skin-frost #aiToolsS
   document.addEventListener('DOMContentLoaded', function(){ prog(false); });
 })();
 </script>
-<script>
-(function(){
-  function files(){ return (window._files||[]).map(function(f){ return (typeof f==='object') ? (f.path||f.name) : f; }).filter(Boolean); }
-  function dirOf(p){ p=String(p||'').replace(/\\/g,'/'); var i=p.lastIndexOf('/'); return i>=0?p.slice(0,i):''; }
-  function defOut(name){ var fs=files(); var d=fs.length?dirOf(fs[0]):''; return (d?d+'\\':'')+name; }
-  function status(id,msg,err){ var e=document.getElementById(id); if(!e)return; e.textContent=msg||''; e.classList.toggle('err',!!err); }
-  function preview(id,url){ var box=document.getElementById(id); if(!box)return; var img=box.querySelector('img'); if(img)img.src=url||''; box.style.display=url?'block':'none'; }
-  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-  function baseName(p){ p=String(p||'').replace(/\\/g,'/'); return p.slice(p.lastIndexOf('/')+1); }
-  function toast(s){ try{ toastMsg(s); }catch(e){ console.log(s); } }
-
-  window.proOpen=function(tab){
-    var ov=document.getElementById('proOverlay'); if(!ov)return;
-    ov.classList.add('on'); proTab(tab||'hdr'); proSync();
-  };
-  window.proClose=function(){ var ov=document.getElementById('proOverlay'); if(ov)ov.classList.remove('on'); };
-  window.proTab=function(tab){
-    document.querySelectorAll('.pro-tab').forEach(function(t){ t.classList.toggle('on',t.getAttribute('data-tab')===tab); });
-    document.querySelectorAll('.pro-pane').forEach(function(p){ p.classList.toggle('on',p.getAttribute('data-pane')===tab); });
-  };
-  window.proSync=function(){
-    var fs=files();
-    var hc=document.getElementById('proHdrCount'); if(hc)hc.textContent=fs.length;
-    var ac=document.getElementById('proAirCount'); if(ac)ac.textContent=fs.length;
-    var pp=document.getElementById('proProofPath'); if(pp)pp.textContent=fs[window._selIdx]||'未选择';
-    if(!document.getElementById('proHdrOut').value) document.getElementById('proHdrOut').placeholder='留空输出到 '+(fs.length?dirOf(fs[0])+'\\_pro':'当前目录\\_pro');
-  };
-  window.proHdrAnalyze=function(){
-    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
-    var obj={paths:fs};
-    window._proGroup=null;
-    var o=document.getElementById('proHdrOut'); if(o)o.value='';
-    status('proHdrStatus','正在分析 EXIF、文件名族、亮度与清晰度差…');
-    document.getElementById('proHdrGroups').innerHTML='<span class="pro-kv">分析中…</span>';
-    post('hdr_analyze|'+edxB64(JSON.stringify(obj)));
-  };
-  function hdrIn(){
-    var mode=document.getElementById('proHdrMode').value;
-    return {paths:files(),mode:mode,align:document.getElementById('proHdrAlign').checked,
-      deghost:document.getElementById('proHdrDeghost').checked,deghost_strength:0.35,
-      auto_tone:document.getElementById('proHdrTone').checked,
-      max_dim:parseInt(document.getElementById('proHdrMax').value||'0',10)||0};
-  }
-  window.proHdrMerge=function(){
-    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
-    if(window._proGroup){ fs=window._proGroup.paths.slice(); }
-    else if((window._proHdrGroups||[]).length>1){
-      window._proQueue=(window._proHdrGroups||[]).map(function(g){ return {paths:g.paths.slice(),mode:g.suggested_mode,kind:g.kind}; });
-      window._proQueueTotal=window._proQueue.length;
-      window._proBatch=[];
-      proHdrMergeNext();
-      return;
-    }
-    var obj=hdrIn(); obj.paths=fs;
-    var out=document.getElementById('proHdrOut').value.trim();
-    if(!out) out=defOut('_pro\\hdr_'+obj.mode+'_'+Date.now()+'.jpg');
-    obj.output=out;
-    status('proHdrStatus','正在对齐并合成 '+fs.length+' 张（'+obj.mode+'）…大图可能需要几十秒');
-    post('hdr_merge|'+edxB64(JSON.stringify(obj)));
-  };
-  window.proHdrMergeNext=function(){
-    var q=window._proQueue||[]; if(!q.length)return;
-    var job=q.shift(); var total=window._proQueueTotal||1;
-    var dir=dirOf(files()[0]||job.paths[0]||'');
-    var out=(dir?dir+'\\':'')+'_pro\\hdr_'+job.mode+'_'+(total-q.length)+'_'+Date.now()+'.jpg';
-    var obj=hdrIn(); obj.paths=job.paths; obj.mode=job.mode||'auto'; obj.output=out;
-    status('proHdrStatus','正在合成第 '+(total-q.length)+'/'+total+' 组（'+(job.kind||job.mode)+'）…');
-    post('hdr_merge|'+edxB64(JSON.stringify(obj)));
-  };
-  window.proHdrUseGroup=function(i){
-    var g=(window._proHdrGroups||[])[i]; if(!g)return;
-    window._proGroup=g;
-    var o=document.getElementById('proHdrOut'); if(o)o.value='';
-    status('proHdrStatus','已选中分组：'+g.kind+' · '+g.paths.length+' 张。点「一键合成」只合成这一组。');
-  };
-  window.proHdrOpenOut=function(){
-    var p=document.getElementById('proHdrOut').value.trim();
-    if(p) post('proopenfolder|'+edxB64(dirOf(p)));
-    else { var fs=files(); if(fs.length) post('proopenfolder|'+edxB64(dirOf(fs[0])+'\\_pro')); }
-  };
-  window.proAirStart=function(){
-    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
-    var obj={paths:fs,outdir:document.getElementById('proAirOut').value.trim(),
-      face:document.getElementById('proAirFace').checked?1:0,
-      face_strength:parseFloat(document.getElementById('proAirStrength').value),
-      superres:parseInt(document.getElementById('proAirSr').value,10)||0,
-      denoise:parseInt(document.getElementById('proAirDenoise').value,10)||0,
-      scratch:parseInt(document.getElementById('proAirScratch').value,10)||0,
-      auto_tone:document.getElementById('proAirTone').checked?1:0,quality:95,suffix:'_restored'};
-    if(!obj.outdir) obj.outdir=defOut('_restored');
-    status('proAirStatus','AI 修复中：'+fs.length+' 张。'+(obj.superres?'超分在 CPU 上较慢，请耐心等待。':''));
-    document.getElementById('proAirResults').innerHTML='<span class="pro-kv">处理中…</span>';
-    post('airestore|'+edxB64(JSON.stringify(obj)));
-  };
-  window.proContact=function(){
-    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
-    var out=document.getElementById('proCtOut').value.trim()||defOut('_pro\\contact_'+Date.now()+'.jpg');
-    var obj={paths:fs,output:out,cols:parseInt(document.getElementById('proCtCols').value,10)||4,
-      cell:parseInt(document.getElementById('proCtCell').value,10)||360,title:document.getElementById('proCtTitle').value||'联系表',labels:true};
-    status('proOutStatus','正在生成联系表…');
-    post('procontact|'+edxB64(JSON.stringify(obj)));
-  };
-  window.proWatermark=function(){
-    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
-    var obj={paths:fs,text:document.getElementById('proWmText').value||'图片批处理工具',
-      position:document.getElementById('proWmPos').value,opacity:parseFloat(document.getElementById('proWmOpacity').value),
-      border:parseInt(document.getElementById('proWmBorder').value,10)||0,border_color:'#ffffff',outdir:defOut('_pro\\watermark'),quality:95};
-    status('proOutStatus','正在批量加水印…');
-    post('prowatermark|'+edxB64(JSON.stringify(obj)));
-  };
-  window.proProofPick=function(){
-    var fs=files(); var idx=window._selIdx;
-    if(idx<0||idx>=fs.length){ if(fs.length){ idx=0; } else { toast('请先添加照片'); return; } }
-    window._proProofPath=fs[idx];
-    document.getElementById('proProofPath').textContent=fs[idx];
-  };
-  window.proProof=function(){
-    var p=window._proProofPath||files()[window._selIdx]||files()[0];
-    if(!p){ toast('请先选择照片'); return; }
-    var out=document.getElementById('proProofOut').value.trim()||defOut('_pro\\proof_'+Date.now()+'.jpg');
-    var obj={path:p,output:out,icc:document.getElementById('proProofIcc').value.trim(),intent:document.getElementById('proProofIntent').value};
-    status('proOutStatus','正在做 ICC 软打样…');
-    post('proof|'+edxB64(JSON.stringify(obj)));
-  };
-  window.proOnResult=function(m){
-    var d=m.data||{}; var ok=!!d.ok;
-    if(m.kind==='hdr_analyze'){
-      window._proHdrGroups=d.groups||[];
-      var box=document.getElementById('proHdrGroups');
-      if(!window._proHdrGroups.length){ box.innerHTML='<span class="pro-kv">没有识别到可分组的多张照片；可直接选模式合成。</span>'; status('proHdrStatus',d.error||'分析完成，但没有分组',!ok); return; }
-      var html=''; window._proHdrGroups.forEach(function(g,i){
-        html+='<div class="pro-group"><div class="pro-group-h">组 '+(i+1)+' · '+esc(g.kind||'?')+'<span class="tag">'+esc(g.suggested_mode||'')+' · 置信度 '+esc(g.confidence||'')+'</span><button class="pro-btn alt" style="margin-left:auto;padding:3px 8px" onclick="proHdrUseGroup('+i+')">合成此组</button></div><div class="paths">'+g.paths.map(function(p){ return esc(baseName(p)); }).join(' · ')+'</div><div class="paths">'+esc(g.reason||'')+'</div></div>';
-      });
-      box.innerHTML=html;
-      status('proHdrStatus','分析完成：'+window._proHdrGroups.length+' 组。可点「合成此组」，或直接「一键合成」全部。',!ok);
-    } else if(m.kind==='hdr_merge'){
-      if(ok&&d.output){
-        if(window._proQueue){
-          (window._proBatch=window._proBatch||[]).push(d.output);
-          if(window._proQueue.length){
-            status('proHdrStatus','第 '+window._proBatch.length+'/'+(window._proQueueTotal||'?')+' 组完成：'+d.output+'，继续下一组…');
-            proHdrMergeNext();
-            return;
-          }
-          status('proHdrStatus','全部合成完成：'+window._proBatch.length+' 组。最后输出：'+d.output);
-          window._proQueue=null;
-          preview('proHdrPreview',null); post('propreview|'+edxB64(d.output));
-          document.getElementById('proHdrOut').value=d.output;
-          return;
-        }
-        status('proHdrStatus','合成完成（'+esc(d.mode||'auto')+'）：'+d.output+'（'+d.w+'×'+d.h+'）'); preview('proHdrPreview',null); post('propreview|'+edxB64(d.output)); document.getElementById('proHdrOut').value=d.output;
-      }
-      else { window._proQueue=null; status('proHdrStatus','合成失败：'+(d.error||'未知错误'),true); }
-    } else if(m.kind==='airestore'){
-      if(ok){
-        var rr=d.results||[]; var oks=rr.filter(function(x){return x.ok;});
-        status('proAirStatus','修复完成：'+d.ok_count+'/'+d.count+' 张。输出：'+d.outdir);
-        document.getElementById('proAirResults').innerHTML=rr.map(function(x){ return '<div class="pro-file"><span class="nm">'+esc(x.input?baseName(x.input):'')+'</span><span class="tp">'+esc((x.actions||[]).join(' / ')||'失败')+'</span>'+(x.ok?'<span class="pro-badge">OK</span>':'<span class="tp" style="color:#ff9d9d">'+esc(x.error||'失败')+'</span>')+'</div>'; }).join('');
-        if(oks.length) post('propreview|'+edxB64(oks[0].output));
-      } else status('proAirStatus','修复失败：'+(d.error||'未知错误'),true);
-    } else if(m.kind==='procontact'||m.kind==='prowatermark'||m.kind==='proof'){
-      if(ok&&d.output){ status('proOutStatus','输出完成：'+d.output); post('propreview|'+edxB64(d.output)); }
-      else status('proOutStatus','输出失败：'+(d.error||'未知错误'),true);
-    }
-  };
-  window.proOnPreview=function(m){
-    if(!m.data)return;
-    var map={hdr:'proHdrPreview',restore:'proAirPreview',output:'proOutPreview'};
-    var active=document.querySelector('.pro-pane.on'); var pane=active?active.getAttribute('data-pane'):'hdr';
-    preview(map[pane]||'proHdrPreview',m.data);
-  };
-})();
-</script>
-
 </body></html>
 
 

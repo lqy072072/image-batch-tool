@@ -384,7 +384,7 @@ static class Presets
     }
 }
 
-// ---------------- 编辑器扩展：曲线 / HSL / 镜头校正 / 局部蒙版 / 智能消除 ----------------
+// ---------------- 编辑器扩展：曲线 / HSL / 镜头校正 ----------------
 static class EditorFx
 {
     static double P(Dictionary<string, double> p, string k, double d)
@@ -477,9 +477,7 @@ static class EditorFx
         bool curveOn = P(p, "curve_on", 0) > 0.5;
         bool hslOn = P(p, "hsl_on", 0) > 0.5;
         bool lensOn = P(p, "lens_on", 0) > 0.5;
-        bool localOn = P(p, "local_on", 0) > 0.5;
-        bool eraseOn = P(p, "erase_on", 0) > 0.5;
-        if (!curveOn && !hslOn && !lensOn && !localOn && !eraseOn) return;
+        if (!curveOn && !hslOn && !lensOn) return;
 
         int W = bmp.Width, H = bmp.Height;
         BitmapData data = bmp.LockBits(new Rectangle(0, 0, W, H), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
@@ -501,21 +499,6 @@ static class EditorFx
         double lensK = P(p, "lens_dist", 0) / 100.0;
         double lensCa = P(p, "lens_ca", 0) / 100.0;
         double lensVig = P(p, "lens_vig", 0) / 100.0;
-
-        double[] lx = new double[4], ly = new double[4], lr = new double[4], lf = new double[4], le = new double[4], ls = new double[4], lt = new double[4];
-        for (int m = 1; m <= 3; m++) {
-            lx[m] = P(p, "loc" + m + "_x", 50) / 100.0;
-            ly[m] = P(p, "loc" + m + "_y", 50) / 100.0;
-            lr[m] = Math.Max(1, P(p, "loc" + m + "_r", 30)) / 100.0;
-            lf[m] = Math.Max(0, Math.Min(100, P(p, "loc" + m + "_feather", 50))) / 100.0;
-            le[m] = P(p, "loc" + m + "_exp", 0) / 100.0;
-            ls[m] = P(p, "loc" + m + "_sat", 0) / 100.0;
-            lt[m] = P(p, "loc" + m + "_temp", 0) / 100.0;
-        }
-
-        double ex = P(p, "erase_x", 10) / 100.0, ey = P(p, "erase_y", 10) / 100.0;
-        double ew = Math.Max(1, P(p, "erase_w", 15)) / 100.0, eh = Math.Max(1, P(p, "erase_h", 15)) / 100.0;
-        double ef = Math.Max(0, Math.Min(100, P(p, "erase_feather", 20))) / 100.0;
 
         byte[] srcCopy = null;
         if (lensOn) { srcCopy = new byte[buf.Length]; Buffer.BlockCopy(buf, 0, srcCopy, 0, buf.Length); }
@@ -565,62 +548,7 @@ static class EditorFx
                     HslToRgb(hh, ss, ll, out r, out g, out b);
                 }
 
-                if (localOn) {
-                    double px = x / (double)W, py = y / (double)H;
-                    for (int m = 1; m <= 3; m++) {
-                        if (P(p, "loc" + m + "_on", 0) <= 0.5) continue;
-                        double dx = (px - lx[m]) * W, dy = (py - ly[m]) * H;
-                        double rr = lr[m] * W;
-                        double dist = Math.Sqrt(dx * dx + dy * dy) / Math.Max(rr, 1);
-                        if (dist > 1.0) continue;
-                        double feather = Math.Max(0.0001, lf[m]);
-                        double wgt = 1.0;
-                        if (dist > 1.0 - feather) wgt = Math.Max(0, (1.0 - dist) / feather);
-                        if (wgt <= 0) continue;
-                        double gain = Math.Pow(2.0, le[m] * 1.6);
-                        r = r * gain; g = g * gain; b = b * gain;
-                        double sat = 1.0 + ls[m];
-                        double lum = 0.299 * r + 0.587 * g + 0.114 * b;
-                        r = lum + (r - lum) * sat; g = lum + (g - lum) * sat; b = lum + (b - lum) * sat;
-                        double tw = lt[m] * 22.0;
-                        r += tw * wgt; b -= tw * wgt;
-                        r = r * wgt + buf[i + 2] * (1 - wgt);
-                        g = g * wgt + buf[i + 1] * (1 - wgt);
-                        b = b * wgt + buf[i] * (1 - wgt);
-                    }
-                }
-
                 buf[i] = Clamp(b); buf[i + 1] = Clamp(g); buf[i + 2] = Clamp(r);
-            }
-        }
-
-        if (eraseOn) {
-            int rx = (int)(ex * W), ry = (int)(ey * H), rw = (int)(ew * W), rh = (int)(eh * H);
-            if (rw > 1 && rh > 1) {
-                int srcX = rx - rw; if (srcX < 1) srcX = rx + rw; if (srcX + rw > W) srcX = Math.Max(1, W - rw - 1);
-                int feather = Math.Max(1, (int)(ef * Math.Min(rw, rh) * 0.5));
-                byte[] fill = new byte[buf.Length]; Buffer.BlockCopy(buf, 0, fill, 0, buf.Length);
-                for (int yy = 0; yy < rh; yy++) {
-                    int dy = ry + yy; if (dy < 0 || dy >= H) continue;
-                    for (int xx = 0; xx < rw; xx++) {
-                        int dx = rx + xx; if (dx < 0 || dx >= W) continue;
-                        int si = dy * stride + Math.Min(W - 1, Math.Max(0, srcX + xx)) * 4;
-                        int di = dy * stride + dx * 4;
-                        fill[di] = buf[si]; fill[di + 1] = buf[si + 1]; fill[di + 2] = buf[si + 2];
-                    }
-                }
-                for (int yy = 0; yy < rh; yy++) {
-                    int dy = ry + yy; if (dy < 0 || dy >= H) continue;
-                    for (int xx = 0; xx < rw; xx++) {
-                        int dx = rx + xx; if (dx < 0 || dx >= W) continue;
-                        int edge = Math.Min(Math.Min(xx, rw - 1 - xx), Math.Min(yy, rh - 1 - yy));
-                        double wgt = edge < feather ? edge / (double)feather : 1.0;
-                        int di = dy * stride + dx * 4;
-                        buf[di] = Clamp(buf[di] * (1 - wgt) + fill[di] * wgt);
-                        buf[di + 1] = Clamp(buf[di + 1] * (1 - wgt) + fill[di + 1] * wgt);
-                        buf[di + 2] = Clamp(buf[di + 2] * (1 - wgt) + fill[di + 2] * wgt);
-                    }
-                }
             }
         }
 
