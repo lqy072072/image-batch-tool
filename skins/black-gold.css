@@ -1,0 +1,946 @@
+/* ==========================================================================
+   黑金 · 墨黑赤金主题（v2.40 独立版）
+   不再依赖 eva-core / skin-eva：只使用本文件自己的变量、底图与控件样式。
+   视觉语言：黑漆底、赤金线、和纸浪纹；平直切边，不使用任何旧皮肤装甲形状。
+   只改变外观，不改变布局尺寸、DOM 结构、点击区域或业务逻辑。
+   ========================================================================== */
+
+html.skin-blackgold-html {
+  background: #050403 !important;
+}
+
+body.skin-blackgold {
+  --bg-ink: #050403;
+  --bg-lacquer: #0b0805;
+  --panel: rgba(9, 7, 5, .88);
+  --panel-soft: rgba(15, 11, 7, .64);
+  --panel-solid: #0b0805;
+  --gold: #c9a45d;
+  --gold-bright: #e8c878;
+  --gold-pale: #f5e4b4;
+  --gold-deep: #8d6633;
+  --text: #f2e8cf;
+  --muted: #b9a77f;
+  --dim: #8d7b5c;
+  --line: rgba(201, 164, 93, .28);
+  --line-strong: rgba(232, 200, 120, .58);
+  --hover: rgba(232, 200, 120, .12);
+  --field: rgba(5, 4, 3, .94);
+  --danger: #c95747;
+  --danger-text: #ffe0d5;
+  color-scheme: dark;
+  color: var(--text) !important;
+  background:
+    linear-gradient(180deg, rgba(5, 4, 3, .10) 0%, rgba(5, 4, 3, .44) 48%, rgba(5, 4, 3, .68) 100%),
+    url("black-gold-bg.jpg") center / cover fixed no-repeat !important;
+}
+
+/* 根页面也铺底图，避免首帧或滚动时露出灰色 */
+html.skin-blackgold-html,
+body.skin-blackgold {
+  background-color: var(--bg-ink) !important;
+}
+body.skin-blackgold::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 54% at 50% 34%, transparent 0%, rgba(5, 4, 3, .55) 100%),
+    linear-gradient(180deg, transparent 0%, rgba(5, 4, 3, .18) 40%, rgba(5, 4, 3, .52) 100%);
+}
+
+/* ---------- 顶部窗口栏 ---------- */
+body.skin-blackgold .titlebar,
+body.skin-blackgold .alb-titlebar,
+body.skin-blackgold .alb-head {
+  background: linear-gradient(180deg, rgba(13, 9, 5, .98) 0%, rgba(5, 4, 3, .96) 100%) !important;
+  border-bottom: 1px solid var(--line-strong) !important;
+  box-shadow: 0 1px 0 rgba(232, 200, 120, .12), 0 8px 24px rgba(0, 0, 0, .38) !important;
+}
+body.skin-blackgold .titlebar::after,
+body.skin-blackgold .alb-titlebar::after,
+body.skin-blackgold .alb-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright) 18%, transparent 46%, var(--gold) 74%, transparent);
+  opacity: .72;
+  pointer-events: none;
+}
+body.skin-blackgold .titlebar,
+body.skin-blackgold .alb-titlebar,
+body.skin-blackgold .alb-head { position: relative; }
+
+/* 窗口控制点：黑金小铜环，不再沿用旧皮肤的浮起圆点 */
+body.skin-blackgold .light {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(232, 200, 120, .70) !important;
+  box-shadow: inset 0 0 0 2px rgba(5, 4, 3, .92), 0 0 8px rgba(232, 200, 120, .10) !important;
+  transition: transform .15s ease, box-shadow .15s ease !important;
+}
+body.skin-blackgold .light.red { background: #a8463b !important; }
+body.skin-blackgold .light.yellow { background: #c79c4a !important; }
+body.skin-blackgold .light.green { background: #8c6e36 !important; }
+body.skin-blackgold .light:hover {
+  transform: scale(1.12);
+  box-shadow: inset 0 0 0 2px rgba(5, 4, 3, .86), 0 0 12px rgba(232, 200, 120, .35) !important;
+}
+
+/* 顶栏文字与标签：黑漆描金，悬停才出现底线 */
+body.skin-blackgold .top-right { color: var(--muted) !important; }
+body.skin-blackgold .top-right span {
+  border: 1px solid transparent !important;
+  border-bottom-color: rgba(201, 164, 93, .26) !important;
+  border-radius: 1px !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  text-shadow: 0 1px 0 #000;
+  transition: color .16s ease, border-color .16s ease, background .16s ease !important;
+}
+body.skin-blackgold .top-right span:hover {
+  background: rgba(232, 200, 120, .09) !important;
+  border-color: rgba(232, 200, 120, .56) !important;
+  color: var(--gold-pale) !important;
+}
+
+/* 顶栏标签页：金色下划线选中，不用旧皮肤的胶囊块 */
+/* 复选框：黑底细金边，选中为赤金方印。 */
+body.skin-blackgold input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  background: rgba(5, 4, 3, .72);
+  position: relative;
+  cursor: pointer;
+  vertical-align: -2px;
+  box-shadow: inset 0 1px 0 rgba(255, 243, 210, .04);
+}
+body.skin-blackgold input[type="checkbox"]:hover {
+  border-color: var(--gold);
+}
+body.skin-blackgold input[type="checkbox"]:checked {
+  border-color: var(--gold-bright);
+  background: linear-gradient(135deg, #f2dfa8, #c6a35e);
+}
+body.skin-blackgold input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #120d08;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* 查看器、回收站、去重窗口里的通用按钮，统一成黑漆金边；危险操作保留赤色。 */
+body.skin-blackgold #albView button,
+body.skin-blackgold .bin-head .bin-btn,
+body.skin-blackgold #dupPanel .mini-btn,
+body.skin-blackgold #dupPanel .dup-ignore {
+  border: 1px solid var(--line) !important;
+  border-radius: 1px !important;
+  background: linear-gradient(180deg, rgba(29, 23, 15, .96), rgba(12, 9, 6, .98)) !important;
+  color: var(--gold-pale) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 243, 210, .04) !important;
+}
+body.skin-blackgold #albView button:hover,
+body.skin-blackgold .bin-head .bin-btn:hover,
+body.skin-blackgold #dupPanel .mini-btn:hover,
+body.skin-blackgold #dupPanel .dup-ignore:hover {
+  border-color: var(--gold) !important;
+  background: linear-gradient(180deg, #ead9a4, #c6a35e) !important;
+  color: #120d08 !important;
+}
+body.skin-blackgold #albView .alb-vacts button:last-child,
+body.skin-blackgold .bin-head .bin-btn.danger {
+  border-color: #a84b37 !important;
+  background: linear-gradient(180deg, #8f2e22, #5e1b14) !important;
+  color: #ffe7df !important;
+}
+body.skin-blackgold #albView .alb-vacts button:last-child:hover,
+body.skin-blackgold .bin-head .bin-btn.danger:hover {
+  border-color: #d27658 !important;
+  background: linear-gradient(180deg, #a83a2a, #76231a) !important;
+  color: #fff3ee !important;
+}
+
+body.skin-blackgold .tab,
+body.skin-blackgold .alb-tab,
+body.skin-blackgold .alb-curate-tab,
+body.skin-blackgold .edx-tab,
+body.skin-blackgold .edx-gr,
+body.skin-blackgold .pro-tab,
+body.skin-blackgold .gen-tab,
+body.skin-blackgold .hist-tab {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 1px !important;
+  color: var(--muted) !important;
+  box-shadow: none !important;
+  transition: color .16s ease, border-color .16s ease, background .16s ease !important;
+}
+body.skin-blackgold .tab.active,
+body.skin-blackgold .tab.on,
+body.skin-blackgold .alb-tab.active,
+body.skin-blackgold .alb-tab.on,
+body.skin-blackgold .alb-curate-tab.active,
+body.skin-blackgold .alb-curate-tab.on,
+body.skin-blackgold .edx-tab.active,
+body.skin-blackgold .edx-tab.on,
+body.skin-blackgold .edx-gr.on,
+body.skin-blackgold .pro-tab.active,
+body.skin-blackgold .pro-tab.on,
+body.skin-blackgold .gen-tab.active,
+body.skin-blackgold .gen-tab.on,
+body.skin-blackgold .hist-tab.active,
+body.skin-blackgold .hist-tab.on {
+  background: rgba(232, 200, 120, .08) !important;
+  border-color: transparent !important;
+  border-bottom: 2px solid var(--gold-bright) !important;
+  color: var(--gold-pale) !important;
+  box-shadow: 0 6px 18px rgba(232, 200, 120, .06) !important;
+}
+
+/* ---------- 主体与面板 ---------- */
+body.skin-blackgold .main,
+body.skin-blackgold .alb-overlay,
+body.skin-blackgold .alb-body,
+body.skin-blackgold .alb-view-body,
+body.skin-blackgold .alb-grid,
+body.skin-blackgold .dup-list { background: transparent !important; }
+
+body.skin-blackgold .left,
+body.skin-blackgold .right {
+  background:
+    linear-gradient(180deg, rgba(8, 6, 4, .84) 0%, rgba(5, 4, 3, .93) 100%),
+    url("black-gold-bg.jpg") center / cover !important;
+  border-color: var(--line) !important;
+  box-shadow: inset 0 0 0 1px rgba(232, 200, 120, .06), 0 14px 34px rgba(0, 0, 0, .36) !important;
+}
+body.skin-blackgold .left,
+body.skin-blackgold .right { position: relative; }
+body.skin-blackgold .left::before,
+body.skin-blackgold .right::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold));
+  opacity: .45;
+  pointer-events: none;
+}
+body.skin-blackgold .center {
+  background:
+    linear-gradient(180deg, rgba(5, 4, 3, .18) 0%, rgba(5, 4, 3, .48) 56%, rgba(5, 4, 3, .70) 100%),
+    url("black-gold-bg.jpg") center / cover !important;
+}
+body.skin-blackgold .preview-area {
+  background: transparent !important;
+}
+body.skin-blackgold .toolbar,
+body.skin-blackgold .bottombar,
+body.skin-blackgold .ruler-row,
+body.skin-blackgold .ruler-v-col,
+body.skin-blackgold .ruler-corner {
+  background: rgba(6, 5, 3, .92) !important;
+  border-color: var(--line) !important;
+}
+body.skin-blackgold .vsplitter { background: rgba(201, 164, 93, .28) !important; }
+body.skin-blackgold .vsplitter:hover,
+body.skin-blackgold .vsplitter.dragging { background: var(--gold-bright) !important; }
+
+body.skin-blackgold .left-section,
+body.skin-blackgold .right-section,
+body.skin-blackgold .left-footer,
+body.skin-blackgold .lut-header,
+body.skin-blackgold .panel-divider,
+body.skin-blackgold .alb-paths,
+body.skin-blackgold .alb-foot {
+  border-color: var(--line) !important;
+}
+body.skin-blackgold .section-header,
+body.skin-blackgold .alb-head,
+body.skin-blackgold .alb-curate-head,
+body.skin-blackgold .alb-albums-h,
+body.skin-blackgold .alb-group-h {
+  background: linear-gradient(90deg, rgba(201, 164, 93, .15), rgba(8, 6, 4, .34)) !important;
+  border-left: 2px solid var(--gold) !important;
+  color: var(--gold-bright) !important;
+  text-shadow: 0 1px 0 #000 !important;
+}
+body.skin-blackgold .left-header,
+body.skin-blackgold .lut-header,
+body.skin-blackgold .panel-title,
+body.skin-blackgold .sub-title,
+body.skin-blackgold .alb-group-h,
+body.skin-blackgold .alb-albums-h {
+  color: var(--gold) !important;
+}
+body.skin-blackgold .left-header .count,
+body.skin-blackgold .alb-vhint,
+body.skin-blackgold .alb-foot,
+body.skin-blackgold .alb-search-count,
+body.skin-blackgold .row-line > span,
+body.skin-blackgold .chk > span,
+body.skin-blackgold .bottom-label,
+body.skin-blackgold .zoom-label,
+body.skin-blackgold .status,
+body.skin-blackgold .status-pct,
+body.skin-blackgold .output-info,
+body.skin-blackgold .hist-labels,
+body.skin-blackgold .preview-empty,
+body.skin-blackgold .edx-tip,
+body.skin-blackgold .gen-help,
+body.skin-blackgold .pro-note,
+body.skin-blackgold .pro-status,
+body.skin-blackgold .ai-mini-note,
+body.skin-blackgold .ai-tool-status {
+  color: var(--muted) !important;
+}
+body.skin-blackgold .alb-title,
+body.skin-blackgold .alb-vname,
+body.skin-blackgold .output-info b,
+body.skin-blackgold .slider-row .val,
+body.skin-blackgold .slider-row label,
+body.skin-blackgold .crop-row label,
+body.skin-blackgold .lut-group-title,
+body.skin-blackgold .file-item,
+body.skin-blackgold .lut-item {
+  color: var(--text) !important;
+}
+
+/* ---------- 按钮 ---------- */
+body.skin-blackgold .btn,
+body.skin-blackgold .tool-btn,
+body.skin-blackgold .mini-btn,
+body.skin-blackgold .lut-mode-btn,
+body.skin-blackgold .alb-ctl,
+body.skin-blackgold .alb-search-btn,
+body.skin-blackgold .alb-dedup-btn,
+body.skin-blackgold .alb-curate-btn,
+body.skin-blackgold .alb-favbtn,
+body.skin-blackgold .alb-zoom button,
+body.skin-blackgold .alb-path-btns button,
+body.skin-blackgold .alb-curate-x,
+body.skin-blackgold .alb-search-cancel,
+body.skin-blackgold .bin-btn,
+body.skin-blackgold .dup-btn,
+body.skin-blackgold .pro-btn,
+body.skin-blackgold .gen-primary,
+body.skin-blackgold .ai-primary-sm,
+body.skin-blackgold .ai-run,
+body.skin-blackgold .ai-alt-sm,
+body.skin-blackgold .pro-close,
+body.skin-blackgold .gen-result-close {
+  background: linear-gradient(180deg, rgba(27, 21, 13, .92) 0%, rgba(7, 5, 4, .92) 100%) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 218, .07) !important;
+  text-shadow: 0 1px 0 #000 !important;
+  transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease !important;
+}
+body.skin-blackgold .btn:hover,
+body.skin-blackgold .tool-btn:hover,
+body.skin-blackgold .mini-btn:hover,
+body.skin-blackgold .lut-mode-btn:hover,
+body.skin-blackgold .alb-ctl:hover,
+body.skin-blackgold .alb-search-btn:hover,
+body.skin-blackgold .alb-dedup-btn:hover,
+body.skin-blackgold .alb-curate-btn:hover,
+body.skin-blackgold .alb-favbtn:hover,
+body.skin-blackgold .alb-zoom button:hover,
+body.skin-blackgold .alb-path-btns button:hover,
+body.skin-blackgold .bin-btn:hover,
+body.skin-blackgold .dup-btn:hover,
+body.skin-blackgold .pro-btn:hover,
+body.skin-blackgold .gen-primary:hover,
+body.skin-blackgold .ai-primary-sm:hover,
+body.skin-blackgold .ai-run:hover,
+body.skin-blackgold .ai-alt-sm:hover,
+body.skin-blackgold .pro-close:hover,
+body.skin-blackgold .gen-result-close:hover {
+  background: linear-gradient(180deg, rgba(201, 164, 93, .22) 0%, rgba(30, 21, 11, .92) 100%) !important;
+  border-color: var(--gold-bright) !important;
+  color: var(--gold-pale) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 218, .12), 0 0 16px rgba(232, 200, 120, .08) !important;
+}
+body.skin-blackgold .btn:active,
+body.skin-blackgold .tool-btn:active,
+body.skin-blackgold .mini-btn:active,
+body.skin-blackgold .alb-ctl:active,
+body.skin-blackgold .bin-btn:active,
+body.skin-blackgold .dup-btn:active,
+body.skin-blackgold .pro-btn:active { transform: translateY(1px) !important; }
+
+body.skin-blackgold .btn-start,
+body.skin-blackgold #colorAutoBtn,
+body.skin-blackgold #aiOptBtn,
+body.skin-blackgold #beautyBtn,
+body.skin-blackgold .alb-curate-btn.on,
+body.skin-blackgold .alb-ctl.on,
+body.skin-blackgold .alb-perf-seg span.on,
+body.skin-blackgold .lut-mode-btn.active,
+body.skin-blackgold .hist-tab.active {
+  background: linear-gradient(180deg, var(--gold-pale) 0%, var(--gold) 52%, var(--gold-deep) 100%) !important;
+  border-color: var(--gold-pale) !important;
+  color: #0b0804 !important;
+  text-shadow: 0 1px 0 rgba(255, 246, 218, .50) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 0 18px rgba(232, 200, 120, .12) !important;
+}
+body.skin-blackgold .btn-start:hover,
+body.skin-blackgold #colorAutoBtn:hover,
+body.skin-blackgold #aiOptBtn:hover,
+body.skin-blackgold #beautyBtn:hover {
+  background: linear-gradient(180deg, #fff0c8 0%, var(--gold-bright) 56%, var(--gold) 100%) !important;
+  color: #050403 !important;
+}
+body.skin-blackgold .btn.danger,
+body.skin-blackgold .bin-btn.danger,
+body.skin-blackgold .alb-opt-item.danger,
+body.skin-blackgold .alb-ctx-item.danger {
+  background: linear-gradient(180deg, rgba(169, 67, 56, .96), rgba(83, 23, 19, .96)) !important;
+  border-color: rgba(224, 116, 94, .88) !important;
+  color: var(--danger-text) !important;
+}
+
+/* ---------- 输入框 / 下拉 / 文本域 ---------- */
+body.skin-blackgold input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+body.skin-blackgold textarea,
+body.skin-blackgold select,
+body.skin-blackgold .bottom-select,
+body.skin-blackgold .mini-input,
+body.skin-blackgold .mini-sel,
+body.skin-blackgold .alb-search-box,
+body.skin-blackgold .alb-search-box input,
+body.skin-blackgold .alb-sel-wrap,
+body.skin-blackgold .alb-sel-menu,
+body.skin-blackgold .crop-row select,
+body.skin-blackgold .crop-row input,
+body.skin-blackgold .gen-prompt,
+body.skin-blackgold .dup-thr,
+body.skin-blackgold .dup-rule {
+  background: var(--field) !important;
+  border: 1px solid var(--line) !important;
+  border-bottom: 2px solid var(--gold-deep) !important;
+  border-radius: 2px !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, .52) !important;
+  outline: none !important;
+}
+body.skin-blackgold input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+body.skin-blackgold textarea:focus,
+body.skin-blackgold select:focus,
+body.skin-blackgold .alb-search-box:focus-within,
+body.skin-blackgold .dup-thr:focus,
+body.skin-blackgold .dup-rule:focus {
+  border-color: var(--gold-bright) !important;
+  border-bottom-color: var(--gold-pale) !important;
+  box-shadow: 0 0 0 1px rgba(232, 200, 120, .16), inset 0 1px 0 rgba(0, 0, 0, .52) !important;
+}
+body.skin-blackgold input::placeholder,
+body.skin-blackgold textarea::placeholder { color: rgba(185, 167, 127, .62) !important; }
+body.skin-blackgold select option { background: #0b0805 !important; color: var(--text) !important; }
+body.skin-blackgold input[type="checkbox"],
+body.skin-blackgold input[type="radio"] { accent-color: var(--gold) !important; }
+body.skin-blackgold .alb-search-box { overflow: hidden; }
+body.skin-blackgold .alb-search-box input { border: 0 !important; box-shadow: none !important; background: transparent !important; }
+
+/* ---------- 滑块：金色细轨 + 方铜块 ---------- */
+body.skin-blackgold .slider-row input[type="range"],
+body.skin-blackgold input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px !important;
+  background: linear-gradient(90deg, rgba(201, 164, 93, .24), var(--gold) 48%, rgba(201, 164, 93, .24)) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+body.skin-blackgold .slider-row input[type="range"]::-webkit-slider-thumb,
+body.skin-blackgold input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 1px !important;
+  background: linear-gradient(135deg, var(--gold-pale), var(--gold) 60%, var(--gold-deep)) !important;
+  border: 1px solid #f5e4b4 !important;
+  box-shadow: 0 0 10px rgba(232, 200, 120, .22) !important;
+  cursor: pointer;
+}
+body.skin-blackgold .slider-row .reset {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 1px !important;
+  color: var(--muted) !important;
+}
+body.skin-blackgold .slider-row .reset:hover {
+  border-color: var(--gold-bright) !important;
+  color: var(--gold-pale) !important;
+}
+body.skin-blackgold .progress,
+body.skin-blackgold .dup-bar,
+body.skin-blackgold .gen-progress,
+body.skin-blackgold .ai-progress {
+  background: rgba(201, 164, 93, .14) !important;
+  border-radius: 0 !important;
+}
+body.skin-blackgold .progress-bar,
+body.skin-blackgold .dup-bar > div,
+body.skin-blackgold .gen-progress > div,
+body.skin-blackgold .ai-progress > div {
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright)) !important;
+  border-radius: 0 !important;
+}
+
+/* ---------- 文件 / 滤镜 / 列表选中态 ---------- */
+body.skin-blackgold .file-item:hover,
+body.skin-blackgold .lut-item:hover,
+body.skin-blackgold .alb-opt-item:hover,
+body.skin-blackgold .alb-ctx-item:hover,
+body.skin-blackgold .lut-menu-item:hover,
+body.skin-blackgold .alb-sel-item:hover {
+  background: var(--hover) !important;
+  color: var(--gold-pale) !important;
+}
+body.skin-blackgold .file-item.sel,
+body.skin-blackgold .lut-item.sel,
+body.skin-blackgold .alb-sel-item.on,
+body.skin-blackgold .alb-opt-item.active,
+body.skin-blackgold .alb-ctx-item.active {
+  background: rgba(201, 164, 93, .16) !important;
+  border-left: 2px solid var(--gold-bright) !important;
+  color: var(--gold-pale) !important;
+}
+body.skin-blackgold .lut-radio {
+  border-color: var(--gold) !important;
+  border-radius: 1px !important;
+}
+body.skin-blackgold .lut-item.sel .lut-radio { border-color: var(--gold-bright) !important; }
+body.skin-blackgold .lut-item.sel .lut-radio::after { background: var(--gold-bright) !important; border-radius: 0 !important; }
+
+/* ---------- 卡片 / 缩略图 / 标签 ---------- */
+body.skin-blackgold .alb-cell,
+body.skin-blackgold .alb-pcard,
+body.skin-blackgold .alb-person,
+body.skin-blackgold .alb-curate-card,
+body.skin-blackgold .file-item,
+body.skin-blackgold .lut-item,
+body.skin-blackgold .gen-card,
+body.skin-blackgold .fx-thumb,
+body.skin-blackgold .ai-tool,
+body.skin-blackgold .pro-file {
+  background: linear-gradient(180deg, rgba(15, 11, 7, .82), rgba(5, 4, 3, .90)) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 218, .04) !important;
+}
+body.skin-blackgold .alb-cell:hover,
+body.skin-blackgold .alb-cell.sel,
+body.skin-blackgold .alb-pcard:hover,
+body.skin-blackgold .alb-curate-card.on,
+body.skin-blackgold .alb-curate-card:hover {
+  border-color: var(--gold-bright) !important;
+  box-shadow: 0 0 0 1px var(--gold-bright), 0 10px 24px rgba(0, 0, 0, .40), 0 0 18px rgba(232, 200, 120, .10) !important;
+}
+body.skin-blackgold .alb-cell .badge,
+body.skin-blackgold .tag,
+body.skin-blackgold .bin-tag,
+body.skin-blackgold .alb-vtags span,
+body.skin-blackgold .alb-chip,
+body.skin-blackgold .alb-rate,
+body.skin-blackgold .edx-badge,
+body.skin-blackgold .pro-badge,
+body.skin-blackgold .gen-badge {
+  background: rgba(29, 21, 12, .82) !important;
+  border: 1px solid rgba(232, 200, 120, .32) !important;
+  border-radius: 1px !important;
+  color: var(--gold-pale) !important;
+}
+body.skin-blackgold .thumb,
+body.skin-blackgold .alb-thumb,
+body.skin-blackgold .alb-pcard img,
+body.skin-blackgold .bin-thumb,
+body.skin-blackgold .dup-thumb,
+body.skin-blackgold .dup-cell img,
+body.skin-blackgold .dup-cell .ph {
+  background-color: #050403 !important;
+  border-radius: 1px !important;
+}
+body.skin-blackgold .alb-vexif,
+body.skin-blackgold .alb-vtags,
+body.skin-blackgold .alb-vhint { color: var(--muted) !important; }
+
+/* ---------- 相册顶栏与视图 ---------- */
+body.skin-blackgold .alb-ctl-row,
+body.skin-blackgold .alb-search-row,
+body.skin-blackgold .alb-tabs,
+body.skin-blackgold .alb-curate-tabs,
+body.skin-blackgold .alb-paths,
+body.skin-blackgold .alb-foot {
+  background: rgba(6, 5, 3, .78) !important;
+  border-color: var(--line) !important;
+}
+body.skin-blackgold .alb-view,
+body.skin-blackgold .alb-view-main,
+body.skin-blackgold .alb-view-side,
+body.skin-blackgold .alb-right,
+body.skin-blackgold .alb-saved {
+  background:
+    linear-gradient(180deg, rgba(8, 6, 4, .80), rgba(5, 4, 3, .94)),
+    url("black-gold-bg.jpg") center / cover !important;
+  border-color: var(--line) !important;
+}
+body.skin-blackgold .alb-vhead,
+body.skin-blackgold .alb-vacts { border-color: var(--line) !important; }
+body.skin-blackgold .alb-video,
+body.skin-blackgold .alb-view-video { background: #050403 !important; }
+body.skin-blackgold .alb-zoom button { min-width: 26px; }
+body.skin-blackgold .alb-empty,
+body.skin-blackgold .alb-path-empty { color: var(--dim) !important; }
+
+/* 相册设置 / 右键 / 选择菜单：黑漆底板，细金边，不用旧装甲切角 */
+body.skin-blackgold .alb-modal,
+body.skin-blackgold .alb-opt-menu,
+body.skin-blackgold .alb-opts,
+body.skin-blackgold .alb-sel-menu,
+body.skin-blackgold .alb-ctx,
+body.skin-blackgold .lut-menu,
+body.skin-blackgold .gen-modal,
+body.skin-blackgold .fx-modal > .fx-card,
+body.skin-blackgold .pro-panel {
+  background:
+    linear-gradient(180deg, rgba(11, 8, 5, .97), rgba(5, 4, 3, .99)),
+    url("black-gold-bg.jpg") center / cover !important;
+  background-blend-mode: normal, multiply !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 2px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 218, .08), 0 24px 64px rgba(0, 0, 0, .72) !important;
+}
+body.skin-blackgold .alb-modal::before,
+body.skin-blackgold .pro-panel::before,
+body.skin-blackgold .gen-modal::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold-bright), transparent 32%, transparent 68%, var(--gold));
+  opacity: .66;
+  pointer-events: none;
+}
+body.skin-blackgold .alb-opt-item,
+body.skin-blackgold .alb-ctx-item,
+body.skin-blackgold .lut-menu-item,
+body.skin-blackgold .alb-sel-item {
+  border-radius: 1px !important;
+  color: var(--text) !important;
+  background: transparent !important;
+}
+body.skin-blackgold .alb-opt-sec-title,
+body.skin-blackgold .alb-opt-perf-title,
+body.skin-blackgold .alb-curate-status,
+body.skin-blackgold .alb-curate-note,
+body.skin-blackgold .alb-opt-note { color: var(--muted) !important; }
+
+/* ---------- 图片编辑面板 ---------- */
+body.skin-blackgold .edx-pane,
+body.skin-blackgold .edx-groups,
+body.skin-blackgold .edx-ch,
+body.skin-blackgold .edx-hsl-row,
+body.skin-blackgold .edx-mini,
+body.skin-blackgold .edx-video-row,
+body.skin-blackgold .edx-curve-wrap,
+body.skin-blackgold .edx-xmp,
+body.skin-blackgold .hist-canvas-wrap {
+  background: rgba(8, 6, 4, .72) !important;
+  border-color: var(--line) !important;
+  border-radius: 2px !important;
+}
+body.skin-blackgold .hist-canvas-wrap { border: 1px solid var(--line) !important; }
+body.skin-blackgold .edx-tabs,
+body.skin-blackgold .hist-tabs,
+body.skin-blackgold .gen-tabs,
+body.skin-blackgold .pro-tabs { background: transparent !important; }
+
+body.skin-blackgold .pro-panel,
+body.skin-blackgold .gen-modal,
+body.skin-blackgold .fx-modal > .fx-card,
+body.skin-blackgold .ai-mask-box {
+  color: var(--text) !important;
+}
+body.skin-blackgold .pro-head,
+body.skin-blackgold .gen-result-head,
+body.skin-blackgold .ai-mask-head {
+  background: linear-gradient(180deg, rgba(14, 10, 6, .96), rgba(6, 5, 3, .96)) !important;
+  border-bottom: 1px solid var(--line-strong) !important;
+}
+body.skin-blackgold .pro-body,
+body.skin-blackgold .gen-result-body,
+body.skin-blackgold .ai-mask-body,
+body.skin-blackgold .ai-mask-tools,
+body.skin-blackgold .pro-pane,
+body.skin-blackgold .pro-group,
+body.skin-blackgold .pro-box,
+body.skin-blackgold .pro-row,
+body.skin-blackgold .gen-controls,
+body.skin-blackgold .gen-result-box,
+body.skin-blackgold .gen-result-pane {
+  background: transparent !important;
+  border-color: var(--line) !important;
+}
+body.skin-blackgold .pro-group-h,
+body.skin-blackgold .gen-result-head b,
+body.skin-blackgold .ai-group-title,
+body.skin-blackgold .pro-kv b,
+body.skin-blackgold .pro-sec,
+body.skin-blackgold .edx-xmp b { color: var(--gold-bright) !important; }
+body.skin-blackgold .pro-kv,
+body.skin-blackgold .pro-preview,
+body.skin-blackgold .gen-result-box,
+body.skin-blackgold .ai-mask-stage {
+  background: rgba(5, 4, 3, .88) !important;
+  border-color: var(--line) !important;
+}
+body.skin-blackgold .ai-tag,
+body.skin-blackgold .gen-dot { background: var(--gold) !important; color: #0b0804 !important; }
+body.skin-blackgold .gen-prompt { min-height: 64px; }
+
+/* ---------- 去重子窗口 ---------- */
+body.skin-blackgold .dup-panel,
+body.skin-blackgold #dupPanel {
+  background:
+    linear-gradient(180deg, rgba(5, 4, 3, .16) 0%, rgba(5, 4, 3, .46) 48%, rgba(5, 4, 3, .76) 100%),
+    url("black-gold-bg.jpg") center / cover !important;
+  color: var(--text) !important;
+}
+body.skin-blackgold .dup-head {
+  background: linear-gradient(180deg, rgba(13, 9, 5, .98), rgba(5, 4, 3, .96)) !important;
+  border-bottom: 1px solid var(--line-strong) !important;
+}
+body.skin-blackgold .dup-head .t { color: var(--gold-pale) !important; }
+body.skin-blackgold .dup-head .s,
+body.skin-blackgold .dup-path,
+body.skin-blackgold .dup-stat,
+body.skin-blackgold .dup-tools > span,
+body.skin-blackgold .dup-tools > #dupDstPath { color: var(--muted) !important; }
+body.skin-blackgold .dup-head .x {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 1px !important;
+  color: var(--muted) !important;
+}
+body.skin-blackgold .dup-head .x:hover { border-color: var(--gold-bright) !important; color: var(--gold-pale) !important; }
+body.skin-blackgold .dup-tools {
+  background: rgba(6, 5, 3, .82) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+body.skin-blackgold .dup-list { background: transparent !important; }
+body.skin-blackgold .dup-group {
+  background: linear-gradient(180deg, rgba(12, 9, 6, .86), rgba(5, 4, 3, .92)) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+}
+body.skin-blackgold .dup-cell {
+  background: linear-gradient(180deg, rgba(18, 13, 8, .90), rgba(6, 5, 3, .92)) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+}
+body.skin-blackgold .dup-cell:hover { border-color: var(--gold-bright) !important; }
+body.skin-blackgold .dup-cell .nm { color: var(--text) !important; }
+body.skin-blackgold .dup-cell .fd { color: var(--muted) !important; }
+body.skin-blackgold .dup-cell .mt { color: var(--dim) !important; }
+body.skin-blackgold .dup-cell label { color: var(--text) !important; }
+body.skin-blackgold .dup-empty { color: var(--dim) !important; }
+body.skin-blackgold .dup-kind {
+  color: #b5d39a !important;
+  border-color: rgba(149, 183, 116, .42) !important;
+  border-radius: 1px !important;
+}
+body.skin-blackgold .dup-kind.sim {
+  color: var(--gold-bright) !important;
+  border-color: rgba(232, 200, 120, .48) !important;
+}
+body.skin-blackgold .dup-ignore { color: var(--muted) !important; }
+body.skin-blackgold .dup-ignore:hover { color: var(--gold-pale) !important; }
+
+/* ---------- 回收站子窗口 ---------- */
+body.skin-blackgold .bin-overlay { background: rgba(5, 4, 3, .46) !important; }
+body.skin-blackgold .bin-panel {
+  background:
+    linear-gradient(180deg, rgba(8, 6, 4, .82), rgba(5, 4, 3, .96)),
+    url("black-gold-bg.jpg") center / cover !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 2px !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 218, .08), 0 24px 64px rgba(0, 0, 0, .70) !important;
+}
+body.skin-blackgold .bin-head {
+  background: linear-gradient(180deg, rgba(13, 9, 5, .98), rgba(5, 4, 3, .96)) !important;
+  border-bottom: 1px solid var(--line-strong) !important;
+}
+body.skin-blackgold .bin-title { color: var(--gold-pale) !important; }
+body.skin-blackgold .bin-sub,
+body.skin-blackgold .bin-dir,
+body.skin-blackgold .bin-info,
+body.skin-blackgold .bin-foot,
+body.skin-blackgold .bin-empty { color: var(--muted) !important; }
+body.skin-blackgold .bin-grid { background: transparent !important; }
+body.skin-blackgold .bin-cell {
+  background: linear-gradient(180deg, rgba(16, 12, 8, .88), rgba(5, 4, 3, .92)) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+}
+body.skin-blackgold .bin-cell:hover { border-color: var(--gold-bright) !important; }
+body.skin-blackgold .bin-name { color: var(--text) !important; }
+
+/* ---------- 皮肤菜单 ---------- */
+body.skin-blackgold #skinMenu.skin-menu {
+  background:
+    linear-gradient(180deg, rgba(12, 9, 6, .98), rgba(5, 4, 3, .99)),
+    url("black-gold-bg.jpg") center / cover !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 2px !important;
+  color: var(--text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 218, .08), 0 20px 54px rgba(0, 0, 0, .76) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+body.skin-blackgold #skinMenu .skin-menu-head b { color: var(--gold-bright) !important; }
+body.skin-blackgold #skinMenu .skin-menu-head,
+body.skin-blackgold #skinMenu .skin-desc,
+body.skin-blackgold #skinMenu .skin-menu-foot { color: var(--muted) !important; }
+body.skin-blackgold #skinMenu .skin-item {
+  background: rgba(255, 246, 218, .025) !important;
+  border: 1px solid transparent !important;
+  border-radius: 1px !important;
+}
+body.skin-blackgold #skinMenu .skin-item:hover {
+  background: rgba(232, 200, 120, .10) !important;
+  border-color: rgba(232, 200, 120, .34) !important;
+  transform: none !important;
+}
+body.skin-blackgold #skinMenu .skin-item.on {
+  background: rgba(232, 200, 120, .15) !important;
+  border-color: var(--gold-bright) !important;
+  box-shadow: inset 2px 0 0 var(--gold-bright) !important;
+}
+body.skin-blackgold #skinMenu .skin-swatch {
+  border-radius: 1px !important;
+  border: 1px solid rgba(232, 200, 120, .52) !important;
+}
+body.skin-blackgold #skinMenu .skin-check {
+  border-radius: 1px !important;
+  border-color: rgba(201, 164, 93, .30) !important;
+  color: transparent !important;
+}
+body.skin-blackgold #skinMenu .skin-item.on .skin-check {
+  color: #0b0804 !important;
+  background: linear-gradient(145deg, var(--gold-pale), var(--gold)) !important;
+  border-color: var(--gold-pale) !important;
+  box-shadow: 0 0 10px rgba(232, 200, 120, .18) !important;
+}
+
+/* ---------- 切肤动画：不再出现旧皮肤的装甲碎片 ---------- */
+body.skin-blackgold .skin-transition .st-veil {
+  background:
+    radial-gradient(42% 46% at 24% 32%, rgba(232, 200, 120, .24), transparent 70%),
+    radial-gradient(36% 42% at 78% 22%, rgba(141, 102, 51, .30), transparent 72%),
+    linear-gradient(180deg, rgba(5, 4, 3, .92), rgba(5, 4, 3, .45)) !important;
+  filter: blur(18px) saturate(118%) !important;
+}
+body.skin-blackgold .skin-transition .st-lens {
+  background: radial-gradient(circle at var(--st-x, 50%) var(--st-y, 50%), rgba(245, 228, 180, .30), rgba(201, 164, 93, .12) 32%, transparent 62%) !important;
+  border-color: rgba(232, 200, 120, .50) !important;
+  border-style: solid !important;
+  filter: blur(3px) !important;
+  mix-blend-mode: screen !important;
+}
+body.skin-blackgold .skin-transition .st-prism {
+  background: linear-gradient(112deg, transparent 22%, rgba(232, 200, 120, .22) 40%, rgba(141, 102, 51, .18) 54%, transparent 76%) !important;
+  filter: blur(12px) !important;
+}
+body.skin-blackgold .skin-transition .st-blob {
+  background: radial-gradient(circle at 38% 34%, rgba(245, 228, 180, .26), rgba(141, 102, 51, .12) 48%, transparent 72%) !important;
+  filter: blur(34px) !important;
+}
+body.skin-blackgold .skin-transition .st-streak {
+  height: 2px !important;
+  background: linear-gradient(90deg, transparent, rgba(245, 228, 180, .82), rgba(201, 164, 93, .40), transparent) !important;
+  box-shadow: 0 0 16px rgba(232, 200, 120, .24) !important;
+}
+body.skin-blackgold .skin-transition .st-ring {
+  border-color: rgba(232, 200, 120, .42) !important;
+  border-style: solid !important;
+}
+body.skin-blackgold .skin-transition .st-core {
+  background: var(--gold-pale) !important;
+  box-shadow: 0 0 24px 8px rgba(232, 200, 120, .42) !important;
+}
+/* 旧转场里的碎片/棱镜片严格隐藏，改用浪幕 + 金线 + 圆环 */
+body.skin-blackgold .skin-transition .st-shard { display: none !important; }
+body.skin-blackgold .skin-transition .st-grain { opacity: .08 !important; }
+
+/* 页面入场：黑漆自上而下铺开，金线扫过 */
+body.skin-blackgold.lg-page-enter::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(5, 4, 3, .98) 0%, rgba(5, 4, 3, .72) 34%, rgba(201, 164, 93, .10) 54%, transparent 78%),
+    radial-gradient(60% 36% at 50% 100%, rgba(232, 200, 120, .10), transparent 76%);
+  animation: bgGoldInkDrop 1.05s cubic-bezier(.2, .8, .2, 1) both;
+}
+body.skin-blackgold.lg-page-enter .titlebar,
+body.skin-blackgold.lg-page-enter .alb-titlebar {
+  animation: bgGoldBarIn .72s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes bgGoldInkDrop {
+  0% { clip-path: inset(0 0 100% 0); opacity: 1; }
+  42% { clip-path: inset(0 0 24% 0); opacity: .94; }
+  100% { clip-path: inset(0 0 0 0); opacity: 0; }
+}
+@keyframes bgGoldBarIn {
+  0% { transform: translateY(-10px); opacity: .35; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* ---------- 滚动条 ---------- */
+body.skin-blackgold * { scrollbar-color: var(--gold-deep) #080604; }
+body.skin-blackgold ::-webkit-scrollbar { width: 10px; height: 10px; }
+body.skin-blackgold ::-webkit-scrollbar-track { background: #080604; }
+body.skin-blackgold ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(201, 164, 93, .56), rgba(141, 102, 51, .52));
+  border: 2px solid #080604;
+  border-radius: 0;
+}
+body.skin-blackgold ::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+body.skin-blackgold ::-webkit-scrollbar-corner { background: #080604; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.skin-blackgold.lg-page-enter::after,
+  body.skin-blackgold.lg-page-enter .titlebar,
+  body.skin-blackgold.lg-page-enter .alb-titlebar,
+  body.skin-blackgold .light { animation: none !important; transition: none !important; }
+  body.skin-blackgold .skin-transition { display: none !important; }
+}

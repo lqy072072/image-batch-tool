@@ -2111,6 +2111,354 @@ namespace ImageBatchTool
     }
 
     // ============================================================
+    // 关于窗口：跟随当前皮肤绘制。黑金使用墨黑底 + 金色浪纹，
+    // 其它皮肤使用对应的底色/强调色；内容、链接和关闭行为保持不变。
+    // ============================================================
+    sealed class ThemedAboutForm : Form
+    {
+        sealed class Palette
+        {
+            public Color Back;
+            public Color Panel;
+            public Color Text;
+            public Color Muted;
+            public Color Accent;
+            public Color Border;
+            public bool Wave;
+        }
+
+        string _appTitle;
+        string _version;
+        string _creator;
+        string _body;
+        string _url;
+        readonly Palette _p;
+        Image _bg;
+        Rectangle _closeRect = Rectangle.Empty;
+        Rectangle _linkRect = Rectangle.Empty;
+        bool _hoverClose;
+        bool _hoverLink;
+
+        public ThemedAboutForm(string skin, string displayName, string aboutText)
+        {
+            _p = PaletteFor(skin);
+            ParseText(aboutText, displayName);
+
+            Text = "关于 " + displayName;
+            FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.CenterParent;
+            ShowInTaskbar = false;
+            AutoScaleMode = AutoScaleMode.Dpi;
+            ClientSize = new Size(640, 520);
+            BackColor = _p.Back;
+            KeyPreview = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint
+                | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            if (_p.Wave)
+            {
+                try
+                {
+                    string bg = Path.Combine(Application.StartupPath, "skins", "black-gold-bg.jpg");
+                    if (File.Exists(bg)) _bg = Image.FromFile(bg);
+                }
+                catch { _bg = null; }
+            }
+        }
+
+        static Palette PaletteFor(string skin)
+        {
+            Palette p = new Palette();
+            skin = String.IsNullOrEmpty(skin) ? "dark" : skin.Trim().ToLowerInvariant();
+            if (skin == "light")
+            {
+                p.Back = Color.FromArgb(244, 243, 239); p.Panel = Color.FromArgb(255, 255, 255);
+                p.Text = Color.FromArgb(32, 30, 27); p.Muted = Color.FromArgb(108, 101, 90);
+                p.Accent = Color.FromArgb(151, 105, 43); p.Border = Color.FromArgb(198, 183, 160); p.Wave = false;
+            }
+            else if (skin == "frost")
+            {
+                p.Back = Color.FromArgb(248, 246, 250); p.Panel = Color.FromArgb(255, 255, 255);
+                p.Text = Color.FromArgb(37, 32, 45); p.Muted = Color.FromArgb(118, 108, 132);
+                p.Accent = Color.FromArgb(132, 92, 164); p.Border = Color.FromArgb(214, 204, 228); p.Wave = false;
+            }
+            else if (skin == "aurora")
+            {
+                p.Back = Color.FromArgb(233, 246, 249); p.Panel = Color.FromArgb(250, 254, 255);
+                p.Text = Color.FromArgb(25, 42, 51); p.Muted = Color.FromArgb(88, 111, 120);
+                p.Accent = Color.FromArgb(0, 135, 151); p.Border = Color.FromArgb(164, 203, 211); p.Wave = false;
+            }
+            else if (skin == "smoke")
+            {
+                p.Back = Color.FromArgb(11, 21, 35); p.Panel = Color.FromArgb(15, 29, 47);
+                p.Text = Color.FromArgb(238, 245, 255); p.Muted = Color.FromArgb(166, 185, 207);
+                p.Accent = Color.FromArgb(122, 181, 255); p.Border = Color.FromArgb(62, 87, 118); p.Wave = false;
+            }
+            else if (skin == "eva01")
+            {
+                p.Back = Color.FromArgb(16, 9, 28); p.Panel = Color.FromArgb(25, 15, 42);
+                p.Text = Color.FromArgb(241, 235, 255); p.Muted = Color.FromArgb(183, 168, 207);
+                p.Accent = Color.FromArgb(185, 255, 61); p.Border = Color.FromArgb(112, 86, 145); p.Wave = false;
+            }
+            else if (skin == "eva00")
+            {
+                p.Back = Color.FromArgb(7, 17, 29); p.Panel = Color.FromArgb(11, 27, 44);
+                p.Text = Color.FromArgb(235, 245, 255); p.Muted = Color.FromArgb(160, 185, 208);
+                p.Accent = Color.FromArgb(106, 176, 255); p.Border = Color.FromArgb(55, 83, 112); p.Wave = false;
+            }
+            else if (skin == "eva02")
+            {
+                p.Back = Color.FromArgb(22, 7, 8); p.Panel = Color.FromArgb(34, 10, 12);
+                p.Text = Color.FromArgb(255, 240, 235); p.Muted = Color.FromArgb(210, 172, 159);
+                p.Accent = Color.FromArgb(255, 106, 61); p.Border = Color.FromArgb(125, 61, 47); p.Wave = false;
+            }
+            else if (skin == "blackgold")
+            {
+                p.Back = Color.FromArgb(5, 4, 3); p.Panel = Color.FromArgb(10, 8, 5);
+                p.Text = Color.FromArgb(242, 232, 207); p.Muted = Color.FromArgb(185, 167, 127);
+                p.Accent = Color.FromArgb(232, 200, 120); p.Border = Color.FromArgb(201, 164, 93); p.Wave = true;
+            }
+            else
+            {
+                p.Back = Color.FromArgb(28, 28, 30); p.Panel = Color.FromArgb(36, 36, 40);
+                p.Text = Color.FromArgb(232, 232, 235); p.Muted = Color.FromArgb(156, 156, 164);
+                p.Accent = Color.FromArgb(124, 170, 255); p.Border = Color.FromArgb(72, 72, 80); p.Wave = false;
+            }
+            return p;
+        }
+
+        void ParseText(string text, string displayName)
+        {
+            text = String.IsNullOrEmpty(text) ? "" : text.Replace("\r", "");
+            string[] lines = text.Split('\n');
+            _appTitle = (lines.Length > 0 && lines[0].Trim().Length > 0) ? lines[0].Trim() : displayName;
+            _version = lines.Length > 1 ? lines[1].Trim() : "";
+            _creator = "";
+            _url = "";
+            StringBuilder body = new StringBuilder();
+            bool inBody = false;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (line.Length == 0) continue;
+                if (!inBody && line.StartsWith("制作者", StringComparison.Ordinal))
+                {
+                    _creator = line;
+                    continue;
+                }
+                if (!inBody && line.StartsWith("GitHub", StringComparison.OrdinalIgnoreCase))
+                {
+                    _url = line;
+                    continue;
+                }
+                if (line.StartsWith("免责声明", StringComparison.Ordinal))
+                {
+                    inBody = true;
+                    continue;
+                }
+                if (!inBody) continue;
+                if (line.StartsWith("GitHub", StringComparison.OrdinalIgnoreCase))
+                {
+                    _url = line;
+                    break;
+                }
+                if (body.Length > 0) body.Append('\n');
+                body.Append(line);
+            }
+            _body = body.ToString();
+            if (_body.Length == 0)
+            {
+                // 结构意外变化时仍然把完整内容呈现出来，不丢免责声明。
+                _body = text;
+            }
+        }
+
+        static string UrlPart(string raw)
+        {
+            if (String.IsNullOrEmpty(raw)) return "";
+            int idx = raw.IndexOf("http", StringComparison.OrdinalIgnoreCase);
+            return idx >= 0 ? raw.Substring(idx) : raw;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            // 整个背景在 OnPaint 中一次画完，避免先刷灰底再盖图。
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            int w = ClientSize.Width, h = ClientSize.Height;
+
+            if (_bg != null)
+            {
+                g.DrawImage(_bg, new Rectangle(0, 0, w, h));
+                using (LinearGradientBrush veil = new LinearGradientBrush(
+                    new Rectangle(0, 0, w, h),
+                    Color.FromArgb(150, _p.Back), Color.FromArgb(222, _p.Back), 90f))
+                    g.FillRectangle(veil, 0, 0, w, h);
+            }
+            else
+            {
+                using (LinearGradientBrush bg = new LinearGradientBrush(
+                    new Rectangle(0, 0, w, h),
+                    Color.FromArgb(255, _p.Panel), Color.FromArgb(255, _p.Back), 90f))
+                    g.FillRectangle(bg, 0, 0, w, h);
+            }
+
+            using (Pen border = new Pen(_p.Border, 1))
+                g.DrawRectangle(border, 0, 0, w - 1, h - 1);
+
+            // 标题栏
+            using (SolidBrush bar = new SolidBrush(Color.FromArgb(_p.Wave ? 236 : 255, _p.Panel)))
+                g.FillRectangle(bar, 1, 1, w - 2, 47);
+            using (Pen line = new Pen(_p.Border, 1))
+                g.DrawLine(line, 1, 48, w - 2, 48);
+            using (Font titleFont = new Font("Microsoft YaHei UI", 10.5f, FontStyle.Bold))
+            using (SolidBrush titleBrush = new SolidBrush(_p.Accent))
+                g.DrawString("关于 " + AppModule.DisplayName, titleFont, titleBrush, 22, 16);
+
+            _closeRect = new Rectangle(w - 45, 11, 29, 26);
+            using (SolidBrush closeBg = new SolidBrush(_hoverClose ? Color.FromArgb(32, _p.Accent) : Color.Transparent))
+                g.FillRectangle(closeBg, _closeRect);
+            using (Pen closePen = new Pen(_hoverClose ? _p.Accent : _p.Border, 1))
+                g.DrawRectangle(closePen, _closeRect);
+            using (Font closeFont = new Font("Microsoft YaHei UI", 10f))
+            using (SolidBrush closeBrush = new SolidBrush(_hoverClose ? _p.Accent : _p.Muted))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString("✕", closeFont, closeBrush, _closeRect, sf);
+                sf.Dispose();
+            }
+
+            // 内容
+            int left = 30;
+            using (Font appFont = new Font("Microsoft YaHei UI", 17f, FontStyle.Bold))
+            using (SolidBrush appBrush = new SolidBrush(_p.Text))
+                g.DrawString(_appTitle, appFont, appBrush, left, 63);
+            if (_version.Length > 0)
+            {
+                using (Font small = new Font("Microsoft YaHei UI", 9.5f))
+                using (SolidBrush muted = new SolidBrush(_p.Muted))
+                    g.DrawString(_version, small, muted, left, 101);
+            }
+            if (_creator.Length > 0)
+            {
+                using (Font small = new Font("Microsoft YaHei UI", 9.5f))
+                using (SolidBrush text = new SolidBrush(_p.Text))
+                    g.DrawString(_creator, small, text, left, 126);
+            }
+            using (Pen div = new Pen(_p.Border, 1))
+                g.DrawLine(div, left, 154, w - 30, 154);
+
+            using (Font head = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold))
+            using (SolidBrush accent = new SolidBrush(_p.Accent))
+                g.DrawString("免责声明", head, accent, left, 168);
+            using (Font bodyFont = new Font("Microsoft YaHei UI", 9f))
+            using (SolidBrush bodyBrush = new SolidBrush(_p.Text))
+            {
+                Rectangle bodyRect = new Rectangle(left, 193, w - 60, 155);
+                StringFormat bodyFormat = new StringFormat();
+                bodyFormat.Trimming = StringTrimming.None;
+                bodyFormat.FormatFlags = StringFormatFlags.LineLimit;
+                g.DrawString(_body, bodyFont, bodyBrush, bodyRect, bodyFormat);
+                bodyFormat.Dispose();
+            }
+
+            string link = UrlPart(_url);
+            if (link.Length > 0)
+            {
+                using (Font labelFont = new Font("Microsoft YaHei UI", 8.5f))
+                using (SolidBrush labelBrush = new SolidBrush(_p.Muted))
+                    g.DrawString("GitHub", labelFont, labelBrush, left, 358);
+                using (Font linkFont = new Font("Microsoft YaHei UI", 9.2f))
+                using (SolidBrush linkBrush = new SolidBrush(_hoverLink ? _p.Accent : _p.Muted))
+                {
+                    SizeF size = g.MeasureString(link, linkFont);
+                    _linkRect = new Rectangle(left, 377, (int)Math.Ceiling(size.Width), 22);
+                    g.DrawString(link, linkFont, linkBrush, left, 377);
+                    if (_hoverLink)
+                        using (Pen underline = new Pen(_p.Accent, 1))
+                            g.DrawLine(underline, left, 396, left + Math.Min((int)size.Width, w - 60), 396);
+                }
+            }
+
+            // 底部关闭按钮：黑漆描金，不使用系统灰色 MessageBox 按钮
+            Rectangle closeBtn = new Rectangle(w - 116, h - 58, 86, 32);
+            using (SolidBrush btnBg = new SolidBrush(Color.FromArgb(_p.Wave ? 220 : 255, _p.Panel)))
+                g.FillRectangle(btnBg, closeBtn);
+            using (Pen btnBorder = new Pen(_p.Accent, 1))
+                g.DrawRectangle(btnBorder, closeBtn);
+            using (Font btnFont = new Font("Microsoft YaHei UI", 9.5f))
+            using (SolidBrush btnText = new SolidBrush(_p.Text))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString("关闭", btnFont, btnText, closeBtn, sf);
+                sf.Dispose();
+            }
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            bool overClose = _closeRect.Contains(e.Location);
+            bool overLink = _linkRect.Contains(e.Location);
+            if (overClose != _hoverClose || overLink != _hoverLink)
+            {
+                _hoverClose = overClose;
+                _hoverLink = overLink;
+                Invalidate();
+            }
+            Cursor = (overClose || overLink) ? Cursors.Hand : Cursors.Default;
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+            if (_closeRect.Contains(e.Location)) { Close(); return; }
+            if (_linkRect.Contains(e.Location)) { OpenLink(); return; }
+            if (e.Y < 48)
+            {
+                try
+                {
+                    Native.ReleaseCapture();
+                    Native.SendMessage(Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero);
+                }
+                catch { }
+            }
+        }
+
+        void OpenLink()
+        {
+            string url = UrlPart(_url);
+            if (url.Length == 0) return;
+            try { Process.Start(url); } catch { }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Escape || e.KeyCode == Keys.Enter) Close();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _bg != null)
+            {
+                try { _bg.Dispose(); } catch { }
+                _bg = null;
+            }
+            base.Dispose(disposing);
+        }
+    }
+
+    // ============================================================
     // 主窗口：WebView2 宿主 + 图像处理管线调度
     //   - WebView2 加载 ui.html（SetVirtualHostNameToFolderMapping → http://app.local）
     //   - 通过 Send(json) / Web_Message 与前端双向通信
@@ -2142,6 +2490,9 @@ namespace ImageBatchTool
         bool glassBridgeReady;
         GlassBackdrop dedupGlass;
         System.Windows.Forms.Timer skinSyncTimer;
+        System.Windows.Forms.Timer skinFadeTimer;
+        bool skinFadeClosing;
+        bool dedupFadeClosing;
         volatile string lastSkinSync = "";
         CoreWebView2Environment webEnv;
         public SplashForm Splash;
@@ -2597,6 +2948,7 @@ namespace ImageBatchTool
             if (s == "liquid" || s == "glass" || s == "liquid-glass" || s == "liquidglass"
                 || s == "old-liquid" || s == "dark-glass" || s == "ink") return "smoke";
             if (s == "liquid2" || s == "new-liquid" || s == "realtime-liquid" || s == "clear-glass") return "aurora";
+            if (s == "black-gold" || s == "gold" || s == "gold-black") return "blackgold";
             if (s == "eva-01" || s == "unit01" || s == "unit-01") return "eva01";
             if (s == "eva-00" || s == "unit00" || s == "unit-00") return "eva00";
             if (s == "eva-02" || s == "unit02" || s == "unit-02") return "eva02";
@@ -2610,6 +2962,7 @@ namespace ImageBatchTool
         {
             if (skin == "light") return Color.FromArgb(245, 245, 247);
             if (skin == "frost") return Color.FromArgb(246, 244, 250);
+            if (skin == "blackgold") return Color.FromArgb(5, 4, 3);
             if (skin == "eva00") return Color.FromArgb(7, 17, 29);
             if (skin == "eva02") return Color.FromArgb(16, 5, 7);
             if (skin == "eva01") return Color.FromArgb(7, 5, 13);
@@ -2697,6 +3050,51 @@ namespace ImageBatchTool
             }
             catch (Exception ex) { try { Log("应用原生皮肤失败 " + skin + ": " + ex.Message); } catch { } }
         }
+        // 黑金专属窗口开关过渡：黑金是唯一不透明实体装甲主题，整窗淡入/淡出最自然；
+        // 其他皮肤保持原有行为，不做整窗动画，避免影响液态玻璃 / 浅色皮肤。
+        void BeginBlackGoldOpenFade(string skin)
+        {
+            if (NormalizeSkin(skin) != "blackgold") { if (Opacity < 1) Opacity = 1; return; }
+            if (skinFadeTimer != null) { try { skinFadeTimer.Stop(); skinFadeTimer.Dispose(); } catch { } skinFadeTimer = null; }
+            skinFadeClosing = false;
+            Opacity = 0;
+            int step = 0;
+            var timer = new System.Windows.Forms.Timer { Interval = 16 };
+            skinFadeTimer = timer;
+            timer.Tick += (s, e) =>
+            {
+                if (IsDisposed || skinFadeClosing) { timer.Stop(); timer.Dispose(); return; }
+                step++;
+                try { Opacity = Math.Min(1.0, step / 16.0); } catch { }
+                if (step >= 16) { timer.Stop(); timer.Dispose(); if (ReferenceEquals(skinFadeTimer, timer)) skinFadeTimer = null; }
+            };
+            timer.Start();
+        }
+
+        void CloseWithBlackGoldFade()
+        {
+            if (skinFadeClosing) return;
+            if (NormalizeSkin(ReadSkinName()) != "blackgold") { Close(); return; }
+            if (skinFadeTimer != null) { try { skinFadeTimer.Stop(); skinFadeTimer.Dispose(); } catch { } skinFadeTimer = null; }
+            skinFadeClosing = true;
+            int step = 0;
+            var timer = new System.Windows.Forms.Timer { Interval = 16 };
+            skinFadeTimer = timer;
+            timer.Tick += (s, e) =>
+            {
+                if (IsDisposed) { timer.Stop(); timer.Dispose(); return; }
+                step++;
+                try { Opacity = Math.Max(0.0, 1.0 - step / 14.0); } catch { }
+                if (step >= 14)
+                {
+                    timer.Stop(); timer.Dispose();
+                    if (ReferenceEquals(skinFadeTimer, timer)) skinFadeTimer = null;
+                    try { Close(); } catch { }
+                }
+            };
+            timer.Start();
+        }
+
         static void PostToWeb(WebView2 target, string json)
         {
             if (target == null || json == null) return;
@@ -3321,7 +3719,30 @@ namespace ImageBatchTool
 
         void CloseDupWindow()
         {
-            try { if (dedupForm != null && !dedupForm.IsDisposed) dedupForm.Close(); } catch { }
+            var f = dedupForm;
+            if (f == null || f.IsDisposed) return;
+            if (NormalizeSkin(ReadSkinName()) == "blackgold" && !dedupFadeClosing)
+            {
+                dedupFadeClosing = true;
+                int step = 0;
+                var timer = new System.Windows.Forms.Timer { Interval = 16 };
+                timer.Tick += (s, e) =>
+                {
+                    if (f.IsDisposed) { timer.Stop(); timer.Dispose(); return; }
+                    step++;
+                    try { f.Opacity = Math.Max(0.0, 1.0 - step / 14.0); } catch { }
+                    if (step >= 14)
+                    {
+                        timer.Stop(); timer.Dispose();
+                        dedupFadeClosing = false;
+                        try { f.Close(); } catch { }
+                    }
+                };
+                try { f.Opacity = 1; } catch { }
+                timer.Start();
+                return;
+            }
+            try { f.Close(); } catch { }
         }
 
         void DupWeb_Message(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -3472,13 +3893,15 @@ namespace ImageBatchTool
                 {
                     case "ready":
                         Log("页面 ready，显示主窗口");
+                        bool firstReady = !webPageReady;
                         webPageReady = true;
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
                         string readySkin = ReadSkinName();
                         bool deferGlass = AuroraWindowGlass && NormalizeSkin(readySkin) == "aurora";
                         if (!deferGlass) ApplyNativeSkin(readySkin);
-                        if (Opacity < 1) Opacity = 1;
                         Show(); Activate();
+                        if (firstReady) BeginBlackGoldOpenFade(readySkin);
+                        else if (Opacity < 1) Opacity = 1;
                         if (deferGlass)
                         {
                             // 先让 WebView2 真正画出一帧，再加分层透明；过早设置会让整块网页不显示。
@@ -4092,7 +4515,8 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show(AppModule.AboutText, "关于 " + AppModule.DisplayName);
+                        try { new ThemedAboutForm(ReadSkinName(), AppModule.DisplayName, AppModule.AboutText).ShowDialog(this); }
+                        catch { MessageBox.Show(AppModule.AboutText, "关于 " + AppModule.DisplayName); }
                         break;
                     case "setskin":
                         try {
@@ -4108,7 +4532,7 @@ namespace ImageBatchTool
                     case "getskin":
                         Send("{\"type\":\"skin\",\"skin\":" + JsonStr(ReadSkinName()) + "}");
                         break;
-                    case "winclose": InvokeUi(() => Close()); break;
+                    case "winclose": InvokeUi(() => CloseWithBlackGoldFade()); break;
                     case "winmin": InvokeUi(() => MinimizeFromUi()); break;
                     case "winmax": InvokeUi(() => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized); break;
                     case "dragstart":
