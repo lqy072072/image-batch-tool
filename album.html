@@ -455,7 +455,10 @@ body.skin-light .alb-ctx-item.dis { color:#b4b6ba; }
 .alb-body { flex:1; position:relative; overflow:hidden; display:flex; }
 .alb-tree { width:230px; flex:none; overflow-y:auto; border-right:1px solid #383a40; background:#242427; padding:8px 6px 30px; display:none; }
 .alb-tree.on { display:block; }
-.alb-tree .tr-root { font-size:11px; color:#9fb3c9; padding:7px 8px 4px; cursor:pointer; border-radius:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.alb-tree .tr-root { font-size:11px; color:#9fb3c9; padding:7px 8px 4px; cursor:pointer; border-radius:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px; }
+.alb-tree .tr-root .tr-name { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.alb-tree .tr-caret { width:12px; flex:none; text-align:center; color:#8fb4d9; font-size:10px; line-height:14px; user-select:none; }
+.alb-tree .tr-caret.empty { visibility:hidden; }
 .alb-tree .tr-root:hover, .alb-tree .tr-row:hover { background:#34363d; color:#fff; }
 .alb-tree .tr-row { font-size:11px; color:#c9cdd3; padding:4px 8px; cursor:pointer; border-radius:5px; display:flex; gap:6px; align-items:center; white-space:nowrap; }
 .alb-tree .tr-row .n { margin-left:auto; color:#7f8790; font-size:10px; }
@@ -508,6 +511,7 @@ body.skin-light .alb-ctx-item.dis { color:#b4b6ba; }
 .alb-pcard .hide { color:#9aa0a8; font-size:9px; }
 body.skin-light .alb-tree { background:#f7f7fa; border-color:#dcdce2; }
 body.skin-light .alb-tree .tr-root, body.skin-light .alb-tree .tr-row { color:#333; }
+body.skin-light .alb-tree .tr-caret { color:#5c7fa3; }
 body.skin-light .alb-tree .tr-root:hover, body.skin-light .alb-tree .tr-row:hover { background:#e4e7ee; }
 body.skin-light .alb-tree .tr-row.sel { background:#cfe3f6; color:#12558f; }
 body.skin-light .alb-albums { background:#fff; border-color:#dcdce2; }
@@ -1217,16 +1221,11 @@ window.addEventListener('mouseup', function(e) {
       <span class="alb-tab" data-tab="map">地图</span>
     </div>
     <div class="alb-quick">
-      <button class="mini-btn alb-dedup-btn" id="albDedupBtn" onclick="albDedup()" title="查找重复照片，确认后移入回收站"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 4h8a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 9h6M9 12h6M9 15h4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>去重</button>
       <button class="mini-btn" onclick="albToggleTree()" title="显示/隐藏文件夹树">文件夹</button>
-      <button class="mini-btn" onclick="albAlbumsOpen()" title="自定义相册与智能相册">相册</button><button class="mini-btn" onclick="albCurateOpen('curate')" title="智能策展、自动相册与导入自动化">策展</button>
+      <button class="mini-btn" onclick="albAlbumsOpen()" title="自定义相册与智能相册">相册</button>
       <button class="mini-btn alb-search-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.2 15.2l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>搜索</button>
     </div>
     <div class="alb-right">
-      <button class="mini-btn alb-favbtn" id="albFavBtn" onclick="albToggleFavFilter()" title="只看收藏照片">☆ 收藏</button>
-      <select class="alb-rate" id="albRateSel" onchange="albSetRateFilter(this.value)" title="按评分筛选">
-        <option value="0">评分</option><option value="1">≥1 星</option><option value="2">≥2 星</option><option value="3">≥3 星</option><option value="4">≥4 星</option><option value="5">5 星</option>
-      </select>
       <button class="mini-btn" id="albTimeBtn" onclick="albToggleTimeSort()" title="按拍摄时间排列，并按天分组">按时间</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(-1)" title="缩小缩略图（Ctrl+滚轮也可缩放）">−</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(1)" title="放大缩略图（Ctrl+滚轮也可缩放）">＋</button>
@@ -1261,11 +1260,10 @@ window.addEventListener('mouseup', function(e) {
           </div>
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">照片管理</div>
-            <div class="alb-opt-item" onclick="albImportOpen()">导入照片/视频…</div>
-            <div class="alb-opt-item" onclick="albBatchRenameOpen()">批量重命名…</div>
-            <div class="alb-opt-item" onclick="albBatchMoveOpen()">批量移动 / 复制…</div>
+            <div class="alb-opt-item" onclick="albBatchMoveOpen()">批量移动…</div>
+            <div class="alb-opt-item" onclick="albDedup()">照片去重…</div>
             <div class="alb-opt-item" onclick="albPrivateOpen()">私密相册…</div>
-            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div><div class="alb-opt-item" onclick="albCurateOpen('auto')">导入自动化…</div>
+            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
           </div>
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">缓存</div>
@@ -1278,12 +1276,9 @@ window.addEventListener('mouseup', function(e) {
         <button class="mini-btn" id="albSelBtn" onclick="albToggleSelMenu(event)">选择 ▾</button>
         <div class="alb-opt-menu alb-sel-menu" id="albSelMenu">
           <div class="alb-opt-item alb-sel-item" id="albSelAllBtn" onclick="albSelMenuAll()">全选</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelFav()">收藏选中</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelRate()">评分选中…</div>
           <div class="alb-opt-item alb-sel-item" onclick="albSelHide()">隐藏 / 取消隐藏</div>
           <div class="alb-opt-item alb-sel-item" onclick="albSelAddAlbum()">加入相册…</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelBatchRename()">批量重命名…</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelBatchMove()">移动 / 复制…</div>
+          <div class="alb-opt-item alb-sel-item" onclick="albSelBatchMove()">批量移动…</div>
           <div class="alb-opt-item alb-sel-item" id="albEditBtn" onclick="albSelMenuEdit()">编辑选中</div>
           <div class="alb-opt-item alb-sel-item danger" id="albDelSelBtn" onclick="albSelMenuDelete()">删除选中</div>
         </div>
@@ -1336,8 +1331,6 @@ window.addEventListener('mouseup', function(e) {
 <div class="alb-ctx" id="albCtx">
   <div class="alb-ctx-item" data-a="info">详细信息</div>
   <div class="alb-ctx-item" data-a="folder">打开图片所在文件夹</div>
-  <div class="alb-ctx-item" data-a="fav">收藏 / 取消收藏</div>
-  <div class="alb-ctx-item" data-a="rate">评分…</div>
   <div class="alb-ctx-item" data-a="album">加入相册…</div>
   <div class="alb-ctx-item" data-a="hide">隐藏 / 取消隐藏</div>
   <div class="alb-ctx-item" data-a="save">另存为…</div>
@@ -3285,18 +3278,45 @@ function albToggleTree(){
   if(!A.treeOpen){ A.folderPath=''; A.folderRoot=''; A.vDirty=true; A.vList=null; albRender(); }
   else { post('albfolders'); albRenderTree(); }
 }
+function albTreeNorm(s){ return String(s==null?'':s).replace(/\//g,'\\'); }
+function albTreeToggle(ev,key){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const A=window._alb; A.treeFold=A.treeFold||{};
+  A.treeFold[key]=!A.treeFold[key];
+  albRenderTree();
+}
+function albTreeHidden(A,r,f){
+  const fold=A.treeFold||{}, rootKey='r|'+r;
+  if(fold[rootKey]) return true;
+  const parts=albTreeNorm(f).split('\\').filter(Boolean);
+  for(let i=1;i<parts.length;i++){
+    if(fold['d|'+r+'|'+parts.slice(0,i).join('\\')]) return true;
+  }
+  return false;
+}
+function albTreeHasChild(fs,r,f){
+  const base=albTreeNorm(f); if(!base) return false;
+  return fs.some(function(y){ return (y.r||'')===r && albTreeNorm(y.f).indexOf(base+'\\')===0; });
+}
 function albRenderTree(){
   const A=window._alb, t=document.getElementById('albTree'); if(!t) return;
   const fs=A.folders||[];
+  A.treeFold=A.treeFold||{};
   let html='<div class="tr-row'+(A.folderPath?'':' sel')+'" onclick="albPickFolder(\'\',\'\')">全部文件夹</div>';
   if(!fs.length) html+='<div class="tr-none">暂无文件夹统计，先扫描相册</div>';
   const groups={}; fs.forEach(function(x){ const r=x.r||''; if(!groups[r]) groups[r]=[]; groups[r].push(x); });
   Object.keys(groups).forEach(function(r){
-    html+='<div class="tr-root" title="'+escAttr(r)+'">'+escHtml(r)+'</div>';
+    const rootCollapsed=!!A.treeFold['r|'+r];
+    html+='<div class="tr-root" data-k="'+escAttr('r|'+r)+'" title="'+escAttr(r)+'" onclick="albTreeToggle(event,this.dataset.k)"><span class="tr-caret">'+(rootCollapsed?'▸':'▾')+'</span><span class="tr-name">'+escHtml(r)+'</span></div>';
     groups[r].sort(function(a,b){ return String(a.f||'').localeCompare(String(b.f||'')); }).forEach(function(x){
       const f=x.f==='.'?'':x.f; const depth=f?f.split(/[\\/]/).length:0;
+      if(albTreeHidden(A,r,f)) return;
       const sel=(A.folderPath && A.folderRoot===r && A.folderPath===f)?' sel':'';
-      html+='<div class="tr-row'+sel+'" style="padding-left:'+(8+depth*12)+'px" title="'+escAttr((r?r+'\\':'')+(f||''))+'" onclick="albPickFolder(\''+escAttr(albJs(r))+'\',\''+escAttr(albJs(f))+'\')"><span>'+(f?escHtml(f.split(/[\\/]/).pop()):'根目录')+'</span><span class="n">'+(x.n||0)+'</span></div>';
+      const hasChild=albTreeHasChild(fs,r,f);
+      const dirKey='d|'+r+'|'+f;
+      const dirCollapsed=!!A.treeFold[dirKey];
+      const caret=hasChild?'<span class="tr-caret" data-k="'+escAttr(dirKey)+'" title="折叠 / 展开" onclick="albTreeToggle(event,this.dataset.k)">'+(dirCollapsed?'▸':'▾')+'</span>':'<span class="tr-caret empty">▾</span>';
+      html+='<div class="tr-row'+sel+'" style="padding-left:'+(8+depth*12)+'px" title="'+escAttr((r?r+'\\':'')+(f||''))+'" onclick="albPickFolder(\''+escAttr(albJs(r))+'\',\''+escAttr(albJs(f))+'\')">'+caret+'<span>'+(f?escHtml(f.split(/[\\/]/).pop()):'根目录')+'</span><span class="n">'+(x.n||0)+'</span></div>';
     });
   });
   t.innerHTML=html;
@@ -3410,16 +3430,15 @@ function albBatchMoveOpen(paths){
   paths=(paths&&paths.length)?paths:albSelectedPaths();
   if(!paths.length){ toastMsg('先在「选择」中勾选要移动的照片'); return; }
   window._albMovePaths=paths.slice(); window._albMoveOpen=true;
-  albModalOpen('<h3>移动 / 复制 · '+paths.length+' 项</h3>'+
+  albModalOpen('<h3>批量移动 · '+paths.length+' 项</h3>'+
     '<div class="row"><span>目标文件夹</span><input type="text" id="albMoveDst" value=""><button class="btn" onclick="albImportPickDo(\'dst\')">选择…</button></div>'+
-    '<div class="chkline"><label><input type="radio" name="albMoveMode" value="move" checked> 移动（改原路径）</label><label><input type="radio" name="albMoveMode" value="copy"> 复制（保留原文件）</label></div>'+
-    '<div class="hint">重名会自动加 _1、_2 后缀。目标在相册目录外时会自动加入相册。</div>'+
+    '<div class="hint">移动后会改原路径；重名会自动加 _1、_2 后缀。目标在相册目录外时会自动加入相册。</div>'+
     '<div class="foot"><button class="btn" onclick="albModalClose()">取消</button><button class="btn pri" onclick="albMoveApplyDo()">开始</button></div>');
 }
 function albMoveApplyDo(){
   const dst=((document.getElementById('albMoveDst')||{}).value||'').trim();
   if(!dst){ toastMsg('请先选择目标文件夹'); return; }
-  const mode=(document.querySelector('input[name="albMoveMode"]:checked')||{}).value||'move';
+  const mode='move';
   if(!confirm((mode==='copy'?'复制 ':'移动 ')+window._albMovePaths.length+' 项到：\n'+dst)) return;
   post('albmove|'+albB64(JSON.stringify({paths:window._albMovePaths,dst:dst,copy:mode==='copy'})));
 }
@@ -4283,12 +4302,9 @@ function albCellHtml(i, extraStyle){
     (i.t==='raw'?'<span class="badge raw">RAW</span>':'<span class="badge">照片</span>')));
   const dur=i.t==='video'?'<span class="dur">'+albFmtDur(i.d)+'</span>':'';
   const meta=i.dt?('<div class="meta">'+(i.tk===0?'创建 ':'')+albFmtTime(i.dt)+'</div>'):'';
-  const mm=albItemM(i);
-  const favmk=mm.f?'<span class="favmk" title="取消收藏" onclick="event.stopPropagation();albToggleFavPaths([\''+albJs(i.p)+'\'])">★</span>':'';
-  const ratebar=mm.r?'<span class="ratebar" title="修改评分" onclick="event.stopPropagation();albRatePaths([\''+albJs(i.p)+'\'])" >'+('★'.repeat(Math.max(1,Math.min(5,mm.r)))+'☆'.repeat(5-Math.max(1,Math.min(5,mm.r)))+'</span>'):'';
   const st=extraStyle?' style="'+extraStyle.replace(/"/g,'&quot;')+'"':'';
   return '<div class="alb-cell'+selCls+(window._alb.selSet[i.p]?' checked':'')+'"'+st+' data-p="'+escAttr(i.p)+'" onclick="albCellClick(event,this)">'+
-    img+badge+dur+meta+favmk+ratebar+
+    img+badge+dur+meta+
     '<input type="checkbox" class="chk"'+checked+' onclick="event.stopPropagation();albCellChk(this)"></div>';
 }
 

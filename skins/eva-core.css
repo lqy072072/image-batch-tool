@@ -919,6 +919,11 @@ body[class*="skin-eva"] textarea {
   border-radius: 0 !important;
   border-left: 3px solid var(--eva-accent-2) !important;
 }
+/* 选择按钮外壳只负责定位：不能把“选择”下拉一起裁进按钮大小的切角里 */
+body[class*="skin-eva"] .alb-sel-wrap {
+  clip-path: none !important;
+  overflow: visible !important;
+}
 body[class*="skin-eva"] #currentLut {
   border-radius: 0 !important;
   border-left: 3px solid var(--eva-accent-2) !important;

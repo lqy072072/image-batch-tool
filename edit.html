@@ -79,6 +79,13 @@ body { display:flex; flex-direction:column; }
 .vsplitter { height:5px; background:#1a1a1a; cursor:row-resize; flex-shrink:0; }
 .vsplitter:hover, .vsplitter.dragging { background:#0969da; }
 
+/* 文件 / 滤镜之间的拖动分隔条 */
+.left-splitter { height:9px; flex:0 0 9px; cursor:row-resize; display:flex; align-items:center; justify-content:center; background:transparent; touch-action:none; position:relative; }
+.left-splitter::before { content:""; width:52px; height:3px; border-radius:3px; background:#5a5a5a; transition:background .12s ease, box-shadow .12s ease, width .12s ease; }
+.left-splitter:hover::before, .left-splitter.dragging::before { background:#8c8c8c; width:64px; box-shadow:0 0 0 2px rgba(255,255,255,.06); }
+body.skin-light .left-splitter::before { background:#b8b8bf; }
+body.skin-light .left-splitter:hover::before, body.skin-light .left-splitter.dragging::before { background:#7c7c85; }
+
 /* 中间 */
 .center { flex:1; background:#1e1e1e; display:flex; flex-direction:column; min-width:0; }
 .toolbar { height:42px; background:#2b2b2b; display:flex; align-items:center; padding:0 8px; gap:4px; border-bottom:1px solid #1a1a1a; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
@@ -746,6 +753,8 @@ window.addEventListener('mouseup', function(e) {
         <div class="file-list" id="fileList" style="max-height:190px;min-height:44px"><span style="color:#555">还没有添加照片</span></div>
       </div>
     </div>
+
+    <div class="left-splitter" id="leftSplitter" title="拖动调整「文件」与「滤镜」的高度；双击恢复默认"></div>
 
     <div class="lut-section" id="lutSection" style="flex:1 1 auto;min-height:0">
       <div class="section-header"><span>滤镜</span><span class="arrow">▼</span></div>
@@ -6161,6 +6170,51 @@ body.skin-light #aiToolsSection .ai-actions .ai-alt-sm,body.skin-frost #aiToolsS
   };
 
   document.addEventListener('DOMContentLoaded', function(){ prog(false); });
+})();
+</script>
+<script>
+/* v2.46：拖动「文件」和「滤镜」之间的分隔条，调整两段高度 */
+(function(){
+  var col=document.getElementById('leftCol');
+  var sec=document.getElementById('fileSection');
+  var list=document.getElementById('fileList');
+  var lut=document.getElementById('lutSection');
+  var sp=document.getElementById('leftSplitter');
+  if(!col||!sec||!list||!lut||!sp) return;
+  var MIN_LIST=44, MIN_LUT=132, DEFAULT_MAX=190, drag=null;
+  function limit(){
+    var other=sec.offsetHeight-list.offsetHeight;
+    return Math.max(MIN_LIST, col.clientHeight-other-MIN_LUT);
+  }
+  function apply(h){
+    list.style.maxHeight='none';
+    list.style.height=Math.round(h)+'px';
+  }
+  function stop(){
+    if(!drag) return;
+    drag=null; sp.classList.remove('dragging');
+  }
+  sp.addEventListener('pointerdown', function(e){
+    if(e.button!==0) return;
+    drag={y:e.clientY,h:list.getBoundingClientRect().height,max:limit()};
+    sp.classList.add('dragging');
+    try{ sp.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault(); e.stopPropagation();
+  });
+  sp.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var h=drag.h+(e.clientY-drag.y);
+    h=Math.max(MIN_LIST, Math.min(drag.max, h));
+    apply(h);
+    e.preventDefault();
+  });
+  sp.addEventListener('pointerup', stop);
+  sp.addEventListener('pointercancel', stop);
+  sp.addEventListener('lostpointercapture', stop);
+  sp.addEventListener('dblclick', function(){
+    list.style.height='';
+    list.style.maxHeight=DEFAULT_MAX+'px';
+  });
 })();
 </script>
 </body></html>

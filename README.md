@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.45-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.46-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.45**：图片编辑左侧 UI 重排，删除「辅助工具」分页与「自动挑片」「配色提取」入口，把「参考图→LUT」移入「滤镜」，滤镜列表铺满左栏剩余高度。v2.43 的精简界面与 v2.44 的直方图、相册导出栏修复保持不变。
+> 当前版本 **v2.46**：图片编辑左侧「文件 / 滤镜」之间增加可拖动分隔条；相册文件夹树支持逐级折叠/展开；移除「策展、收藏、评分、导入自动化、导入照片/视频、批量重命名、批量复制」等界面入口，修复霜蓝 / 紫夜 / 赤霞三套皮肤下「选择」菜单被裁切的问题；「去重」移入设置「照片管理」并排在「私密相册」前。v2.45 的编辑左栏精简与 v2.44 的直方图、相册导出栏修复保持不变。
 
 直接下载最新安装包（约 1.21GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.45_setup.exe`；本地构建文件名为 `图片批处理工具_v2.45_安装包.exe`（1,297,551,627 字节，约 1.21 GB）；SHA256 `A6704879E508CBC7DFC65296C77737D15209F5DBD8B8707000FBE28A55E4D253`，完整测试记录见 [`v2.45_回归测试报告.md`](v2.45_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.46_setup.exe`；本地构建文件名为 `图片批处理工具_v2.46_安装包.exe`（1,297,434,787 字节，约 1.21 GB）；SHA256 `ACBF7F227DF4C53C405C78CF162D1FB5427E168DFF0BAF29F4F5AC813197F8FB`，完整测试记录见 [`v2.46_回归测试报告.md`](v2.46_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -64,11 +64,29 @@ GitHub Release 资产名为 `image-batch-tool_v2.45_setup.exe`；本地构建文
 - **启动秒开**：扫描结果与 EXIF / 尺寸 / 地理位置持久化到 `alb_index.dat`，缩略图落盘缓存，第二次打开直接用缓存先展示，后台再核对
 - **大目录优化**：枚举阶段只收集图片 / 视频，跳过回收站、系统目录、node_modules 等；界面分页 + 滚动懒加载
 - **删除同步**：相册内删除后自动校准计数与其他视图，不需要手动刷新
-- **设置菜单**：扫描控制、标签索引 AI（含索引性能）、照片管理、缓存分区；去重已移到相册顶栏，人物识别控制条只出现在人物分类
+- **设置菜单**：扫描控制、标签索引 AI（含索引性能）、照片管理、缓存分区；去重已移入「照片管理」并排在「私密相册」前，人物识别控制条只出现在人物分类
 
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.46 更新
+
+![v2.46 图片编辑：可拖动分隔条](docs/screenshots/v246_edit_split.png)
+
+![v2.46 相册：文件夹树逐级折叠](docs/screenshots/v246_album_tree.png)
+
+![v2.46 相册：缩略图与精简后的单元格](docs/screenshots/v246_album_grid.png)
+
+![v2.46 回收站：边角与缩略图视图](docs/screenshots/v246_album_bin.png)
+
+> 本轮仍按“只动 UI”处理：移除入口、调整布局和皮肤外壳，不改动底层导入、收藏、评分、策展、批量重命名/复制、去重与选择菜单的业务函数和消息处理。
+
+- **图片编辑分隔条**：在「文件」和「滤镜」之间加入横向拖动条，鼠标上下拖动即可调整两段高度；双击恢复文件列表默认高度，文件列表不再被 190px 上限卡住。
+- **相册文件夹树折叠**：根目录整行点击可收起/展开全部子目录；有子目录的文件夹显示独立折叠箭头，可逐级收起/展开，状态在当前页面内保持。
+- **相册入口精简**：移除顶栏「策展」、收藏筛选、评分筛选；移除设置里的「导入自动化」「导入照片视频」「批量重命名」「批量移动 / 复制」中的复制选项；移除选择菜单里的收藏、评分、批量重命名、批量复制；移除右键菜单里的收藏、评分。
+- **皮肤修复**：霜蓝 / 紫夜 / 赤霞三套装甲皮肤的 `.alb-sel-wrap` 切角外壳不再裁剪内部下拉菜单，「选择」按钮可正常打开并点中菜单项。
+- **去重移位**：顶栏「去重」按钮移除，设置「照片管理」分组新增「照片去重…」，位置排在「私密相册…」之前，仍调用原 `dupalbum / dupwindow`。
 
 ### v2.45 更新
 
