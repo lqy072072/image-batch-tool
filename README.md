@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.41-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.42-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.41**：自动优化、AI 优化改为显式开关，默认导入不再隐式提亮；智能扩图方向改为「四周 / 上 / 下 / 左 / 右」，向下只补背景、不重绘身体，原图仍逐像素保留；相册右键与顶部「图片编辑」入口改为拉起独立的 `图片编辑\图片编辑.exe`，不再进入 `album.html` 内置的旧编辑器。
+> 当前版本 **v2.42**：删除「关于 图片编辑」窗口底部无效的「关闭」按钮，窗口高度收紧为 640×462；顶部右上角 `✕`、`Esc`、`Enter` 的关闭方式保留。v2.41 的自动优化显式开关、扩图五方向、相册右键新版编辑器保持不变。
 
 直接下载最新安装包（约 1.21GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.41_setup.exe`；本地构建文件名为 `图片批处理工具_v2.41_安装包.exe`（1,297,568,072 字节，约 1.21 GB）；SHA256 `5A86B33641A99D2082B0D9DFB423B641E05233F9B69682C7C2135917C9FD42B6`，完整测试记录见 [`v2.41_回归测试报告.md`](v2.41_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.42_setup.exe`；本地构建文件名为 `图片批处理工具_v2.42_安装包.exe`（1,297,567,663 字节，约 1.21 GB）；SHA256 `BC0814507BD9EC4606F6AFCF247609304EFB8E3371E79315394F63D3E2DAF71B`，完整测试记录见 [`v2.42_回归测试报告.md`](v2.42_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -78,6 +78,16 @@ GitHub Release 资产名为 `image-batch-tool_v2.41_setup.exe`；本地构建文
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.42 更新
+
+> 删除「关于 图片编辑」窗口底部无效的「关闭」按钮；顶部右上角 `✕`、`Esc`、`Enter` 仍可关闭。
+
+![v2.42 关于窗口](docs/screenshots/v242_about.png)
+
+- **为什么按钮无效**：底部「关闭」只由 `ThemedAboutForm.OnPaint()` 画出来，`OnMouseDown()` 只处理顶部 `✕` 和 GitHub 链接，从未给它绑定点击区域，所以它一直是装饰、点不动。
+- **处理方式**：直接移除底部按钮的绘制代码，窗口高度由 640×520 收紧到 640×462；保留顶部关闭、Esc、Enter 三种关闭方式。
+- **回归**：用反射测试工具加载生产 `图片编辑.exe` 弹出关于窗口，截图确认底部无按钮、版本为 2.42、GitHub 链接仍在；模拟点击右上角 `✕` 后窗口进程退出。安装包静默安装返回 0，安装后 `图片编辑.exe`、`相册.exe` 哈希与构建产物一致。详见 [`v2.42_回归测试报告.md`](v2.42_回归测试报告.md)。
 
 ### v2.41 更新
 

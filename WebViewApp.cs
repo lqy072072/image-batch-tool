@@ -2157,7 +2157,7 @@ namespace ImageBatchTool
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false;
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(640, 520);
+            ClientSize = new Size(640, 462);
             BackColor = _p.Back;
             KeyPreview = true;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint
@@ -2392,22 +2392,6 @@ namespace ImageBatchTool
                         using (Pen underline = new Pen(_p.Accent, 1))
                             g.DrawLine(underline, left, 396, left + Math.Min((int)size.Width, w - 60), 396);
                 }
-            }
-
-            // 底部关闭按钮：黑漆描金，不使用系统灰色 MessageBox 按钮
-            Rectangle closeBtn = new Rectangle(w - 116, h - 58, 86, 32);
-            using (SolidBrush btnBg = new SolidBrush(Color.FromArgb(_p.Wave ? 220 : 255, _p.Panel)))
-                g.FillRectangle(btnBg, closeBtn);
-            using (Pen btnBorder = new Pen(_p.Accent, 1))
-                g.DrawRectangle(btnBorder, closeBtn);
-            using (Font btnFont = new Font("Microsoft YaHei UI", 9.5f))
-            using (SolidBrush btnText = new SolidBrush(_p.Text))
-            {
-                StringFormat sf = new StringFormat();
-                sf.Alignment = StringAlignment.Center;
-                sf.LineAlignment = StringAlignment.Center;
-                g.DrawString("关闭", btnFont, btnText, closeBtn, sf);
-                sf.Dispose();
             }
         }
 
