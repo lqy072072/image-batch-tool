@@ -2,7 +2,7 @@
 
 Windows 图片批处理与相册管理工具：LUT 滤镜、AI 调色、人像增强、美颜液化、景深虚化、超分、证件照、本地相册与去重。相册和图片编辑是两个可独立安装、独立运行的程序。
 
-当前版本：**v2.48**
+当前版本：**v2.49**
 
 ## 下载安装
 
@@ -10,10 +10,10 @@ Windows 图片批处理与相册管理工具：LUT 滤镜、AI 调色、人像�
 
 **https://github.com/lqy072072/image-batch-tool/releases**
 
-- Release 资产名：`image-batch-tool_v2.48_setup.exe`
-- 本地构建名：`图片批处理工具_v2.48_安装包.exe`
-- 大小：1,297,491,065 字节（约 1.21 GB）
-- SHA256：`E1B2219EC29790DAF3B6DBC4B817037399D5021F47151AF45DDEA5D5CD555EE5`
+- Release 资产名：`image-batch-tool_v2.49_setup.exe`
+- 本地构建名：`图片批处理工具_v2.49_安装包.exe`
+- 大小：1,297,545,943 字节（约 1.21 GB）
+- SHA256：`CA7565F7901165C9BDF80BCD345ADE7473DE1813ADEF761342BD32E90966840D`
 
 安装包已内置两个模块的 Python 运行时、AI/OCR 模型和 LUT；生成式修图的大模型不预装，首次使用时在程序内下载。
 
@@ -53,9 +53,9 @@ installer/Installer.cs  安装向导源码
 需要 .NET Framework 4.x 的 `csc.exe`，以及 WebView2 SDK 的 `Microsoft.Web.WebView2.Core.dll` / `Microsoft.Web.WebView2.WinForms.dll`。
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /d:ALBUM_BUILD /win32icon:相册.ico /out:"相册.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs AppModule.cs AlbumMeta.cs Extras.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /d:ALBUM_BUILD /win32icon:相册.ico /out:"相册.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs AppModule.cs AlbumMeta.cs Extras.cs GlassMouseBridge.cs
 
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /d:EDIT_BUILD /win32icon:相册_编辑.ico /out:"图片编辑.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs AppModule.cs AlbumMeta.cs Extras.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /d:EDIT_BUILD /win32icon:相册_编辑.ico /out:"图片编辑.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs AppModule.cs AlbumMeta.cs Extras.cs GlassMouseBridge.cs
 ```
 
 安装程序与卸载程序：

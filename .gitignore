@@ -40,6 +40,7 @@ WebView2Loader.dll
 # Release drafts, historical test reports, screenshots and promo material
 /.release_body*.md
 /v2.*_回归测试报告.md
+/v2.*_AI_LUT*.md
 /v2.12_拆分与测试报告.md
 /AI功能候选清单_*.md
 /工程清理报告.md

@@ -107,6 +107,8 @@ body.skin-light .left-splitter:hover::before, body.skin-light .left-splitter.dra
 
 /* 右栏 */
 .right { width:300px; flex-shrink:0; background:#2b2b2b; border-left:1px solid #1a1a1a; overflow-y:auto; }
+.right-sticky { position:sticky; top:0; z-index:6; background:#2b2b2b; }
+body.skin-light .right-sticky { background:#f4f5f8; }
 .right-section { border-bottom:1px solid #1a1a1a; }
 .section-header { padding:9px 12px; display:flex; justify-content:space-between; align-items:center; color:#ccc; cursor:pointer; font-size:12px; background:#333; font-weight:600; }
 .section-header .arrow { color:#888; font-size:10px; display:inline-block; transition:transform .15s; width:12px; text-align:center; }
@@ -818,22 +820,24 @@ window.addEventListener('mouseup', function(e) {
   </div>
 
   <div class="right">
-    <div class="edx-groups" id="edxGroups">
-      <span class="edx-gr on" data-g="basic" onclick="edxGroup('basic')">调整</span>
-      <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
-      <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
-      <span class="edx-gr" data-g="gen" onclick="edxGroup('gen')">AI</span>
-    </div>
-    <div class="right-section" id="histSection">
-      <div class="section-header"><span>直方图</span><span class="arrow">▼</span></div>
-      <div class="section-body">
-        <div class="hist-tabs">
-          <div class="hist-tab active" data-mode="rgb">RGB 直方图</div>
-          <div class="hist-tab" data-mode="lum">曝光直方图</div>
+    <div class="right-sticky">
+      <div class="edx-groups" id="edxGroups">
+        <span class="edx-gr on" data-g="basic" onclick="edxGroup('basic')">调整</span>
+        <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
+        <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
+        <span class="edx-gr" data-g="gen" onclick="edxGroup('gen')">AI</span>
+      </div>
+      <div class="right-section" id="histSection">
+        <div class="section-header"><span>直方图</span><span class="arrow">▼</span></div>
+        <div class="section-body">
+          <div class="hist-tabs">
+            <div class="hist-tab active" data-mode="rgb">RGB 直方图</div>
+            <div class="hist-tab" data-mode="lum">曝光直方图</div>
+          </div>
+          <div class="hist-canvas-wrap" id="wrapRgb"><canvas id="hist"></canvas></div>
+          <div class="hist-canvas-wrap" id="wrapLum" style="display:none"><canvas id="histLum"></canvas></div>
+          <div class="hist-labels"><span>阴影</span><span>中间调</span><span>高光</span></div>
         </div>
-        <div class="hist-canvas-wrap" id="wrapRgb"><canvas id="hist"></canvas></div>
-        <div class="hist-canvas-wrap" id="wrapLum" style="display:none"><canvas id="histLum"></canvas></div>
-        <div class="hist-labels"><span>阴影</span><span>中间调</span><span>高光</span></div>
       </div>
     </div>
 
@@ -841,11 +845,12 @@ window.addEventListener('mouseup', function(e) {
       <div class="section-header"><span>LUT 参数</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div id="currentLut" style="margin-bottom:10px;padding:8px 10px;background:#1a1a1a;border:1px solid #3c3c3c;border-radius:4px;font-size:11px;color:#888">未选择 LUT</div>
-        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-          <button class="lut-mode-btn active" data-mode="log" onclick="setLutMode('log')">自动</button>
-          <button class="lut-mode-btn" data-mode="ai" onclick="setLutMode('ai')">AI 模式</button>
-          <button class="lut-mode-btn" data-mode="direct" onclick="setLutMode('direct')">直出</button>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+          <button class="lut-mode-btn active" data-mode="log" aria-pressed="true" onclick="setLutMode('log')">自动</button>
+          <button class="lut-mode-btn" data-mode="ai" aria-pressed="false" onclick="setLutMode('ai')">AI 模式</button>
+          <button class="lut-mode-btn" data-mode="direct" aria-pressed="false" onclick="setLutMode('direct')">直出</button>
         </div>
+        <div id="lutModeHint" style="font-size:10px;color:#777;margin-bottom:10px">实际按当前开启的模式处理；可多开</div>
         <div id="lutSliders"></div>
         <div class="panel-divider">
           <div class="sub-title">胶片质感</div>
@@ -2111,15 +2116,31 @@ window.addEventListener('mouseup', function() {
 });
 function doRotate(deg) { post('rotate|'+deg); }
 
-// LUT 模式
-function setLutMode(mode) {
-  document.querySelectorAll('.lut-mode-btn').forEach(b => {
-    const isActive = b.dataset.mode===mode;
-    b.classList.toggle('active', isActive && mode!=='ai');
-    b.classList.toggle('ai-active', isActive && mode==='ai');
-  });
-  post('setparam|lut_mode|' + mode);
+// LUT 模式：三个按钮各自独立开关；底层仍只按最后开启的模式处理
+let _lutModeOrder = ['log'];
+function updateLutModeHint(){
+  const n = document.querySelectorAll('.lut-mode-btn.active').length;
+  const el = document.getElementById('lutModeHint');
+  if (!el) return;
+  if (n === 0) el.textContent = '三个模式均已关闭：实际按「直出」处理';
+  else if (n > 1) el.textContent = '已开启 ' + n + ' 个模式：实际按最后开启的模式处理';
+  else el.textContent = '实际按当前开启的模式处理';
 }
+function setLutMode(mode) {
+  const btn = document.querySelector('.lut-mode-btn[data-mode="' + mode + '"]');
+  if (!btn) return;
+  const turnOn = !btn.classList.contains('active');
+  btn.classList.toggle('active', turnOn);
+  btn.classList.toggle('ai-active', turnOn && mode === 'ai');
+  btn.setAttribute('aria-pressed', turnOn ? 'true' : 'false');
+  _lutModeOrder = _lutModeOrder.filter(m => m !== mode);
+  if (turnOn) _lutModeOrder.push(mode);
+  const actual = _lutModeOrder.length ? _lutModeOrder[_lutModeOrder.length - 1] : 'direct';
+  post('setparam|lut_mode|' + actual);
+  try { if (window._edx) window._edx.lutmode = actual; } catch(e) {}
+  updateLutModeHint();
+}
+updateLutModeHint();
 // 皮肤切换由 skins/skin-core.js 统一处理（菜单、持久化、跨窗口同步）
 // 裁切
 let _cropOn = false, _cropRect = null; // _cropRect 为基于图片的归一化 {x,y,w,h}
@@ -5523,7 +5544,7 @@ function albPopup(i, cnt){
 try{ edxGroup('basic'); }catch(e){}
 </script>
 <style>
-.edx-groups{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #33363d;background:#202226;position:sticky;top:0;z-index:5}
+.edx-groups{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #33363d;background:#202226;position:static;z-index:auto}
 .edx-gr{font-size:11px;padding:5px 11px;border-radius:5px;color:#9299a5;cursor:pointer;border:1px solid transparent}
 .edx-gr.on{color:#fff;background:#365a7c;border-color:#4d769c}
 body.skin-light .edx-groups{background:#f4f5f8;border-color:#e2e4e9}
