@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.44-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.45-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.44**：v2.43 精简图片编辑界面，移除专业工作台、顶部撤销/重做/版本/逐张控件与左侧「输出与批处理」面板；v2.44 修复切组直方图空白和相册导出栏被遮挡。v2.42 的关于窗口修复保持不变。
+> 当前版本 **v2.45**：图片编辑左侧 UI 重排，删除「辅助工具」分页与「自动挑片」「配色提取」入口，把「参考图→LUT」移入「滤镜」，滤镜列表铺满左栏剩余高度。v2.43 的精简界面与 v2.44 的直方图、相册导出栏修复保持不变。
 
 直接下载最新安装包（约 1.21GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.44_setup.exe`；本地构建文件名为 `图片批处理工具_v2.44_安装包.exe`（1,297,551,332 字节，约 1.21 GB）；SHA256 `18E076EEAA713485C53E5F8127AC0C970E65EE2EA542AC37B961ECEFEC9049DD`，完整测试记录见 [`v2.44_回归测试报告.md`](v2.44_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.45_setup.exe`；本地构建文件名为 `图片批处理工具_v2.45_安装包.exe`（1,297,551,627 字节，约 1.21 GB）；SHA256 `A6704879E508CBC7DFC65296C77737D15209F5DBD8B8707000FBE28A55E4D253`，完整测试记录见 [`v2.45_回归测试报告.md`](v2.45_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -47,9 +47,7 @@ GitHub Release 资产名为 `image-batch-tool_v2.44_setup.exe`；本地构建文
 - **景深虚化**：Depth Anything V2 Small 出深度图 + 人像解析保护主体，背景虚化、人脸始终清晰
 - **全图放大/超分**：分块重叠融合的 2× 放大；`ai/models/` 放入任意 Real-ESRGAN 系列 `.onnx` 即自动切换为 AI 超分，否则走 Lanczos+细节回注兜底
 - **证件照**：YuNet 定位 + 人脸解析抠像，白/蓝/红/浅灰换底，一寸/二寸/护照尺寸，可选六寸相纸排版
-- **自动挑片**：清晰度（Laplacian 方差）、曝光（剪裁比+平均亮度）、闭眼（468 点 EAR）打分排序，标出建议保留
-- **配色提取**：K-means 主色提取，点击色值复制，可直接当设计色板用
-- **参考图→LUT**：丢一张喜欢的调色图，自动生成 33³ `.cube` 进「我的-LUT」分组
+- **参考图→LUT（滤镜分页）**：丢一张喜欢的调色图，自动生成 33³ `.cube` 进「我的-LUT」分组；按钮已从左侧「辅助工具」移入「滤镜」段
 - **自动优化 / AI 优化**：两个独立显式按钮。默认导入不自动套用；点「自动优化」只做白平衡、曝光和对比度，点「AI 优化」才做 AI 影调增强。按钮状态与当前图片参数同步，切换照片或撤销/重做后仍准确。
 - **手动调色**：亮度/对比度/饱和度/色温/色调/暗角/高光/暗部/胶片对比
 - **批量导出**：底部导出栏统一设置预览尺寸、格式、输出尺寸、画质与输出目录，多图按当前参数逐张导出
@@ -71,6 +69,18 @@ GitHub Release 资产名为 `image-batch-tool_v2.44_setup.exe`；本地构建文
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.45 更新
+
+![v2.45 图片编辑左侧：文件 + 滤镜铺满](docs/screenshots/v245_edit_left.png)
+
+> 只调整图片编辑左侧 UI：删掉「辅助工具」分页与两个入口，把「参考图→LUT」放进「滤镜」，让滤镜列表铺满左栏。按“只动 UI”要求，滤镜、挑片、配色、参考图生成 LUT 的后端函数与消息处理均未改动，只是不再暴露「自动挑片」「配色提取」的界面入口。
+
+- **删除辅助工具分页**：移除「自动挑片」「配色提取」两个按钮，以及 `#pickBox`、`#paletteBox`、三张隐藏 `fx-thumb`；页面不再出现「辅助工具」文本。
+- **参考图→LUT 移入滤镜**：按钮放在「导入自定义 LUT / 打开 LUT 文件夹」下方，仍调用原来的 `reflutdialog`；宽度铺满滤镜段。
+- **左侧重新铺满**：文件列表按内容自适应高度，「滤镜」段用 `flex:1 1 auto` 吃掉剩余高度，LUT 树从 519px 扩展到左栏底部，865 条 LUT 可正常滚动；折叠/展开滤镜段正常。
+- **九套皮肤实测**：深色、墨色玻璃、浅色、柔光白、液态玻璃、黑金、紫夜、霜蓝、赤霞下，滤镜段底边均与左栏底边对齐（0～1px），LUT 树距底 8～9px，无悬空或溢出。
+- **回归**：编辑器核心 18/18 PASS（原 T14 配色提取、T15 自动挑片替换为“UI 入口已移除 + 左侧布局”断言）；安装版 1400×900 实测通过；安装包与关于窗口均显示 2.45。详见 [`v2.45_回归测试报告.md`](v2.45_回归测试报告.md)。
 
 ### v2.44 更新
 

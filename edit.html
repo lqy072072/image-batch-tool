@@ -62,6 +62,9 @@ body { display:flex; flex-direction:column; }
 ::-webkit-scrollbar-corner { background:#2b2b2b; }
 
 .lut-section { flex:0 0 auto; display:flex; flex-direction:column; min-height:0; }
+#lutSection { flex:1 1 auto; min-height:0; }
+#lutSection .section-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+#lutSection .lut-tree { flex:1 1 auto; min-height:0; max-height:none; }
 .lut-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px 6px; color:#bbb; font-size:12px; font-weight:600; }
 .lut-header .group-actions { display:flex; gap:6px; }
 .lut-header .group-actions button { background:transparent; color:#888; border:1px solid #555; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:10px; }
@@ -744,7 +747,7 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
-    <div class="lut-section" id="lutSection" style="flex:0 0 auto">
+    <div class="lut-section" id="lutSection" style="flex:1 1 auto;min-height:0">
       <div class="section-header"><span>滤镜</span><span class="arrow">▼</span></div>
       <div class="section-body" style="padding:0 0 8px">
         <input id="lutSearch" type="text" placeholder="搜索滤镜…" style="margin:0 12px 6px;padding:5px 8px;font-size:11px;border-radius:5px;border:1px solid #555;background:#3c3c3c;color:#ddd;outline:none;width:calc(100% - 24px)"/>
@@ -752,27 +755,10 @@ window.addEventListener('mouseup', function(e) {
           <button class="mini-btn" style="flex:1" onclick="post('importlut')">导入自定义 LUT</button>
           <button class="mini-btn" style="flex:1" onclick="post('openlutdir')">打开 LUT 文件夹</button>
         </div>
-        <div class="lut-tree" id="lutTree"></div>
-      </div>
-    </div>
-
-    <div class="left-section" style="padding:0;flex-shrink:0">
-      <div class="section-header"><span>辅助工具</span><span class="arrow">▼</span></div>
-      <div class="section-body">
-        <div class="row-line" style="gap:6px">
-          <button class="mini-btn" style="flex:1" onclick="post('autopick')">自动挑片</button>
-          <button class="mini-btn" style="flex:1" onclick="post('palette|6')">配色提取</button>
-        </div>
-        <div class="row-line">
+        <div class="row-line" style="padding:0 12px 6px">
           <button class="mini-btn" style="flex:1" onclick="post('reflutdialog')">参考图→LUT</button>
         </div>
-        <div id="paletteBox" style="display:none;margin-top:8px;max-height:132px;overflow-y:auto"></div>
-        <div id="pickBox" style="display:none;margin-top:8px;font-size:11px;color:#aaa;max-height:132px;overflow-y:auto"></div>
-        <div class="fx-row">
-          <div class="fx-thumb" onclick="showFx('pick')" title="自动挑片：清晰度/曝光/闭眼打分"><img src="assets/previews/fx_pick.jpg" alt="挑片"><span>自动挑片</span></div>
-          <div class="fx-thumb" onclick="showFx('palette')" title="配色提取：主色与占比"><img src="assets/previews/fx_palette.jpg" alt="配色"><span>配色提取</span></div>
-          <div class="fx-thumb" onclick="showFx('reflut')" title="参考图 → 33³ LUT"><img src="assets/previews/fx_reflut.jpg" alt="参考图LUT"><span>参考图→LUT</span></div>
-        </div>
+        <div class="lut-tree" id="lutTree"></div>
       </div>
     </div>
   </div>
