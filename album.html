@@ -1222,7 +1222,6 @@ window.addEventListener('mouseup', function(e) {
     </div>
     <div class="alb-quick">
       <button class="mini-btn" onclick="albToggleTree()" title="显示/隐藏文件夹树">文件夹</button>
-      <button class="mini-btn" onclick="albAlbumsOpen()" title="自定义相册与智能相册">相册</button>
       <button class="mini-btn alb-search-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.2 15.2l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>搜索</button>
     </div>
     <div class="alb-right">
@@ -1260,7 +1259,6 @@ window.addEventListener('mouseup', function(e) {
           </div>
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">照片管理</div>
-            <div class="alb-opt-item" onclick="albBatchMoveOpen()">批量移动…</div>
             <div class="alb-opt-item" onclick="albDedup()">照片去重…</div>
             <div class="alb-opt-item" onclick="albPrivateOpen()">私密相册…</div>
             <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
@@ -1277,8 +1275,6 @@ window.addEventListener('mouseup', function(e) {
         <div class="alb-opt-menu alb-sel-menu" id="albSelMenu">
           <div class="alb-opt-item alb-sel-item" id="albSelAllBtn" onclick="albSelMenuAll()">全选</div>
           <div class="alb-opt-item alb-sel-item" onclick="albSelHide()">隐藏 / 取消隐藏</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelAddAlbum()">加入相册…</div>
-          <div class="alb-opt-item alb-sel-item" onclick="albSelBatchMove()">批量移动…</div>
           <div class="alb-opt-item alb-sel-item" id="albEditBtn" onclick="albSelMenuEdit()">编辑选中</div>
           <div class="alb-opt-item alb-sel-item danger" id="albDelSelBtn" onclick="albSelMenuDelete()">删除选中</div>
         </div>
@@ -1320,7 +1316,6 @@ window.addEventListener('mouseup', function(e) {
   </div>
   <div class="alb-body">
     <div class="alb-tree" id="albTree"></div>
-    <div class="alb-albums" id="albAlbums"></div>
     <div class="alb-grid" id="albGrid"></div>
     <div class="alb-person" id="albPerson"></div>
     <div class="alb-map" id="albMap"></div>
@@ -1331,7 +1326,6 @@ window.addEventListener('mouseup', function(e) {
 <div class="alb-ctx" id="albCtx">
   <div class="alb-ctx-item" data-a="info">详细信息</div>
   <div class="alb-ctx-item" data-a="folder">打开图片所在文件夹</div>
-  <div class="alb-ctx-item" data-a="album">加入相册…</div>
   <div class="alb-ctx-item" data-a="hide">隐藏 / 取消隐藏</div>
   <div class="alb-ctx-item" data-a="save">另存为…</div>
   <div class="alb-ctx-item" data-a="edit">编辑</div>
@@ -3373,21 +3367,6 @@ function albNewSmartAlbum(){
   A.meta.albums.sort(function(a,b){ return (b.smart?1:0)-(a.smart?1:0); });
   albSaveState(); A.albumId=id; albRenderAlbums(); albRender(); toastMsg('已创建智能相册');
 }
-function albAddToAlbum(paths){
-  const A=window._alb; let albums=A.meta.albums||[];
-  if(!albums.length){ albNewAlbum(); return; }
-  const names=albums.map(function(a,i){ return (i+1)+'. '+(a.name||'相册')+(a.smart?'（智能）':''); }).join('\n');
-  const v=prompt('加入哪个相册？输入序号或相册名：\n'+names,'1'); if(v==null) return;
-  let n=-1; const vs=String(v).trim();
-  if(/^\d+$/.test(vs)) n=parseInt(vs,10)-1;
-  else n=albums.findIndex(function(a){ return String(a.name||'').trim()===vs; });
-  if(n<0||n>=albums.length){ toastMsg('没有找到这个相册：'+vs); return; }
-  if(albums[n].smart){ toastMsg('智能相册不能手动添加照片'); return; }
-  const arr=albums[n].items=albums[n].items||[]; const set={}; arr.forEach(function(p){ set[albMetaKey(p)]=1; });
-  paths.forEach(function(p){ if(!set[albMetaKey(p)]){ arr.push(p); set[albMetaKey(p)]=1; } });
-  albSaveState(); albRenderAlbums(); albRender(); toastMsg('已加入 '+paths.length+' 张到「'+(albums[n].name||'相册')+'」');
-}
-
 function albModalOpen(html){ const mask=document.getElementById('albModalMask'), box=document.getElementById('albModal'); if(box) box.innerHTML=html; if(mask) mask.classList.add('on'); }
 function albModalClose(){ const mask=document.getElementById('albModalMask'); if(mask) mask.classList.remove('on'); window._albRenameOpen=false; window._albMoveOpen=false; window._albImportOpen=false; }
 function albModalSet(html){ const box=document.getElementById('albModal'); if(box) box.innerHTML=html; }
@@ -3426,22 +3405,6 @@ function albRenderRenamePreview(rows){
   box.innerHTML=html;
 }
 
-function albBatchMoveOpen(paths){
-  paths=(paths&&paths.length)?paths:albSelectedPaths();
-  if(!paths.length){ toastMsg('先在「选择」中勾选要移动的照片'); return; }
-  window._albMovePaths=paths.slice(); window._albMoveOpen=true;
-  albModalOpen('<h3>批量移动 · '+paths.length+' 项</h3>'+
-    '<div class="row"><span>目标文件夹</span><input type="text" id="albMoveDst" value=""><button class="btn" onclick="albImportPickDo(\'dst\')">选择…</button></div>'+
-    '<div class="hint">移动后会改原路径；重名会自动加 _1、_2 后缀。目标在相册目录外时会自动加入相册。</div>'+
-    '<div class="foot"><button class="btn" onclick="albModalClose()">取消</button><button class="btn pri" onclick="albMoveApplyDo()">开始</button></div>');
-}
-function albMoveApplyDo(){
-  const dst=((document.getElementById('albMoveDst')||{}).value||'').trim();
-  if(!dst){ toastMsg('请先选择目标文件夹'); return; }
-  const mode='move';
-  if(!confirm((mode==='copy'?'复制 ':'移动 ')+window._albMovePaths.length+' 项到：\n'+dst)) return;
-  post('albmove|'+albB64(JSON.stringify({paths:window._albMovePaths,dst:dst,copy:mode==='copy'})));
-}
 function albImportOpen(){
   window._albImportOpen=true;
   albModalOpen('<h3>导入照片 / 视频</h3>'+
@@ -4853,9 +4816,7 @@ function albSelNeedPaths(){ albSelMenuEnsureSel(); const p=albSelectedPaths(); i
 function albSelFav(){ const p=albSelNeedPaths(); if(p) albToggleFavPaths(p); }
 function albSelRate(){ const p=albSelNeedPaths(); if(p) albRatePaths(p); }
 function albSelHide(){ const p=albSelNeedPaths(); if(p){ const first=window._alb.byPath[p[0]]||{}; albSetHidden(p,!albItemM(first).h); } }
-function albSelAddAlbum(){ const p=albSelNeedPaths(); if(p) albAddToAlbum(p); }
 function albSelBatchRename(){ const p=albSelNeedPaths(); if(p) albBatchRenameOpen(p); }
-function albSelBatchMove(){ const p=albSelNeedPaths(); if(p) albBatchMoveOpen(p); }
 function albToggleSel(){
   window._alb.sel=!window._alb.sel;
   window._alb.selSet={};
@@ -4994,7 +4955,6 @@ function albCtxDo(a){
   if(a==='folder'){ if(C.multi) return; post('albopenfolder|'+C.path); return; }
   if(a==='fav'){ albToggleFavPaths(paths); return; }
   if(a==='rate'){ albRatePaths(paths); return; }
-  if(a==='album'){ albAddToAlbum(paths); return; }
   if(a==='hide'){ const first=window._alb.byPath[C.path]||{}; albSetHidden(paths,!albItemM(first).h); return; }
   if(a==='save'){ if(!paths.length) return; post('albsaveas|'+paths.join('\n')); return; }
   if(a==='edit'){ albEditPaths(paths); return; }

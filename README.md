@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.46-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.47-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.46**：图片编辑左侧「文件 / 滤镜」之间增加可拖动分隔条；相册文件夹树支持逐级折叠/展开；移除「策展、收藏、评分、导入自动化、导入照片/视频、批量重命名、批量复制」等界面入口，修复霜蓝 / 紫夜 / 赤霞三套皮肤下「选择」菜单被裁切的问题；「去重」移入设置「照片管理」并排在「私密相册」前。v2.45 的编辑左栏精简与 v2.44 的直方图、相册导出栏修复保持不变。
+> 当前版本 **v2.47**：相册顶栏「相册」入口、左侧「我的相册」面板以及选择/右键「加入相册…」全部移除；设置和选择菜单里的「批量移动…」也移除。v2.46 的编辑分隔条、文件夹树折叠、三皮肤修复和「去重」移位保持不变。
 
 直接下载最新安装包（约 1.21GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.46_setup.exe`；本地构建文件名为 `图片批处理工具_v2.46_安装包.exe`（1,297,434,787 字节，约 1.21 GB）；SHA256 `ACBF7F227DF4C53C405C78CF162D1FB5427E168DFF0BAF29F4F5AC813197F8FB`，完整测试记录见 [`v2.46_回归测试报告.md`](v2.46_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.47_setup.exe`；本地构建文件名为 `图片批处理工具_v2.47_安装包.exe`（1,297,490,764 字节，约 1.21 GB）；SHA256 `B7B52798538C542F5E42380E462279C7C86C6A5BC1805BB2E0436EB0732A4EC4`，完整测试记录见 [`v2.47_回归测试报告.md`](v2.47_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -69,6 +69,17 @@ GitHub Release 资产名为 `image-batch-tool_v2.46_setup.exe`；本地构建文
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.47 更新
+
+![v2.47 相册：顶栏已移除「相册」，只剩文件夹/搜索](docs/screenshots/v247_album_top.png)
+
+![v2.47 设置：照片管理不再有「批量移动」](docs/screenshots/v247_album_settings.png)
+
+- **相册入口彻底移除**：顶栏「相册」按钮、左侧「我的相册」面板、选择菜单与右键菜单中的「加入相册…」全部删除；顶栏快捷区只剩「文件夹」「搜索」。
+- **批量移动移除**：设置「照片管理」和选择菜单中的「批量移动…」删除；批量移动弹窗及前端打开/提交函数一并移除，不再有可触发的入口。
+- **保留功能**：文件夹树与折叠、缩略图、选择/删除、搜索、照片去重、私密相册、回收站、人物/地图、编辑选中均保持原样；v2.46 的编辑分隔条、文件夹树折叠和三套装甲皮肤修复不变。
+- **回归**：相册 UI 8/8 PASS，含 5 张缩略图、314 项回收站边角视图；安装版编辑分隔条 5/5 PASS。详见 [`v2.47_回归测试报告.md`](v2.47_回归测试报告.md)。
 
 ### v2.46 更新
 
