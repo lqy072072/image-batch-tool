@@ -757,7 +757,7 @@ body.skin-light .alb-pcard .nm { color:#222; }
 body.skin-light .alb-vexif { border-color:#ddd; }
 body.skin-light .alb-vexif .v { color:#222; }
 </style>
-<script src="skins/skin-core.js?v=2400"></script>
+<script src="skins/skin-core.js?v=2410"></script>
 <style>body.mode-album .alb-titlebar .top-right span[onclick*="albOptDo('editor')"]{display:none!important;}</style></head>
 <body>
 
@@ -3563,9 +3563,8 @@ function setAppMode(mode){
   document.body.classList.toggle('mode-album', window._appMode === 'album');
 }
 function enterEditorFromAlbum(){
-  setAppMode('edit');
-  const ov=document.getElementById('albOverlay');
-  if(ov) iosHide(ov, function(){ closeAlbView(); });
+  // v2.41：相册不再切到内嵌旧编辑器，直接拉起独立的图片编辑程序。
+  post('openeditor');
 }
 function openAlbum(){
   const ov=document.getElementById('albOverlay');
@@ -3858,9 +3857,8 @@ function albToEdit(){
 }
 function albEditCurrent(){
   const p=window._alb.viewerPath; if(!p) return;
-  post('albtoedit|'+p);
-  setAppMode('edit');
-  closeAlbView(); closeAlbum();
+  post('openeditor|'+p);
+  closeAlbView();
 }
 
 function albResetScroll(){ const g=document.getElementById('albGrid'); if(g){ g.scrollTop=0; } }
@@ -4934,9 +4932,7 @@ function albCtxClose(){
 }
 function albEditPaths(paths){
   if(!paths || !paths.length) return;
-  setAppMode('edit');
-  post('albtoedit|'+paths.join('\n'));
-  setTimeout(closeAlbum,150);
+  post('openeditor|'+paths.join('\n'));
 }
 function albDeletePaths(paths){
   const A=window._alb, n=paths.length;

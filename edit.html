@@ -686,7 +686,7 @@ body.skin-light .edx-curve-wrap { background:#fff; border-color:#d7d9e0; }
 body.skin-light .edx-hsl-row { color:#444; }
 body.skin-light .edx-xmp input[type=text], body.skin-light .edx-xmp input[type=password], body.skin-light .edx-xmp textarea, body.skin-light .edx-video-row input { background:#fff; color:#222; border-color:#d7d9e0; }
 </style>
-<script src="skins/skin-core.js?v=2400"></script>
+<script src="skins/skin-core.js?v=2410"></script>
 <style>body:not(.mode-album) .top-right span[onclick="openAlbum()"]{display:none!important;}</style></head>
 <body>
 
@@ -947,8 +947,8 @@ window.addEventListener('mouseup', function(e) {
       <div class="section-header"><span>色彩调整</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div style="display:flex;gap:6px;margin-bottom:10px">
-          <button id="colorAutoBtn" onclick="toggleColorAuto()" style="flex:1;padding:7px;background:#0969da;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">自动优化</button>
-          <button id="aiOptBtn" onclick="toggleAiOpt()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">AI优化</button>
+          <button id="colorAutoBtn" onclick="toggleColorAuto()" style="flex:1;padding:7px;background:#0969da;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">开启自动优化</button>
+          <button id="aiOptBtn" onclick="toggleAiOpt()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">开启AI优化</button>
         </div>
         <div id="colorSliders"></div>
         <div class="panel-divider">
@@ -1217,10 +1217,10 @@ window.addEventListener('mouseup', function(e) {
         <details class="ai-tool">
           <summary><b>智能扩图</b><span class="ai-tag">本机 · 背景延展</span></summary>
           <div class="ai-tool-body">
-            <div class="ai-line"><span>方向</span><select id="aiB3Dir" class="mini-sel"><option value="all">四周 · 竖图只扩左右</option><option value="horizontal">左右</option><option value="left">向左</option><option value="right">向右</option><option value="top">向上</option></select></div>
+            <div class="ai-line"><span>方向</span><select id="aiB3Dir" class="mini-sel"><option value="all">四周</option><option value="top">上</option><option value="bottom">下</option><option value="left">左</option><option value="right">右</option></select></div>
             <div class="slider-row"><span>扩展</span><input type="range" id="aiB3Pct" min="10" max="50" value="25" oninput="document.getElementById('aiB3PctV').textContent=this.value+'%'"><span class="val" id="aiB3PctV">25%</span></div>
             <div class="ai-actions"><button class="ai-run" onclick="aiB3()">背景扩图</button></div>
-            <div class="ai-tool-status" id="aiB3Status">只扩大画布并从边缘延展背景，原图人物、脸部、字幕逐像素保留；竖图「四周」只扩左右，不补头顶、不补腿、不重绘身体。近景人像建议用「左右」。</div>
+            <div class="ai-tool-status" id="aiB3Status">只扩大画布并从边缘延展背景，原图人物、脸部、字幕逐像素保留；方向可选四周、上、下、左、右。向下扩时只补背景，不重绘身体。</div>
           </div>
         </details>
 
@@ -1708,14 +1708,29 @@ function toggleColorAuto() {
   if (!colorAutoApplied) {
     // 自动优化：黑白场+智能白平衡（不影响LUT套用模式）
     setParam('color_auto', 1);
-    btn.textContent = '还原默认';
+    btn.textContent = '关闭自动优化';
     btn.style.background = '#666';
     colorAutoApplied = true;
   } else {
     setParam('color_auto', 0);
-    btn.textContent = '自动优化';
+    btn.textContent = '开启自动优化';
     btn.style.background = '#0969da';
     colorAutoApplied = false;
+  }
+}
+function edxSyncAutoSwitch(){
+  const p = (window._edx && window._edx.params) || {};
+  colorAutoApplied = Number(p.color_auto || 0) > 0.5;
+  aiOptEnabled = Number(p.ai_opt || 0) > 0.5;
+  const cb = document.getElementById('colorAutoBtn');
+  if (cb) {
+    cb.textContent = colorAutoApplied ? '关闭自动优化' : '开启自动优化';
+    cb.style.background = colorAutoApplied ? '#666' : '#0969da';
+  }
+  const ab = document.getElementById('aiOptBtn');
+  if (ab) {
+    ab.textContent = aiOptEnabled ? '关闭AI优化' : '开启AI优化';
+    ab.style.background = aiOptEnabled ? '#666' : '#7c3aed';
   }
 }
 function toggleAiOpt() {
@@ -1729,7 +1744,7 @@ function toggleAiOpt() {
     document.getElementById('statusBox').style.color = '#a78bfa';
   } else {
     setParam('ai_opt', 0);
-    btn.textContent = 'AI优化';
+    btn.textContent = '开启AI优化';
     btn.style.background = '#7c3aed';
     aiOptEnabled = false;
   }
@@ -3470,6 +3485,7 @@ function edxSyncOne(k,v){
 function edxSyncAllUI(){
   const p=window._edx.params||{};
   Object.keys(p).forEach(k=>edxSyncOne(k,p[k]));
+  edxSyncAutoSwitch();
   edxSyncLocControls(); edxDrawCurve();
 }
 // ---------- 曲线 ----------

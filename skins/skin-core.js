@@ -211,7 +211,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-css', def.id);
-      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2400';
+      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2410';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -231,7 +231,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-core', '1');
-      link.href = base + 'skin-core.css?v=2400';
+      link.href = base + 'skin-core.css?v=2410';
       document.head.appendChild(link);
     } catch (e) {}
   }

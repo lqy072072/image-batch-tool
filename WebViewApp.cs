@@ -771,6 +771,14 @@ namespace ImageBatchTool
             MainForm.Log("程序启动 mode=" + mode);
             var main = new MainForm();
             main.StartupMode = mode;
+            // v2.41：独立编辑器接受相册右键传来的图片路径；忽略 --debug-webview 等开关。
+            var startupPaths = new List<string>();
+            foreach (string a in args)
+            {
+                if (a.StartsWith("--")) continue;
+                try { if (File.Exists(a) || Directory.Exists(a)) startupPaths.Add(a); } catch { }
+            }
+            main.StartupPaths = startupPaths.ToArray();
             main.ApplyModeIcon();
             main.FormClosed += (s, e) => MainForm.Log("主窗口已关闭");
             main.FormClosing += (s, e) => { try { main.AiStopAll(); } catch { } };
@@ -2497,6 +2505,9 @@ namespace ImageBatchTool
         CoreWebView2Environment webEnv;
         public SplashForm Splash;
         public string StartupMode = AppModule.Id;
+        // v2.41：从相册右键启动图片编辑时，通过命令行把选中图片带入独立编辑器。
+        public string[] StartupPaths = new string[0];
+        bool startupPathsApplied = false;
         readonly List<string> files = new List<string>();
         readonly HashSet<string> fileKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly List<string> lutFiles = new List<string>();
@@ -3880,6 +3891,57 @@ namespace ImageBatchTool
             return added;
         }
 
+        // v2.41：相册右键“编辑”改为拉起独立的图片编辑程序。
+        // v2.12 拆分后 album.html 里仍保留一套旧内嵌编辑界面，继续走 albtoedit 会进入旧 UI。
+        void LaunchEditor(List<string> paths)
+        {
+            try
+            {
+                string parent = null;
+                try { parent = Path.GetDirectoryName(Application.StartupPath.TrimEnd(Path.DirectorySeparatorChar)); } catch { }
+                string exe = null;
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    string preferred = Path.Combine(parent, "图片编辑", "图片编辑.exe");
+                    if (File.Exists(preferred)) exe = preferred;
+                }
+                if (exe == null)
+                {
+                    string sibling = Path.Combine(Application.StartupPath, "图片编辑.exe");
+                    if (File.Exists(sibling)) exe = sibling;
+                }
+                if (exe == null)
+                {
+                    Send("{\"type\":\"toast\",\"msg\":\"未安装图片编辑组件，请重新运行安装包并勾选「图片编辑」\"}");
+                    Log("打开图片编辑失败：未找到图片编辑.exe");
+                    return;
+                }
+                var psi = new ProcessStartInfo();
+                psi.FileName = exe;
+                psi.WorkingDirectory = Path.GetDirectoryName(exe);
+                psi.UseShellExecute = true;
+                if (paths != null && paths.Count > 0)
+                {
+                    var sb = new StringBuilder();
+                    foreach (string p in paths)
+                    {
+                        if (sb.Length > 0) sb.Append(' ');
+                        sb.Append('"').Append(p.Replace("\"", "\\\"")).Append('"');
+                    }
+                    psi.Arguments = sb.ToString();
+                }
+                Process.Start(psi);
+                Log("从相册启动图片编辑: " + exe + " files=" + (paths == null ? 0 : paths.Count));
+                Send("{\"type\":\"toast\",\"msg\":\"已打开图片编辑" +
+                     (paths != null && paths.Count > 0 ? "（" + paths.Count + " 张）" : "") + "\"}");
+            }
+            catch (Exception ex)
+            {
+                Log("打开图片编辑失败: " + ex.Message);
+                Send("{\"type\":\"toast\",\"msg\":\"打开图片编辑失败：" + ex.Message.Replace("\"", "'") + "\"}");
+            }
+        }
+
         void Web_Message(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
@@ -3925,7 +3987,15 @@ namespace ImageBatchTool
                         {
                             Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
                             // 页面这时才真正能收消息：补发一次完整状态（LUT 列表、文件列表、输出目录）
+                            if (!startupPathsApplied && StartupPaths != null && StartupPaths.Length > 0)
+                            {
+                                startupPathsApplied = true;
+                                int startupAdded = AddPaths(StartupPaths);
+                                if (startupAdded > 0) AutoSelectFirst();
+                                Log("启动参数导入 " + startupAdded + " 张");
+                            }
                             SendState();
+                            QueuePreview();
                         }
                         Send("{\"type\":\"appmode\",\"mode\":" + JsonStr(AppModule.Id) + "}");
                         break;
@@ -4287,6 +4357,14 @@ namespace ImageBatchTool
                             }
                             sb.Append("]}");
                             Send(sb.ToString());
+                        }
+                        break;
+                    case "openeditor":
+                        {
+                            string rest = msg.Length > action.Length + 1 ? msg.Substring(action.Length + 1) : "";
+                            var ps = new List<string>();
+                            foreach (var s in rest.Split('\n')) { string t = s.Trim(); if (t.Length > 0) ps.Add(t); }
+                            LaunchEditor(ps);
                         }
                         break;
                     case "albtoedit":
@@ -10447,6 +10525,71 @@ namespace ImageBatchTool
             src.UnlockBits(data);
         }
 
+        // v2.41：AI 优化只由 ai_opt 显式开关触发；有 LUT 时在 LUT 之后执行，无 LUT 时直接执行。
+        void ApplyAiOptimize(Bitmap src)
+        {
+            AiRunner.LutIsLogHint = false;
+            AiRunner.LutBlackHint = 0.0;
+            AiRunner.LutWhiteHint = 1.0;
+            var rect = new Rectangle(0, 0, src.Width, src.Height);
+            var data = src.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            int stride = data.Stride;
+            byte[] buf = new byte[stride * src.Height];
+            Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            int W = src.Width, H = src.Height;
+            bool aiOk = AiRunner.ProcessImage(buf, W, H, stride);
+            Log("AI优化pass: " + aiOk + " " + AiRunner.LastError);
+            if (aiOk)
+            {
+                double aWbR = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbR));
+                double aWbG = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbG));
+                double aWbB = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbB));
+                double aExp = Math.Max(0.85, Math.Min(1.2, AiRunner.OutExposure));
+                double aCon = Math.Max(0.9, Math.Min(1.15, AiRunner.OutContrast));
+                double aSat = Math.Max(0.85, Math.Min(1.15, AiRunner.OutSaturation));
+                double aHl = Math.Max(0.85, Math.Min(1.0, AiRunner.OutHighlights));
+                double aSh = Math.Max(1.0, Math.Min(1.15, AiRunner.OutShadows));
+                bool doHl = aHl < 0.999, doSh = aSh > 1.001;
+                for (int y = 0; y < H; y++)
+                {
+                    int row = y * stride;
+                    for (int x = 0; x < W; x++)
+                    {
+                        int i = row + x * 4;
+                        double b = buf[i], g = buf[i+1], r = buf[i+2];
+                        r *= aWbR * aExp; g *= aWbG * aExp; b *= aWbB * aExp;
+                        double lum = 0.299*r + 0.587*g + 0.114*b;
+                        if (doHl && lum > 180)
+                        {
+                            double t = Math.Min(1.0, (lum - 180) / 75.0);
+                            double hg = 1.0 - (1.0 - aHl) * t;
+                            r *= hg; g *= hg; b *= hg;
+                        }
+                        if (doSh && lum < 70)
+                        {
+                            double t = 1.0 - lum / 70.0;
+                            double sg = 1.0 + (aSh - 1.0) * t;
+                            r *= sg; g *= sg; b *= sg;
+                        }
+                        lum = 0.299*r + 0.587*g + 0.114*b;
+                        r = lum + (r-lum)*aCon; g = lum + (g-lum)*aCon; b = lum + (b-lum)*aCon;
+                        lum = 0.299*r + 0.587*g + 0.114*b;
+                        r = lum + (r-lum)*aSat; g = lum + (g-lum)*aSat; b = lum + (b-lum)*aSat;
+                        if (r > 230) r = 230 + (r-230)*0.4;
+                        if (g > 230) g = 230 + (g-230)*0.4;
+                        if (b > 230) b = 230 + (b-230)*0.4;
+                        buf[i] = (byte)(b<0?0:b>255?255:b);
+                        buf[i+1] = (byte)(g<0?0:g>255?255:g);
+                        buf[i+2] = (byte)(r<0?0:r>255?255:r);
+                    }
+                }
+                Log("AI优化pass完成: exp=" + aExp.ToString("F2") + " con=" + aCon.ToString("F2") + " sat=" + aSat.ToString("F2") +
+                    " 高光=" + aHl.ToString("F3") + " 阴影=" + aSh.ToString("F3") + " 场景=" + AiRunner.OutScene);
+            }
+            Marshal.Copy(buf, 0, data.Scan0, buf.Length);
+            src.UnlockBits(data);
+        }
+
         void ApplyLUT(Bitmap src)
         {
             // 懒加载 LUT（换 LUT 后 activeLut 被置空，这里补载）
@@ -10454,67 +10597,14 @@ namespace ImageBatchTool
                 try { activeLut = CubeLut.Load(activeLutPath); }
                 catch { activeLut = null; }
             bool aiOptOn = par.ContainsKey("ai_opt") && par["ai_opt"] > 0.5;
-            bool autoOpt = (lutMode == "log");
-            if (activeLut == null && !aiOptOn && !autoOpt) { Log("ApplyLUT: LUT未加载"); return; }
-            Log("ApplyLUT开始: " + src.Width + "x" + src.Height + " mode=" + lutMode + " aiOpt=" + aiOptOn + " autoOpt=" + autoOpt);
-
-            // 无LUT时：自动和AI可叠加，先自动再AI
-            if (activeLut == null)
-            {
-                if (autoOpt)
-                {
-                    Log("自动优化：无LUT，基础自动调色");
-                    AutoEnhance(src);
-                }
-                if (aiOptOn)
-                {
-                    Log("AI优化：在当前图基础上AI增强");
-                    // 无LUT模式：清除LUT提示，避免Python按Log LUT模式输出
-                    AiRunner.LutIsLogHint = false;
-                    AiRunner.LutBlackHint = 0.0;
-                    AiRunner.LutWhiteHint = 1.0;
-                    var rectA = new Rectangle(0,0,src.Width,src.Height);
-                    var dataA = src.LockBits(rectA, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-                    int strideA = dataA.Stride;
-                    byte[] bufA = new byte[strideA * src.Height];
-                    Marshal.Copy(dataA.Scan0, bufA, 0, bufA.Length);
-                    int WA = src.Width, HA = src.Height;
-                    bool aiOk = AiRunner.ProcessImage(bufA, WA, HA, strideA);
-                    Log("AI ProcessImage=" + aiOk + " err=" + AiRunner.LastError);
-                    if (aiOk) {
-                        double wbRA = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbR));
-                        double wbGA = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbG));
-                        double wbBA = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbB));
-                        double expA = Math.Max(0.85, Math.Min(1.2, AiRunner.OutExposure));
-                        double conA = Math.Max(0.9, Math.Min(1.15, AiRunner.OutContrast));
-                        double satA = Math.Max(0.85, Math.Min(1.15, AiRunner.OutSaturation));
-                        for (int y = 0; y < HA; y++) {
-                            int row = y * strideA;
-                            for (int x = 0; x < WA; x++) {
-                                int i = row + x*4;
-                                double b = bufA[i], g = bufA[i+1], r = bufA[i+2];
-                                r *= wbRA * expA; g *= wbGA * expA; b *= wbBA * expA;
-                                double lum = 0.299*r + 0.587*g + 0.114*b;
-                                r = lum + (r-lum)*conA; g = lum + (g-lum)*conA; b = lum + (b-lum)*conA;
-                                lum = 0.299*r + 0.587*g + 0.114*b;
-                                r = lum + (r-lum)*satA; g = lum + (g-lum)*satA; b = lum + (b-lum)*satA;
-                                if (r > 230) r = 230 + (r-230)*0.4;
-                                if (g > 230) g = 230 + (g-230)*0.4;
-                                if (b > 230) b = 230 + (b-230)*0.4;
-                                bufA[i] = (byte)(b<0?0:b>255?255:b);
-                                bufA[i+1] = (byte)(g<0?0:g>255?255:g);
-                                bufA[i+2] = (byte)(r<0?0:r>255?255:r);
-                            }
-                        }
-                        Log("AI增强完成: WB=" + wbRA.ToString("F2") + "/" + wbGA.ToString("F2") + "/" + wbBA.ToString("F2") +
-                            " exp=" + expA.ToString("F2") + " con=" + conA.ToString("F2") + " sat=" + satA.ToString("F2") +
-                            " scene=" + AiRunner.OutScene);
-                    }
-                    Marshal.Copy(bufA, 0, dataA.Scan0, bufA.Length);
-                    src.UnlockBits(dataA);
-                }
+            // v2.41：无 LUT 时不再隐式自动提亮。
+            // 「自动优化」只由 color_auto 显式开关在 ApplyColor() 执行；AI 优化只由 ai_opt 显式开关执行。
+            if (activeLut == null) {
+                if (aiOptOn) ApplyAiOptimize(src);
+                Log("ApplyLUT: LUT未加载，跳过隐式增强");
                 return;
             }
+            Log("ApplyLUT开始: " + src.Width + "x" + src.Height + " mode=" + lutMode);
 
             // 自动模式：不做灰片转换，直接套LUT，套完再调曝光/对比/饱和
             bool lutIsLogType = false;
