@@ -1,0 +1,45 @@
+# Build output (compiled app)
+图片批处理工具.exe
+图片批处理工具.exe.WebView2/
+WebViewApp.pdb
+
+# WebView2 SDK DLLs (redistributable, user installs WebView2 runtime)
+Microsoft.Web.WebView2.*.dll
+WebView2Loader.dll
+
+# Build/packaging work
+installer_work/
+
+# ONNX runtime C# NuGet packages (we use Python's onnxruntime)
+ai/ort/
+ai/ort_extracted/
+ai/ort-managed/
+
+# Rejected model (CodeFormer, not used)
+ai/models/codeformer.onnx
+ai/models/yunet_test.onnx
+
+# Debug/test files
+crop_debug.log
+debug_*.*
+test_ai.jpg
+test_*.*
+*.tmp
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temp files
+ai_in_*.jpg
+ai_out_*.json
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+Desktop.ini

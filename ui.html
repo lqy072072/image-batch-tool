@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>图片批处理</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","SF Pro Icons","Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei UI",sans-serif; user-select:none; }
+html,body { height:100%; background:#2d2d2d; color:#d4d4d4; overflow:hidden; font-size:12px; }
+body { display:flex; flex-direction:column; }
+
+/* 标题栏 */
+.titlebar { height:38px; background:#2b2b2b; display:flex; align-items:center; padding:0 12px; flex-shrink:0; border-bottom:1px solid #1a1a1a; }
+.light { width:12px; height:12px; border-radius:50%; margin-right:8px; cursor:pointer; }
+.red{background:#ff5f57}.yellow{background:#febc2e}.green{background:#28c840}
+.light:hover { opacity:0.8; }
+.tabs { display:flex; gap:4px; margin-left:24px; }
+.tab { padding:5px 14px; border-radius:5px; color:#888; cursor:pointer; font-size:12px; }
+.tab.active { background:#4a4a4a; color:#fff; }
+.title-spacer { flex:1; }
+.top-right { display:flex; gap:14px; color:#999; font-size:12px; align-items:center; }
+.top-right span { cursor:pointer; padding:3px 8px; border-radius:4px; }
+.top-right span:hover { background:#3c3c3c; color:#fff; }
+.lut-mode-btn { flex:1; padding:6px 4px; font-size:11px; background:#3c3c3c; color:#ccc; border:1px solid #4a4a4a; border-radius:4px; cursor:pointer; }
+.lut-mode-btn.active { background:#0969da; color:#fff; border-color:#0969da; }
+.lut-mode-btn.ai-active { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+
+/* 主体 */
+.main { flex:1; display:flex; min-height:0; }
+
+/* 左栏 */
+.left { width:290px; flex-shrink:0; background:#2b2b2b; display:flex; flex-direction:column; border-right:1px solid #1a1a1a; }
+.left-section { padding:10px 12px; border-bottom:1px solid #1a1a1a; }
+.left-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; color:#bbb; font-size:12px; font-weight:600; }
+.left-header .count { color:#888; font-size:11px; }
+.btn-row { display:flex; gap:6px; margin-top:8px; }
+.btn { flex:1; background:#3c3c3c; color:#e0e0e0; border:1px solid #4a4a4a; padding:6px 4px; border-radius:5px; cursor:pointer; font-size:11px; text-align:center; transition:background .15s; }
+.btn:hover { background:#4a4a4a; }
+.btn:active { background:#2a2a2a; }
+.file-list { max-height:120px; overflow-y:auto; margin-top:8px; color:#666; font-size:11px; }
+.file-item { padding:4px 8px 4px 10px; cursor:pointer; border-radius:4px; color:#ccc; display:flex; align-items:center; gap:8px; white-space:nowrap; overflow:hidden; border-left:2px solid transparent; transition:background .12s; }
+.file-item .fname { overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
+.file-item .fsize { color:#888; font-size:10px; flex-shrink:0; white-space:nowrap; }
+.file-item:hover { background:#3c3c3c; }
+.file-item.sel { background:rgba(9,105,218,0.25); color:#fff; border-left:2px solid #0969da; }
+.file-item.sel .fsize { color:#7eb3f7; }
+
+/* LUT 圆形单选按钮 */
+.lut-item { display:flex; align-items:center; gap:6px; padding:3px 6px; cursor:pointer; font-size:11px; color:#ccc; border-radius:3px; }
+.lut-item:hover { background:#3c3c3c; }
+.lut-item.sel { background:rgba(9,105,218,0.15); color:#fff; }
+.lut-radio { width:12px; height:12px; border:1.5px solid #666; border-radius:50%; flex-shrink:0; position:relative; transition:all .15s; }
+.lut-item.sel .lut-radio { border-color:#0969da; }
+.lut-item.sel .lut-radio::after { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:6px; height:6px; background:#0969da; border-radius:50%; }
+
+/* 深色滚动条 */
+* { scrollbar-width: thin; scrollbar-color: #555 #2b2b2b; }
+::-webkit-scrollbar { width:10px; height:10px; }
+::-webkit-scrollbar-track { background:#2b2b2b; }
+::-webkit-scrollbar-thumb { background:#555; border-radius:5px; border:2px solid #2b2b2b; }
+::-webkit-scrollbar-thumb:hover { background:#777; }
+::-webkit-scrollbar-corner { background:#2b2b2b; }
+
+.lut-section { flex:1; display:flex; flex-direction:column; min-height:0; }
+.lut-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px 6px; color:#bbb; font-size:12px; font-weight:600; }
+.lut-header .group-actions { display:flex; gap:6px; }
+.lut-header .group-actions button { background:transparent; color:#888; border:1px solid #555; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:10px; }
+.lut-tree { flex:1; overflow-y:auto; padding:0 8px; }
+.lut-group-title { color:#aaa; padding:6px 4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:4px; font-weight:600; }
+.lut-group-title .arrow { font-size:9px; transition:transform .15s; }
+.lut-group.collapsed .arrow { transform:rotate(-90deg); }
+.lut-group.collapsed .lut-items { display:none; }
+.left-footer { padding:10px 12px; display:flex; gap:8px; border-top:1px solid #1a1a1a; }
+.left-footer .btn { background:#3c3c3c; color:#ccc; border-color:#555; }
+
+.vsplitter { height:5px; background:#1a1a1a; cursor:row-resize; flex-shrink:0; }
+.vsplitter:hover, .vsplitter.dragging { background:#0969da; }
+
+/* 中间 */
+.center { flex:1; background:#1e1e1e; display:flex; flex-direction:column; min-width:0; }
+.toolbar { height:42px; background:#2b2b2b; display:flex; align-items:center; padding:0 12px; gap:6px; border-bottom:1px solid #1a1a1a; }
+.toolbar .spacer { flex:1; }
+.toolbar .preview-label { color:#888; font-size:11px; }
+.tool-btn { background:#3c3c3c; color:#ccc; border:1px solid #555; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; }
+.tool-btn:hover { background:#484848; }
+.zoom-label { color:#888; padding:0 4px; min-width:36px; text-align:center; font-size:11px; }
+.ruler-row { display:flex; height:20px; background:#2b2b2b; border-bottom:1px solid #1a1a1a; }
+.ruler-corner { width:40px; flex-shrink:0; border-right:1px solid #1a1a1a; }
+.ruler-h { flex:1; position:relative; overflow:hidden; }
+.ruler-v-col { width:40px; flex-shrink:0; border-right:1px solid #1a1a1a; background:#2b2b2b; position:relative; overflow:hidden; }
+.preview-row { flex:1; display:flex; min-height:0; }
+.preview-area { flex:1; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; background:#1a1a1a; }
+.preview-area img { max-width:100%; max-height:100%; box-shadow:0 4px 20px rgba(0,0,0,0.6); }
+.preview-empty { color:#555; font-size:13px; text-align:center; }
+.preview-empty .icon { font-size:36px; opacity:0.4; margin-bottom:8px; }
+
+/* 右栏 */
+.right { width:300px; flex-shrink:0; background:#2b2b2b; border-left:1px solid #1a1a1a; overflow-y:auto; }
+.right-section { border-bottom:1px solid #1a1a1a; }
+.section-header { padding:9px 12px; display:flex; justify-content:space-between; align-items:center; color:#ccc; cursor:pointer; font-size:12px; background:#333; font-weight:600; }
+.section-header .arrow { color:#888; font-size:10px; display:inline-block; transition:transform .15s; width:12px; text-align:center; }
+.section-header.collapsed .arrow { transform:rotate(-90deg); }
+.section-body { padding:8px 12px 12px; }
+
+/* 直方图 */
+.hist-tabs { display:flex; gap:6px; padding:8px 12px 6px; }
+.hist-tab { flex:1; padding:6px; text-align:center; border-radius:4px; cursor:pointer; font-size:11px; background:#3c3c3c; color:#ccc; border:1px solid #555; }
+.hist-tab.active { background:#0969da; color:#fff; border-color:#0969da; }
+.hist-canvas-wrap { margin:0 12px; background:#1a1a1a; border-radius:3px; padding:4px; }
+.hist-canvas-wrap canvas { width:100%; height:110px; display:block; }
+.hist-labels { display:flex; justify-content:space-between; padding:4px 14px 8px; color:#666; font-size:10px; }
+
+/* 滑块 */
+.slider-row { display:flex; align-items:center; gap:8px; padding:4px 0; }
+.slider-row label { width:56px; color:#bbb; font-size:11px; }
+.slider-row input[type=range] { flex:1; -webkit-appearance:none; height:3px; background:#555; border-radius:1px; outline:none; }
+.slider-row input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; background:#e8e8e8; border-radius:50%; cursor:pointer; }
+.slider-row .val { width:28px; text-align:right; color:#ccc; font-size:11px; }
+.slider-row .reset { width:20px; height:20px; background:#3c3c3c; border:1px solid #555; color:#888; border-radius:3px; cursor:pointer; font-size:10px; display:flex; align-items:center; justify-content:center; }
+.slider-row .reset:hover { background:#484848; color:#fff; }
+
+/* 裁切 */
+.crop-overlay { position:absolute; inset:0; pointer-events:none; display:none; z-index:22; }
+.crop-overlay.active { display:block; pointer-events:auto; cursor:crosshair; }
+.crop-rect { position:absolute; border:1px solid #fff; background:rgba(0,200,255,0.08); cursor:move; z-index:23;
+  background-image:linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px);
+  background-size:33.33% 33.33%;
+}
+.crop-row { display:flex; align-items:center; gap:10px; padding:4px 0; }
+.crop-row label { width:56px; color:#bbb; font-size:11px; }
+.crop-row select, .crop-row input { flex:1; background:#3c3c3c; color:#ddd; border:1px solid #555; padding:4px 6px; border-radius:3px; font-size:11px; }
+
+/* 底部 */
+.bottombar { background:#2b2b2b; border-top:1px solid #1a1a1a; padding:6px 12px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.bottom-sep { width:1px; height:18px; background:#444; }
+.bottom-label { font-size:11px; color:#888; }
+.bottom-select { background:#3c3c3c; color:#ddd; border:1px solid #4a4a4a; border-radius:4px; font-size:11px; padding:2px 6px; outline:none; }
+.output-info { font-size:11px; color:#aaa; white-space:nowrap; }
+.output-info b { color:#e0e0e0; font-weight:600; }
+.btn-start { background:#0969da; color:white; border:none; padding:6px 22px; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600; }
+.btn-start:hover { background:#1079f0; }
+.tool-btn { background:#3c3c3c; color:#ddd; border:1px solid #4a4a4a; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:11px; }
+.tool-btn:hover { background:#4a4a4a; }
+.progress { width:160px; height:4px; background:#3c3c3c; border-radius:2px; overflow:hidden; }
+.progress-bar { height:100%; background:#0969da; width:0%; transition:width .2s; }
+.render-name { font-size:11px; color:#7ec8ff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+.status-pct { font-size:11px; color:#aaa; width:36px; text-align:right; }
+.status-box { font-size:11px; color:#ccc; background:#1f1f1f; border:1px solid #333; border-radius:4px; padding:3px 10px; min-width:120px; max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.status { color:#888; font-size:11px; min-width:50px; text-align:right; }
+
+/* 浅色皮肤 - macOS 风格 */
+body.skin-light { background:#f5f5f7 !important; color:#1d1d1f !important; }
+body.skin-light .titlebar { background:#ececef; border-bottom:1px solid #d1d1d6; }
+body.skin-light .toolbar { background:#ececef; border-bottom:1px solid #d1d1d6; }
+body.skin-light .bottombar { background:#ececef; border-top:1px solid #d1d1d6; }
+body.skin-light .left { background:#ebebef; border-right:1px solid #d1d1d6; }
+body.skin-light .right { background:#f5f5f7; border-left:1px solid #d1d1d6; }
+body.skin-light .center { background:#ffffff; }
+body.skin-light .preview-area { background:#e5e5ea; }
+body.skin-light .left-section, body.skin-light .right-section, body.skin-light .left-footer, body.skin-light .lut-header { border-color:#d1d1d6; }
+body.skin-light .vsplitter { background:#d1d1d6; }
+body.skin-light .ruler-row, body.skin-light .ruler-v-col { background:#ececef; border-color:#d1d1d6; }
+body.skin-light .ruler-corner { border-color:#d1d1d6; }
+
+body.skin-light .section-header { background:#f0f0f3; color:#1d1d1f; border-bottom:1px solid #d1d1d6; }
+body.skin-light .tab { color:#6e6e73; }
+body.skin-light .tab.active { background:rgba(0,0,0,0.06); color:#1d1d1f; }
+body.skin-light .top-right { color:#6e6e73; }
+body.skin-light .top-right span:hover { background:rgba(0,0,0,0.06); color:#1d1d1f; }
+
+body.skin-light .btn, body.skin-light .tool-btn, body.skin-light .lut-mode-btn,
+body.skin-light .bottom-select, body.skin-light .crop-row select, body.skin-light .crop-row input,
+body.skin-light .hist-tab, body.skin-light .slider-row .reset {
+  background:#ffffff; color:#1d1d1f; border:1px solid #c7c7cc; border-radius:6px;
+  box-shadow:0 1px 0 rgba(0,0,0,0.03);
+}
+body.skin-light .btn:hover, body.skin-light .tool-btn:hover, body.skin-light .lut-mode-btn:hover { background:#f5f5f7; border-color:#aeaeb2; }
+body.skin-light .btn:active { background:#e5e5ea; }
+body.skin-light .lut-mode-btn.active, body.skin-light .hist-tab.active { background:#0969da; color:#fff; border-color:#0969da; }
+
+body.skin-light .file-item { color:#1d1d1f; border-radius:4px; padding:4px 8px 4px 10px; border-left:2px solid transparent; }
+body.skin-light .file-item:hover { background:rgba(0,0,0,0.05); }
+body.skin-light .file-item.sel { background:rgba(9,105,218,0.12); color:#0969da; border-left:2px solid #0969da; font-weight:600; }
+body.skin-light .lut-item { color:#1d1d1f; border-radius:4px; }
+body.skin-light .lut-item:hover { background:rgba(0,0,0,0.05); }
+body.skin-light .lut-item.sel { background:rgba(9,105,218,0.12); color:#0a4a8a; }
+body.skin-light .lut-item.sel .lut-radio { border-color:#0969da; }
+body.skin-light .lut-item.sel .lut-radio::after { background:#0969da; }
+
+body.skin-light .slider-row input[type=range] { background:#c7c7cc; height:4px; }
+body.skin-light .slider-row input[type=range]::-webkit-slider-thumb { background:#ffffff; border:0.5px solid #c7c7cc; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+body.skin-light .slider-row label, body.skin-light .crop-row label,
+body.skin-light .left-header, body.skin-light .left-header .count,
+body.skin-light .lut-group-title, body.skin-light .section-header,
+body.skin-light .hist-labels, body.skin-light .output-info,
+body.skin-light .bottom-label, body.skin-light .zoom-label,
+body.skin-light .status-pct, body.skin-light .toolbar .preview-label,
+body.skin-light .file-list { color:#48484a !important; }
+body.skin-light .left-header, body.skin-light .lut-header { color:#1d1d1f; font-weight:600; }
+body.skin-light .output-info b { color:#1d1d1f !important; }
+body.skin-light .slider-row .val { color:#1d1d1f !important; }
+body.skin-light .hist-labels { color:#8e8e93 !important; }
+body.skin-light .preview-empty { color:#8e8e93 !important; }
+
+body.skin-light .hist-canvas-wrap { background:#ffffff; border:1px solid #d1d1d6; }
+body.skin-light #currentLut { background:#f5f5f7 !important; border:1px solid #d1d1d6 !important; color:#48484a !important; }
+body.skin-light #currentLut b { color:#1d1d1f !important; }
+body.skin-light .status-box { background:#ffffff; border:1px solid #c7c7cc; color:#1d1d1f; border-radius:6px; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+body.skin-light .progress { background:#e5e5ea; }
+body.skin-light .progress-bar { background:#0969da; }
+body.skin-light .render-name { color:#0969da; }
+body.skin-light .btn-start { background:#0969da; color:#fff; box-shadow:0 1px 3px rgba(9,105,218,0.3); }
+body.skin-light .btn-start:hover { background:#1079f0; }
+
+body.skin-light * { scrollbar-color: #c7c7cc #f5f5f7; }
+body.skin-light ::-webkit-scrollbar-track { background:#f5f5f7; }
+body.skin-light ::-webkit-scrollbar-thumb { background:#c7c7cc; border:2px solid #f5f5f7; }
+body.skin-light ::-webkit-scrollbar-thumb:hover { background:#aeaeb2; }
+body.skin-light #loadingScreen { background:#f5f5f7; color:#1d1d1f; color-scheme: light; }
+
+/* 浅色皮肤下原生下拉框/输入框背景强制白底黑字，避免出现黑底 */
+body.skin-light { color-scheme: light; }
+body.skin-light select, body.skin-light input, body.skin-light option, body.skin-light textarea {
+  background:#ffffff !important;
+  color:#1d1d1f !important;
+  border:1px solid #c7c7cc;
+}
+body.skin-light select option {
+  background:#ffffff !important;
+  color:#1d1d1f !important;
+}
+body.skin-light select:focus, body.skin-light input:focus {
+  border-color:#0969da;
+  outline:none;
+  box-shadow:0 0 0 2px rgba(9,105,218,0.2);
+}
+body.skin-light input[type=checkbox] { accent-color:#0969da; }
+body.skin-light #lutSearch { background:#ffffff !important; color:#1d1d1f !important; border-color:#c7c7cc !important; }
+body.skin-light #lutSearch::placeholder { color:#8e8e93; }
+body.skin-light .slider-row input[type=range] {
+  background:#c7c7cc !important;
+  height:4px;
+  border:none;
+}
+body.skin-light .slider-row input[type=range]::-webkit-slider-thumb {
+  background:#ffffff !important;
+  border:0.5px solid #c7c7cc;
+  box-shadow:0 1px 3px rgba(0,0,0,0.2);
+}
+</style>
+<script>
+// 启动时先读皮肤偏好（URL 参数由 C# 注入），避免闪烁
+(function(){
+  try {
+    var m = location.search.match(/skin=([a-z]+)/i);
+    var s = m ? m[1].toLowerCase() : 'dark';
+    if (s === 'light') document.documentElement.className = 'skin-light-html';
+  } catch(e){}
+})();
+</script>
+</head>
+<body>
+  <div id="loadingScreen">
+    <div class="ls-spinner"></div>
+    <div class="ls-title">图片批处理工具 正在加载…</div>
+    <div class="ls-sub">初始化图像处理引擎</div>
+  </div>
+  <style>
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loadingScreen{position:fixed;inset:0;background:#2b2b2b;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,"PingFang SC","Microsoft YaHei UI",sans-serif;}
+  #loadingScreen .ls-spinner{width:42px;height:42px;border:3px solid #444;border-top-color:#0969da;border-radius:50%;animation:spin .9s linear infinite;}
+  #loadingScreen .ls-title{margin-top:18px;color:#aaa;font-size:13px;letter-spacing:1px;}
+  #loadingScreen .ls-sub{margin-top:6px;color:#666;font-size:11px;}
+  html.skin-light-html #loadingScreen{background:#f5f5f7;}
+  html.skin-light-html #loadingScreen .ls-spinner{border-color:#d1d1d6;border-top-color:#0969da;}
+  html.skin-light-html #loadingScreen .ls-title{color:#1d1d1f;}
+  html.skin-light-html #loadingScreen .ls-sub{color:#8e8e93;}
+  </style>
+
+<div class="titlebar" id="titlebar">
+  <div class="light red" onclick="post('winclose')" title="关闭"></div>
+  <div class="light yellow" onclick="post('winmin')" title="最小化"></div>
+  <div class="light green" onclick="post('winmax')" title="最大化"></div>
+  <div style="margin-left:20px"></div>
+  <div class="title-spacer"></div>
+  <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+</div>
+<script>
+let _tbDown = null, _tbDragged = false, _tbLastUp = 0;
+function tbIsHit(t) {
+  return t === document.getElementById('titlebar') ||
+         t.classList.contains('title-spacer') ||
+         t.textContent === '图片批处理';
+}
+document.getElementById('titlebar').addEventListener('mousedown', function(e) {
+  if (!tbIsHit(e.target)) return;
+  e.preventDefault();
+  _tbDown = { x: e.clientX, y: e.clientY };
+  _tbDragged = false;
+});
+window.addEventListener('mousemove', function(e) {
+  if (!_tbDown || _tbDragged) return;
+  const dx = e.clientX - _tbDown.x, dy = e.clientY - _tbDown.y;
+  if (dx*dx + dy*dy > 16) {
+    _tbDragged = true;
+    post('dragstart');
+  }
+});
+window.addEventListener('mouseup', function(e) {
+  if (!_tbDown) return;
+  if (!_tbDragged && tbIsHit(e.target)) {
+    const now = Date.now();
+    if (now - _tbLastUp < 300) {
+      post('winmax');
+      _tbLastUp = 0;
+    } else {
+      _tbLastUp = now;
+    }
+  }
+  _tbDown = null;
+});
+</script>
+
+<div class="main">
+  <div class="left">
+    <div class="left-section" id="fileSection" style="height:220px;flex-shrink:0;display:flex;flex-direction:column">
+      <div class="left-header"><span>文件</span><span class="count" id="fileCount">0 项</span></div>
+      <div class="btn-row">
+        <div class="btn" onclick="post('addfolder')">加文件夹</div>
+        <div class="btn" onclick="post('addfiles')">加照片</div>
+        <div class="btn" onclick="post('remove')">移除</div>
+        <div class="btn" onclick="post('clear')">清空</div>
+      </div>
+      <div class="file-list" id="fileList" style="flex:1;overflow-y:auto;min-height:40px"><span style="color:#555">还没有添加照片</span></div>
+    </div>
+
+    <div class="vsplitter" id="vSplitter"></div>
+
+    <div class="lut-section">
+      <div class="lut-header">
+        <span>滤镜</span>
+      </div>
+      <input id="lutSearch" type="text" placeholder="搜索滤镜…" style="margin:0 12px 6px;padding:5px 8px;font-size:11px;border-radius:5px;border:1px solid #555;background:#3c3c3c;color:#ddd;outline:none"/>
+      <div class="lut-tree" id="lutTree"></div>
+    </div>
+
+    <div class="left-footer">
+      <div class="btn" onclick="post('importlut')">导入 LUT</div>
+      <div class="btn" onclick="post('openlutdir')">打开 LUT 文件夹</div>
+    </div>
+  </div>
+
+  <div class="center">
+    <div class="toolbar">
+      <select id="cropRatio" style="background:#3c3c3c;color:#ccc;border:1px solid #555;border-radius:4px;font-size:11px;padding:3px 6px">
+        <option value="0">自由裁切</option>
+        <option value="1">1:1</option>
+        <option value="1.333">4:3</option>
+        <option value="1.778">16:9</option>
+        <option value="1.5">3:2</option>
+      </select>
+      <div class="tool-btn" id="cropToggle" onclick="toggleCrop()">✂ 裁切</div>
+      <div class="tool-btn" onclick="cropReset()">重置裁切</div>
+      <div class="spacer"></div>
+      <div class="tool-btn" onclick="zoomOut()">−</div>
+      <span class="zoom-label" id="zoomLabel">适应</span>
+      <div class="tool-btn" onclick="zoomIn()">+</div>
+      <div class="tool-btn" onclick="zoomFit()">适应</div>
+      <div class="tool-btn" onclick="doRotate(-90)">↺ 左旋</div>
+      <div class="tool-btn" onclick="doRotate(90)">↻ 右旋</div>
+    </div>
+    <div class="preview-row">
+      <div class="preview-area" id="preview">
+        <div class="preview-empty"><div class="icon">🖼</div><div>添加照片后这里显示对比预览</div></div>
+        <div id="tsGuide" style="display:none;position:absolute;left:0;right:0;pointer-events:none;border-top:1px dashed rgba(0,200,255,0.95);border-bottom:1px dashed rgba(0,200,255,0.95);background:rgba(0,200,255,0.1);z-index:100"></div>
+        <div class="crop-overlay" id="cropOverlay">
+          <div class="crop-rect" id="cropRect" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="right-section" id="histSection">
+      <div class="section-header"><span>直方图</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div class="hist-tabs">
+          <div class="hist-tab active" data-mode="rgb">RGB 直方图</div>
+          <div class="hist-tab" data-mode="lum">曝光直方图</div>
+        </div>
+        <div class="hist-canvas-wrap" id="wrapRgb"><canvas id="hist"></canvas></div>
+        <div class="hist-canvas-wrap" id="wrapLum" style="display:none"><canvas id="histLum"></canvas></div>
+        <div class="hist-labels"><span>阴影</span><span>中间调</span><span>高光</span></div>
+      </div>
+    </div>
+
+    <div class="right-section">
+      <div class="section-header"><span>LUT 参数</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div id="currentLut" style="margin-bottom:10px;padding:8px 10px;background:#1a1a1a;border:1px solid #3c3c3c;border-radius:4px;font-size:11px;color:#888">未选择 LUT</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+          <button class="lut-mode-btn active" data-mode="log" onclick="setLutMode('log')">自动</button>
+          <button class="lut-mode-btn" data-mode="ai" onclick="setLutMode('ai')">AI 模式</button>
+          <button class="lut-mode-btn" data-mode="direct" onclick="setLutMode('direct')">直出</button>
+        </div>
+        <div id="lutSliders"></div>
+      </div>
+    </div>
+
+    <div class="right-section">
+      <div class="section-header"><span>色彩调整</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button id="colorAutoBtn" onclick="toggleColorAuto()" style="flex:1;padding:7px;background:#0969da;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">自动优化</button>
+          <button id="aiOptBtn" onclick="toggleAiOpt()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">AI优化</button>
+        </div>
+        <div id="colorSliders"></div>
+      </div>
+    </div>
+
+    <div class="right-section">
+      <div class="section-header"><span>人像增强</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button id="beautyBtn" onclick="toggleBeauty()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">AI人像增强</button>
+        </div>
+        <div class="slider-row"><span>强度</span><input type="range" min="0" max="100" value="70" id="s_beauty_strength" oninput="document.getElementById('v_beauty_strength').textContent=this.value;setParam('beauty_strength',this.value)"><span class="val" id="v_beauty_strength">70</span></div>
+        <div style="font-size:11px;color:#888;margin-top:6px">GFPGAN v1.4 人脸智能修复增强</div>
+      </div>
+    </div>
+
+    <div class="right-section" id="tsPanel">
+      <div class="section-header"><span>移轴效果</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#bbb;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="tsEnable" style="accent-color:#0969da;width:13px;height:13px" onchange="document.getElementById('tsEnable').checked=this.checked; if(this.checked){_zoom=0;applyZoom();} setParam('ts_on',this.checked?1:0);updateTsState();updateGuide()"> 启用移轴
+        </label>
+        <div id="tsSliders" style="opacity:0.4;pointer-events:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bottombar">
+  <span class="bottom-label">预览</span>
+  <select class="bottom-select" id="previewSize" onchange="setParam('preview_max',this.value)" title="预览分辨率（不影响导出质量）">
+    <option value="800">流畅 800</option>
+    <option value="1200" selected>均衡 1200</option>
+    <option value="1600">清晰 1600</option>
+    <option value="2400">极致 2400</option>
+  </select>
+  <span class="bottom-label">格式</span>
+  <select class="bottom-select" id="outFmt" onchange="setParam('out_fmt',this.value)">
+    <option value="jpg" selected>JPG</option>
+    <option value="png">PNG</option>
+    <option value="webp">WebP</option>
+  </select>
+  <span class="bottom-label">尺寸</span>
+  <select class="bottom-select" id="outSize" onchange="setParam('out_size',this.value)">
+    <option value="0" selected>原尺寸</option>
+    <option value="1">1/2</option>
+    <option value="2">1/4</option>
+    <option value="3">长边2K</option>
+    <option value="4">长边4K</option>
+  </select>
+  <span class="bottom-label">画质</span>
+  <select class="bottom-select" id="outQ" onchange="setParam('quality',this.value); setParam('lossless', this.value==100?1:0)">
+    <option value="100" selected>无损</option>
+    <option value="95">高</option>
+    <option value="85">中</option>
+    <option value="75">低</option>
+  </select>
+  <button class="tool-btn" onclick="post('chooseout')" id="btnOut">输出目录</button>
+  <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#bbb;cursor:pointer">
+    <input type="checkbox" checked id="openAfter" style="accent-color:#0969da;width:13px;height:13px" onchange="setParam('open_after',this.checked?1:0)"> 完成后打开文件夹
+  </label>
+  <span class="bottom-sep"></span>
+  <span class="output-info" id="outInfo">未选择图片</span>
+  <div style="flex:1"></div>
+  <div class="status-box" id="statusBox" title="当前执行状态">就绪</div>
+  <span class="render-name" id="renderName"></span>
+  <button class="btn-start" onclick="doExport()">开始</button>
+  <div class="progress"><div class="progress-bar" id="pbar"></div></div>
+  <span class="status-pct" id="status">0%</span>
+</div>
+
+<script>
+function post(m){ if(window.chrome&&chrome.webview) chrome.webview.postMessage(m); }
+// 滤镜搜索
+document.addEventListener('input', function(e){
+  if (e.target && e.target.id === 'lutSearch') {
+    if (window._allLutGroups) renderLutTree(window._allLutGroups);
+  }
+});
+function setParam(k,v){ post('setparam|'+k+'|'+v); updateGuide();
+  const labelMap = {quality:'画质',out_size:'尺寸',out_fmt:'格式',ts_on:'移轴',filterStrength:'滤镜强度',chroma:'色度',saturation:'饱和度',contrast:'对比度',brightness:'亮度',shadows:'暗部亮调',highlights:'高光压暗',temp:'色温',tint:'色调',vignette:'暗角',sharpness:'锐度',ts_pos:'移轴位置',ts_band:'移轴宽度',ts_blur:'模糊强度',ts_angle:'旋转角度',ts_sat:'移轴饱和度',ts_con:'移轴对比度',ts_bri:'移轴亮度',ts_vig:'移轴暗角'};
+  const sb = document.getElementById('statusBox');
+  sb.textContent = '⏳ 正在刷新预览... ('+(labelMap[k]||k)+'='+v+')';
+  sb.style.color = '#ffcc66';
+}
+let colorAutoApplied = false;
+let aiOptEnabled = false;
+function toggleColorAuto() {
+  const btn = document.getElementById('colorAutoBtn');
+  if (!colorAutoApplied) {
+    // 自动优化：黑白场+智能白平衡（不影响LUT套用模式）
+    setParam('color_auto', 1);
+    btn.textContent = '还原默认';
+    btn.style.background = '#666';
+    colorAutoApplied = true;
+  } else {
+    setParam('color_auto', 0);
+    btn.textContent = '自动优化';
+    btn.style.background = '#0969da';
+    colorAutoApplied = false;
+  }
+}
+function toggleAiOpt() {
+  const btn = document.getElementById('aiOptBtn');
+  if (!aiOptEnabled) {
+    setParam('ai_opt', 1);
+    btn.textContent = '关闭AI优化';
+    btn.style.background = '#666';
+    aiOptEnabled = true;
+    document.getElementById('statusBox').textContent = '⏳ AI神经网络优化中...';
+    document.getElementById('statusBox').style.color = '#a78bfa';
+  } else {
+    setParam('ai_opt', 0);
+    btn.textContent = 'AI优化';
+    btn.style.background = '#7c3aed';
+    aiOptEnabled = false;
+  }
+}
+let beautyEnabled = false;
+function toggleBeauty() {
+  const btn = document.getElementById('beautyBtn');
+  if (!beautyEnabled) {
+    setParam('beauty_on', 1);
+    btn.textContent = '关闭增强';
+    btn.style.background = '#666';
+    beautyEnabled = true;
+    document.getElementById('statusBox').textContent = '⏳ AI人像增强处理中...';
+    document.getElementById('statusBox').style.color = '#f472b6';
+  } else {
+    setParam('beauty_on', 0);
+    btn.textContent = 'AI人像增强';
+    btn.style.background = '#ec4899';
+    beautyEnabled = false;
+  }
+}
+function updateTsState() {
+  const on = document.getElementById('tsEnable').checked;
+  const sl = document.getElementById('tsSliders');
+  sl.style.opacity = on ? '1' : '0.4';
+  sl.style.pointerEvents = on ? 'auto' : 'none';
+}
+function updateGuide() {
+  const g = document.getElementById('tsGuide');
+  const enabled = document.getElementById('tsEnable').checked;
+  if (!enabled) { g.style.display='none'; return; }
+  const posV = parseFloat(document.getElementById('s_ts_pos').value);
+  const band = parseFloat(document.getElementById('s_ts_band').value);
+  const ang = parseFloat(document.getElementById('s_ts_angle').value);
+  const container = document.getElementById('preview');
+  const img = container.querySelector('img');
+  // 以实际渲染图片的位置为基准
+  let top0 = 0, left0 = 0, iw = container.clientWidth, ih = container.clientHeight;
+  if (img && img.complete && img.naturalWidth) {
+    const r = img.getBoundingClientRect();
+    const cr = container.getBoundingClientRect();
+    left0 = r.left - cr.left;
+    top0 = r.top - cr.top;
+    iw = r.width; ih = r.height;
+  }
+  const centerY = ih * (0.5 + posV/200);
+  // 与 C# 一致：halfBand = ih * band/100（C# 是 h*band/100，不是 /200）
+  const halfBand = ih * band / 100;
+  // 旋转后要覆盖图片对角线，否则两端会断
+  const diag = Math.sqrt(iw*iw + ih*ih);
+  g.style.display='block';
+  g.style.left = (left0 + iw/2 - diag/2) + 'px';
+  g.style.width = diag + 'px';
+  g.style.top = (top0 + centerY - halfBand) + 'px';
+  g.style.height = (halfBand*2) + 'px';
+  g.style.transformOrigin = '50% 50%';
+  g.style.transform = 'rotate('+ang+'deg)';
+}
+function doExport() {
+  document.getElementById('statusBox').textContent = '开始渲染...';
+  post('export');
+}
+
+// 滑块
+const lutSliders = [
+  ['filterStrength','滤镜强度',0,100,50],
+  ['chroma','色度校准',0,200,100],
+  ['filmContrast','胶片对比',0,100,0],
+];
+const colorSliders = [
+  ['saturation','饱和度',0,300,100],
+  ['contrast','对比度',0,300,100],
+  ['brightness','亮度',0,200,100],
+  ['shadows','暗部亮调',-10,10,0,0.1],
+  ['highlights','高光压暗',-10,10,0,0.1],
+  ['temp','色温',-100,100,0],
+  ['tint','色调',-100,100,0],
+  ['vignette','暗角',0,100,0],
+];
+function buildSliders(cid, list) {
+  const c = document.getElementById(cid);
+  list.forEach(([k,n,mn,mx,v,st]) => {
+    const stepAttr = st ? ` step="${st}"` : '';
+    const row = document.createElement('div'); row.className='slider-row';
+    row.innerHTML = `<label>${n}</label>
+      <input type="range" min="${mn}" max="${mx}"${stepAttr} value="${v}" id="s_${k}">
+      <span class="val" id="v_${k}" title="双击输入">${v}</span>
+      <button class="reset" onclick="resetSlider('${k}',${v})">↺</button>`;
+    c.appendChild(row);
+    // 暗部/高光：内部范围 -10..10 步长 0.1，UI 显示 ×10（即 ±100）
+    const dispScale = (k==='shadows'||k==='highlights') ? 10 : 1;
+    const fmt = x => { const n = parseFloat(x); return Math.round(n*dispScale); };
+    document.getElementById('v_'+k).textContent = fmt(v);
+    row.querySelector('input').oninput = e => {
+      document.getElementById('v_'+k).textContent = fmt(e.target.value);
+      setParam(k, e.target.value);
+    };
+    // 双击数值手动输入
+    row.querySelector('.val').ondblclick = e => {
+      const span = e.target;
+      const old = span.textContent;
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.value = old;
+      inp.style.cssText = 'width:48px;font-size:11px;background:#1a1a1a;color:#fff;border:1px solid #0969da;border-radius:3px;padding:1px 3px;outline:none;';
+      span.replaceWith(inp);
+      inp.focus(); inp.select();
+      const commit = () => {
+        let nv = parseFloat(inp.value);
+        if (isNaN(nv)) nv = v;
+        nv = Math.max(mn*dispScale, Math.min(mx*dispScale, nv))/dispScale;
+        const slider = document.getElementById('s_'+k);
+        slider.value = nv;
+        setParam(k, nv);
+        inp.replaceWith(span);
+        span.textContent = fmt(nv);
+      };
+      inp.onblur = commit;
+      inp.onkeydown = ev => { if (ev.key==='Enter') commit(); if (ev.key==='Escape') inp.replaceWith(span); };
+    };
+  });
+}
+function resetSlider(k,v) {
+  document.getElementById('s_'+k).value = v;
+  document.getElementById('v_'+k).textContent = v;
+  setParam(k, v);
+}
+buildSliders('lutSliders', lutSliders);
+buildSliders('colorSliders', colorSliders);
+
+// 移轴滑块
+const tsSliders = [
+  ['ts_pos','移轴位置',-50,150,0],
+  ['ts_angle','旋转角度',-45,45,0],
+  ['ts_band','焦外带宽',1,50,22],
+  ['ts_blur','模糊强度',1,20,10],
+  ['ts_sat','焦外饱和度',0,200,115],
+  ['ts_con','焦外对比度',0,200,115],
+  ['ts_bri','焦外亮度',50,150,95],
+  ['ts_vig','焦外暗角',0,100,15],
+];
+buildSliders('tsSliders', tsSliders);
+updateTsState();
+
+// LUT 树
+function renderLutTree(groups) {
+  window._allLutGroups = groups || [];
+  const q = (document.getElementById('lutSearch').value || '').trim().toLowerCase();
+  const tree = document.getElementById('lutTree');
+  tree.innerHTML = '';
+  // 把"我的-LUT"置顶
+  const arr = window._allLutGroups.slice();
+  arr.sort((a,b) => {
+    const am = a.group.indexOf('我的')>=0 ? 0 : 1;
+    const bm = b.group.indexOf('我的')>=0 ? 0 : 1;
+    return am - bm;
+  });
+  arr.forEach(g => {
+    let items = g.items || [];
+    if (q) items = items.filter(n => n.toLowerCase().indexOf(q)>=0);
+    const gEl = document.createElement('div'); gEl.className='lut-group';
+    gEl.innerHTML = `<div class="lut-group-title"><span class="arrow">▼</span> ${g.group}</div>
+      <div class="lut-items"></div>`;
+    const itemsEl = gEl.querySelector('.lut-items');
+    if (!g.items || g.items.length===0) {
+      itemsEl.innerHTML = '<div style="padding:4px 12px;color:#555;font-size:11px">无</div>';
+    } else if (items.length===0) {
+      // 搜索无结果：整个组隐藏
+      return;
+    }
+    items.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'lut-item';
+      item.innerHTML = `<span class="lut-radio"></span> <span>${name}</span>`;
+      item.onclick = () => {
+        const wasSelected = item.classList.contains('sel');
+        document.querySelectorAll('.lut-item').forEach(x=>{
+          x.classList.remove('sel');
+        });
+        if (wasSelected) {
+          // 再次点击 = 取消选中，移除 LUT
+          document.getElementById('currentLut').innerHTML = '<span style="color:#666">●</span> 当前 LUT：<b style="color:#888">无</b>';
+          document.getElementById('statusBox').textContent = '移除 LUT';
+          post('deselectlut');
+        } else {
+          item.classList.add('sel');
+          document.getElementById('currentLut').innerHTML = '<span style="color:#0969da">●</span> 当前 LUT：<b style="color:#ddd">'+name+'</b>';
+          document.getElementById('statusBox').textContent = '套用 LUT: '+name;
+          post('selectlut|'+name);
+        }
+      };
+      itemsEl.appendChild(item);
+    });
+    if (!g.items || g.items.length===0) gEl.classList.add('collapsed');
+    gEl.querySelector('.lut-group-title').onclick = () => gEl.classList.toggle('collapsed');
+    tree.appendChild(gEl);
+  });
+}
+
+// 垂直分隔条拖动
+(function(){
+  const splitter = document.getElementById('vSplitter');
+  const fileSection = document.getElementById('fileSection');
+  const left = document.querySelector('.left');
+  let startY = 0, startH = 0, dragging = false;
+  splitter.addEventListener('mousedown', e => {
+    dragging = true;
+    startY = e.clientY;
+    startH = fileSection.offsetHeight;
+    splitter.classList.add('dragging');
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    let newH = startH + dy;
+    const maxH = left.clientHeight - 180;
+    if (newH < 60) newH = 60;
+    if (newH > maxH) newH = maxH;
+    fileSection.style.height = newH + 'px';
+  });
+  document.addEventListener('mouseup', e => {
+    if (dragging) { dragging = false; splitter.classList.remove('dragging'); }
+  });
+})();
+
+// 缩放与旋转
+let _zoom = 0; // 0 = 适应
+let _panX = 0, _panY = 0;
+function applyZoom() {
+  const img = document.querySelector('#preview img');
+  if (!img) return;
+  if (_zoom === 0) {
+    img.style.transform = 'translate(-50%,-50%)';
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '100%';
+    document.getElementById('zoomLabel').textContent = '适应';
+  } else {
+    const sc = _zoom;
+    img.style.transform = `translate(calc(-50% + ${_panX}px), calc(-50% + ${_panY}px)) scale(${sc})`;
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
+    document.getElementById('zoomLabel').textContent = Math.round(sc*100)+'%';
+  }
+}
+function zoomIn() { _zoom = _zoom === 0 ? 1.25 : Math.min(_zoom*1.25, 100); applyZoom(); }
+function zoomOut() { _zoom = _zoom <= 0.1 ? 0.1 : Math.max(_zoom/1.25, 0.1); applyZoom(); }
+function zoomFit() { _zoom = 0; _panX = 0; _panY = 0; applyZoom(); }
+// 鼠标滚轮缩放（以鼠标位置为中心）
+document.getElementById('preview').addEventListener('wheel', function(e) {
+  e.preventDefault();
+  const tsOn = document.getElementById('tsEnable').checked;
+  if (tsOn) { zoomFit(); return; }
+  const img = document.querySelector('#preview img');
+  if (!img) return;
+  const container = e.currentTarget.getBoundingClientRect();
+  const mouseX = e.clientX - container.left - container.width/2;
+  const mouseY = e.clientY - container.top - container.height/2;
+  const oldScale = _zoom === 0 ? 1 : _zoom;
+  const delta = e.deltaY < 0 ? 1.2 : 1/1.2;
+  let newScale = oldScale * delta;
+  if (newScale >= 100) newScale = 100;
+  if (newScale <= 0.1) newScale = 0.1;
+  _panX = mouseX - (mouseX - _panX) * (newScale/oldScale);
+  _panY = mouseY - (mouseY - _panY) * (newScale/oldScale);
+  _zoom = newScale;
+  applyZoom();
+}, { passive: false });
+// 左键拖动平移（仅在放大状态下）
+let _dragging = false, _dragStartX = 0, _dragStartY = 0, _dragPanX = 0, _dragPanY = 0;
+document.getElementById('preview').addEventListener('mousedown', function(e) {
+  if (e.button !== 0) return;
+  if (e.target.closest && e.target.closest('#cropConfirmBar')) return;
+  if (_zoom === 0) return;
+  // 裁切模式下不抢拖动
+  if (typeof _cropOn !== 'undefined' && _cropOn) return;
+  e.preventDefault();
+  _dragging = true;
+  _dragStartX = e.clientX; _dragStartY = e.clientY;
+  _dragPanX = _panX; _dragPanY = _panY;
+  e.currentTarget.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', function(e) {
+  if (!_dragging) return;
+  _panX = _dragPanX + (e.clientX - _dragStartX);
+  _panY = _dragPanY + (e.clientY - _dragStartY);
+  applyZoom();
+});
+window.addEventListener('mouseup', function() {
+  if (_dragging) {
+    _dragging = false;
+    document.getElementById('preview').style.cursor = '';
+  }
+});
+function doRotate(deg) { post('rotate|'+deg); }
+
+// LUT 模式
+function setLutMode(mode) {
+  document.querySelectorAll('.lut-mode-btn').forEach(b => {
+    const isActive = b.dataset.mode===mode;
+    b.classList.toggle('active', isActive && mode!=='ai');
+    b.classList.toggle('ai-active', isActive && mode==='ai');
+  });
+  post('setparam|lut_mode|' + mode);
+}
+// 皮肤切换
+function toggleSkin() {
+  document.body.classList.toggle('skin-light');
+  const light = document.body.classList.contains('skin-light');
+  try { localStorage.setItem('skin', light ? 'light' : 'dark'); } catch(e){}
+  try { post('setskin|' + (light ? 'light' : 'dark')); } catch(e){}
+  document.documentElement.classList.toggle('skin-light-html', light);
+  const dark = !light;
+  document.body.style.background = dark ? '#2b2b2b' : '#f5f5f7';
+  document.body.style.color = dark ? '#e0e0e0' : '#222';
+  document.getElementById('statusBox').style.background = dark ? '#1f1f1f' : '#fff';
+  document.getElementById('statusBox').style.borderColor = dark ? '#333' : '#ccc';
+  if (window._lastHist) drawHist(window._lastHist); else drawHist(null);
+}
+// 启动时应用已保存的皮肤
+(function(){
+  var m = location.search.match(/skin=([a-z]+)/i);
+  var s = m ? m[1].toLowerCase() : 'dark';
+  if (s === 'light') {
+    document.body.classList.add('skin-light');
+    document.body.style.background = '#f5f5f7';
+    document.body.style.color = '#222';
+    document.addEventListener('DOMContentLoaded', function(){
+      var sb = document.getElementById('statusBox');
+      if (sb) { sb.style.background = '#fff'; sb.style.borderColor = '#ccc'; }
+    });
+  }
+})();
+// 裁切
+let _cropOn = false, _cropRect = null; // _cropRect 为基于图片的归一化 {x,y,w,h}
+function toggleCrop() {
+  if (_cropOn) {
+    // 再次点击按钮 = 退出裁切
+    _cropOn = false;
+    document.getElementById('cropOverlay').classList.remove('active');
+    document.getElementById('cropToggle').style.background='';
+    document.getElementById('preview').style.cursor='';
+    _cropRect = null;
+    hideCropUI();
+    return;
+  }
+  // 进入裁切模式
+  _cropOn = true;
+  document.getElementById('cropOverlay').classList.add('active');
+  document.getElementById('cropToggle').style.background = '#0969da';
+  document.getElementById('preview').style.cursor = 'crosshair';
+  // 不自动显示选框，等用户自己拖
+  _cropRect = null;
+}
+// 切换比例时若已在裁切模式，直接退出重进（保持比例锁定但不预置框）
+document.getElementById('cropRatio').addEventListener('change', function() {
+  if (_cropOn) {
+    _cropOn = false;
+    document.getElementById('cropOverlay').classList.remove('active');
+    document.getElementById('cropToggle').style.background='';
+    document.getElementById('preview').style.cursor='';
+    _cropRect = null;
+    hideCropUI();
+    toggleCrop();
+  }
+});
+function hideCropUI() {
+  const r = document.getElementById('cropRect');
+  if (r) r.style.display='none';
+  const cb = document.getElementById('cropConfirmBar'); if (cb) cb.remove();
+  const mk = document.getElementById('cropMask'); if (mk) mk.remove();
+}
+function cropReset() {
+  // 重置为全图
+  post('cropreset');
+  hideCropUI();
+  _cropRect = null;
+}
+function confirmCrop() {
+  if (!_cropRect || _cropRect.w<0.01 || _cropRect.h<0.01) return;
+  post('cropapply|'+_cropRect.x+'|'+_cropRect.y+'|'+_cropRect.w+'|'+_cropRect.h);
+  _cropOn = false;
+  document.getElementById('cropOverlay').classList.remove('active');
+  document.getElementById('cropToggle').style.background='';
+  document.getElementById('preview').style.cursor='';
+  hideCropUI();
+  _cropRect = null;
+}
+// 拿到当前图片在预览容器中的实际矩形
+function imageRect() {
+  const prev = document.getElementById('preview');
+  const img = prev.querySelector('img');
+  if (!img || !img.naturalWidth) return null;
+  const r = img.getBoundingClientRect();
+  const cr = prev.getBoundingClientRect();
+  return { left:r.left-cr.left, top:r.top-cr.top, width:r.width, height:r.height };
+}
+function drawCropRect() {
+  const box = imageRect(); if (!box || !_cropRect) return;
+  const el = document.getElementById('cropRect');
+  el.style.display = 'block';
+  el.style.left = (box.left + _cropRect.x*box.width)+'px';
+  el.style.top = (box.top + _cropRect.y*box.height)+'px';
+  el.style.width = (_cropRect.w*box.width)+'px';
+  el.style.height = (_cropRect.h*box.height)+'px';
+  // 裁切外的暗色遮罩用 4 个 div 实现，避免 box-shadow 把内部也压暗
+  let mask = document.getElementById('cropMask');
+  if (!mask) {
+    mask = document.createElement('div');
+    mask.id = 'cropMask';
+    mask.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:19';
+    document.getElementById('preview').appendChild(mask);
+  }
+  const cr = el.getBoundingClientRect();
+  const pr = document.getElementById('preview').getBoundingClientRect();
+  const L = cr.left-pr.left, T = cr.top-pr.top, R = pr.width-(cr.right-pr.left), B = pr.height-(cr.bottom-pr.top);
+  mask.innerHTML =
+    '<div style="position:absolute;left:0;top:0;right:0;height:'+T+'px;background:rgba(0,0,0,0.55)"></div>'+
+    '<div style="position:absolute;left:0;top:'+T+'px;width:'+L+'px;bottom:'+B+'px;background:rgba(0,0,0,0.55)"></div>'+
+    '<div style="position:absolute;right:0;top:'+T+'px;width:'+R+'px;bottom:'+B+'px;background:rgba(0,0,0,0.55)"></div>'+
+    '<div style="position:absolute;left:0;right:0;bottom:0;height:'+B+'px;background:rgba(0,0,0,0.55)"></div>';
+}
+(function(){
+  const prev = document.getElementById('preview');
+  let dragging = false;
+  let sx=0, sy=0;
+  function imageBox() {
+    const img = prev.querySelector('img');
+    if (!img || !img.naturalWidth) return null;
+    const r = img.getBoundingClientRect();
+    const pr = prev.getBoundingClientRect();
+    return { left:r.left-pr.left, top:r.top-pr.top, width:r.width, height:r.height };
+  }
+  prev.addEventListener('mousedown', e => {
+    if (!_cropOn) return;
+    // 点击确认/取消按钮时不要重置裁切框
+    if (e.target.closest && e.target.closest('#cropConfirmBar')) return;
+    const box = imageBox();
+    post('log|mousedown _cropOn='+_cropOn+' box='+(box?box.width+'x'+box.height+'@'+box.left+','+box.top:'null'));
+    if (!box) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const pr = prev.getBoundingClientRect();
+    sx = e.clientX - pr.left;
+    sy = e.clientY - pr.top;
+    dragging = true;
+    _cropRect = {x:0, y:0, w:0, h:0};
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging || !_cropOn) return;
+    const box = imageBox(); if (!box) return;
+    const pr = prev.getBoundingClientRect();
+    let ex = e.clientX - pr.left;
+    let ey = e.clientY - pr.top;
+    let x1 = Math.min(sx, ex), y1 = Math.min(sy, ey);
+    let x2 = Math.max(sx, ex), y2 = Math.max(sy, ey);
+    if (x1 < box.left) x1 = box.left;
+    if (y1 < box.top) y1 = box.top;
+    if (x2 > box.left + box.width) x2 = box.left + box.width;
+    if (y2 > box.top + box.height) y2 = box.top + box.height;
+    const ratio = parseFloat(document.getElementById('cropRatio').value);
+    let w = x2-x1, h = y2-y1;
+    if (ratio > 0) { h = w/ratio; if (y1+h > box.top+box.height) { h = box.top+box.height-y1; w = h*ratio; } }
+    _cropRect = {
+      x: (x1 - box.left)/box.width,
+      y: (y1 - box.top)/box.height,
+      w: w/box.width,
+      h: h/box.height
+    };
+    drawCropRect();
+    let bar = document.getElementById('cropConfirmBar');
+    if (!bar && _cropRect.w>0.02 && _cropRect.h>0.02) {
+      post('log|show bar w='+_cropRect.w+' h='+_cropRect.h);
+      bar = document.createElement('div');
+      bar.id = 'cropConfirmBar';
+      bar.style.cssText = 'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:#2b2b2b;border:1px solid #555;border-radius:6px;padding:6px 10px;display:flex;gap:8px;z-index:30;box-shadow:0 4px 12px rgba(0,0,0,0.5)';
+      bar.innerHTML = '<button style="background:#0969da;color:#fff;border:0;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:11px" onclick="confirmCrop()">✓ 确定裁切</button>'+
+                      '<button style="background:#3c3c3c;color:#ccc;border:1px solid #555;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:11px" onclick="cancelCrop()">取消</button>';
+      prev.appendChild(bar);
+    }
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  window.cancelCrop = function() {
+    _cropRect = null;
+    hideCropUI();
+    // 同时退出裁切模式，去掉遮罩和十字光标
+    _cropOn = false;
+    document.getElementById('cropOverlay').classList.remove('active');
+    document.getElementById('cropToggle').style.background='';
+    document.getElementById('preview').style.cursor='';
+  };
+})();
+
+// 直方图
+function drawHist(hist) {
+  const light = document.body.classList.contains('skin-light');
+  const c = document.getElementById('hist');
+  const ctx = c.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr;
+  c.height = 110 * dpr;
+  ctx.scale(dpr, dpr);
+  const w = c.clientWidth, h = 110;
+  ctx.clearRect(0,0,w,h);
+  const baseLine = light ? '#c7c7cc' : '#444';
+  if (!hist) {
+    // 平直状态
+    ctx.strokeStyle = baseLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h-5);
+    ctx.lineTo(w, h-5);
+    ctx.stroke();
+    // 亮度也画平直
+    const c2 = document.getElementById('histLum');
+    const ctx2 = c2.getContext('2d');
+    ctx2.clearRect(0,0,c2.clientWidth,60);
+    ctx2.strokeStyle = baseLine;
+    ctx2.beginPath();
+    ctx2.moveTo(0, 56);
+    ctx2.lineTo(c2.clientWidth, 56);
+    ctx2.stroke();
+    return;
+  }
+  function channel(data, color) {
+    ctx.beginPath();
+    ctx.moveTo(0, h-5);
+    let max = 1;
+    for (let i=0;i<data.length;i++) if (data[i]>max) max = data[i];
+    for (let i=0;i<data.length;i++) {
+      const x = i/(data.length-1)*w;
+      const y = h-5 - (data[i]/max)*(h-15);
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h-5);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = light ? 0.55 : 0.5;
+    ctx.fill();
+  }
+  channel(hist.r, light ? '#dc2626' : '#ef4444');
+  channel(hist.g, light ? '#16a34a' : '#22c55e');
+  channel(hist.b, light ? '#2563eb' : '#3b82f6');
+  ctx.globalAlpha = 1;
+  // 曝光直方图（亮度）
+  if (hist.l) {
+    const c2 = document.getElementById('histLum');
+    const ctx2 = c2.getContext('2d');
+    const dpr2 = window.devicePixelRatio || 1;
+    c2.width = c2.clientWidth * dpr2;
+    c2.height = 60 * dpr2;
+    ctx2.scale(dpr2, dpr2);
+    const w2 = c2.clientWidth, h2 = 60;
+    ctx2.clearRect(0,0,w2,h2);
+    ctx2.beginPath();
+    ctx2.moveTo(0, h2-4);
+    let max2 = 1;
+    for (let i=0;i<hist.l.length;i++) if (hist.l[i]>max2) max2 = hist.l[i];
+    for (let i=0;i<hist.l.length;i++) {
+      const x = i/(hist.l.length-1)*w2;
+      const y = h2-4 - (hist.l[i]/max2)*(h2-8);
+      ctx2.lineTo(x, y);
+    }
+    ctx2.lineTo(w2, h2-4);
+    ctx2.closePath();
+    ctx2.fillStyle = light ? '#636366' : '#e0e0e0';
+    ctx2.globalAlpha = light ? 0.5 : 0.6;
+    ctx2.fill();
+    ctx2.globalAlpha = 1;
+  }
+}
+drawHist();
+
+// 折叠
+document.querySelectorAll('.section-header').forEach(h => h.onclick = () => {
+  const body = h.nextElementSibling;
+  if (body) body.style.display = body.style.display==='none' ? '' : 'none';
+  h.classList.toggle('collapsed');
+});
+document.querySelectorAll('.hist-tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.hist-tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const mode = t.dataset.mode;
+  document.getElementById('wrapRgb').style.display = mode==='rgb' ? '' : 'none';
+  document.getElementById('wrapLum').style.display = mode==='lum' ? '' : 'none';
+  // 重画当前直方图
+  if (window._lastHist) drawHist(window._lastHist);
+});
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const isTs = t.textContent.trim() === '移轴效果';
+  document.getElementById('tsPanel').style.display = isTs ? '' : 'none';
+});
+// 消息
+if (window.chrome && chrome.webview) {
+  // 页面真正渲染完通知 C# 关 splash
+  window.addEventListener('load', () => {
+    setTimeout(() => { try { chrome.webview.postMessage('ready'); } catch(e){} }, 200);
+  });
+  chrome.webview.addEventListener('message', e => {
+    const m = e.data;
+    const ls = document.getElementById('loadingScreen');
+    if (ls) { ls.style.opacity = '0'; ls.style.transition = 'opacity 0.3s'; setTimeout(()=>ls.remove(), 300); }
+    if (m.type === 'setparam') {
+      const sl = document.getElementById('s_'+m.key);
+      const vl = document.getElementById('v_'+m.key);
+      if (sl) sl.value = m.value;
+      if (vl) vl.textContent = m.value;
+      return;
+    }
+    if (m.type === 'state') {
+      const fl = document.getElementById('fileList');
+      if (!m.files || m.files.length===0) {
+        fl.innerHTML = '<span style="color:#555">还没有添加照片</span>';
+      } else {
+        fl.innerHTML = m.files.map((f,i) => {
+          const nm = (typeof f === 'object') ? f.name : f;
+          const sz = (typeof f === 'object') ? f.size : 0;
+          let szStr = '';
+          if (sz > 1024*1024) szStr = (sz/1024/1024).toFixed(1)+' MB';
+          else if (sz > 1024) szStr = (sz/1024).toFixed(0)+' KB';
+          return `<div class="file-item ${i===m.selected?'sel':''}" onclick="post('select|${i}')"><span class="fname">${nm}</span><span class="fsize">${szStr}</span></div>`;
+        }).join('');
+      }
+      document.getElementById('fileCount').textContent = (m.files?m.files.length:0)+' 项';
+      renderLutTree(m.luts);
+      if (m.out) {
+        window._outDir = m.out;
+        document.getElementById('btnOut').textContent = '输出: ' + (m.out.length>20?m.out.slice(0,20)+'…':m.out);
+      }
+    } else if (m.type === 'clearpreview') {
+      const prev = document.getElementById('preview');
+      const guide = document.getElementById('tsGuide');
+      const overlay = document.getElementById('cropOverlay');
+      prev.innerHTML = '<div class="preview-empty"><div class="icon">🖼</div><div>添加照片开始处理</div></div>';
+      if (guide) prev.appendChild(guide);
+      if (overlay) prev.appendChild(overlay);
+      document.getElementById('outInfo').textContent = '未选择图片';
+      document.getElementById('renderName').textContent = '';
+      document.getElementById('pbar').style.width = '0%';
+      document.getElementById('status').textContent = '0%';
+      drawHist(null);
+    } else if (m.type === 'preview') {
+      const sb2 = document.getElementById('statusBox');
+      sb2.textContent = '✓ 预览已刷新';
+      sb2.style.color = '#9fff9f';
+      const prev = document.getElementById('preview');
+      // 保留辅助线和裁切层
+      const guide = document.getElementById('tsGuide');
+      const overlay = document.getElementById('cropOverlay');
+      const newImg = document.createElement('img');
+      newImg.draggable = false;
+      newImg.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
+      newImg.onload = function() { updateGuide(); };
+      newImg.src = m.data;
+      prev.innerHTML = '';
+      prev.appendChild(newImg);
+      if (guide) prev.appendChild(guide);
+      if (overlay) prev.appendChild(overlay);
+      window._lastHist = m.hist;
+      drawHist(m.hist);
+      applyZoom();
+      updateGuide();
+      if (m.out_w) {
+        let kb = m.est_kb;
+        let sizeStr = kb > 1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB';
+        document.getElementById('outInfo').innerHTML =
+          `输出: <b>${m.out_w}×${m.out_h}</b> · 约 <b>${sizeStr}</b>`;
+      }
+    } else if (m.type === 'progress') {
+      const pct = m.done*100/m.total;
+      document.getElementById('pbar').style.width = pct+'%';
+      document.getElementById('status').textContent = m.done>=m.total?'100%':Math.round(pct)+'%';
+      if (m.file) {
+        document.getElementById('renderName').textContent = m.file;
+        document.getElementById('statusBox').textContent = m.file;
+      }
+    }
+  });
+}
+</script>
+</body></html>

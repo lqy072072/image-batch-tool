@@ -1,0 +1,2479 @@
+// ============================================================
+// 图片批处理工具 - WebView2 桌面应用
+// 作者：純潔の工口君
+// ------------------------------------------------------------
+// 架构：
+//   - UI 层：WebView2 (Edge Chromium) 加载 ui.html，Mac 风格深色/浅色双皮肤
+//   - 后端：C# WinForms 宿主，通过 WebMessage 与 HTML 双向通信
+//   - 图像处理管线：
+//       1. GPU 加速（gpu_imgproc.dll，D3D11 compute shader）
+//       2. CPU 原生（imgproc.dll，MSVC /O2 /arch:AVX2 /openmp）
+//       3. C# Parallel.For 兜底
+//     三层自动降级，全部 try/catch 保护
+//   - LUT 支持：.cube 3D LUT，四面体插值，Log 型/创意型自动识别
+//   - 其他功能：白平衡、曝光、Log 转换、移轴、裁切、锐化、批量导出
+// 编译：csc.exe /target:winexe /platform:x64 /unsafe
+// ============================================================
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Microsoft.Web.WebView2.WinForms;
+using Microsoft.Web.WebView2.Core;
+
+namespace ImageBatchTool
+{
+    // ============================================================
+    // 原生函数 P/Invoke 声明
+    //   imgproc.dll    — C++ AVX2+OpenMP CPU 加速
+    //   gpu_imgproc.dll — D3D11 compute shader GPU 加速
+    // 所有图像处理函数都接受 BGRA 缓冲区（buf[i]=B, [i+1]=G, [i+2]=R, [i+3]=A）
+    // ============================================================
+    static class Native
+    {
+        [DllImport("user32.dll")] public static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+        [DllImport("imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern void lut_apply(byte[] buf, int W, int H, int stride,
+            [In] float[] lut, int size, float inMin, float inMax,
+            float strength, float chroma,
+            [In] float[] wbGain, [In] float[] expTable, [In] float[] logTable);
+        [DllImport("imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern void color_adjust(byte[] buf, int W, int H, int stride,
+            float saturation, float contrast, float brightness,
+            float shadows, float highlights, float temp, float tint, float vignette);
+        [DllImport("imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern void sharpen(byte[] buf, int W, int H, int stride, float amount);
+        // GPU acceleration (D3D11 compute shaders)
+        [DllImport("gpu_imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern int gpu_available();
+        [DllImport("gpu_imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern int gpu_blur(byte[] buf, int W, int H, int stride, int radius);
+        [DllImport("gpu_imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern int gpu_lut_apply(byte[] buf, int W, int H, int stride,
+            [In] float[] lut, int size, float inMin, float inMax,
+            float strength, float chroma, [In] float[] wbGain);
+        [DllImport("gpu_imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
+        public static extern int gpu_color_adjust(byte[] buf, int W, int H, int stride,
+            float saturation, float contrast, float brightness,
+            float shadows, float highlights, float temp, float tint, float vignette);
+    }
+
+    // ============================================================
+    // LUT 预计算查找表
+    //   SrgbToLinear — sRGB gamma 反向（线性光）
+    //   JpegCodec     — GDI+ JPEG 编码器
+    //   Cores         — CPU 核心数（用于并行度）
+    // ============================================================
+    static class LUT
+    {
+        public static readonly float[] SrgbToLinear = new float[256];
+        public static readonly ImageCodecInfo JpegCodec;
+        public static readonly int Cores = Math.Max(1, Environment.ProcessorCount);
+
+        static LUT()
+        {
+            for (int i = 0; i < 256; i++)
+            {
+                double c = i / 255.0;
+                double lin = c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+                SrgbToLinear[i] = (float)lin;
+            }
+            foreach (var c in ImageCodecInfo.GetImageEncoders())
+                if (c.FormatID == ImageFormat.Jpeg.Guid) { JpegCodec = c; break; }
+        }
+    }
+
+    static class Program
+    {
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            var splash = new SplashForm();
+            splash.Show();
+            Application.DoEvents();
+            var main = new MainForm();
+            main.Shown += (s, e) => { main.Splash = splash; };
+            Application.Run(main);
+        }
+    }
+
+    // ============================================================
+    // 启动画面（Splash）：带进度条，皮肤感知（深色/浅色）
+    // ============================================================
+    public class SplashForm : Form
+    {
+        public SplashForm()
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.CenterScreen;
+            Size = new Size(360, 220);
+            string skin = "dark";
+            try {
+                string sf = Path.Combine(Application.StartupPath, "skin.txt");
+                if (File.Exists(sf)) skin = File.ReadAllText(sf).Trim().ToLower();
+            } catch {}
+            bool light = skin == "light";
+            BackColor = light ? Color.FromArgb(245,245,247) : Color.FromArgb(43,43,43);
+
+            var t = new Label();
+            t.Text = "图片批处理工具";
+            t.ForeColor = light ? Color.FromArgb(29,29,31) : Color.FromArgb(220,220,220);
+            t.Font = new Font("Microsoft YaHei UI", 14f);
+            t.AutoSize = false; t.Size = new Size(360, 40); t.Location = new Point(0, 70);
+            t.TextAlign = ContentAlignment.MiddleCenter;
+
+            var sub = new Label();
+            sub.Text = "正在初始化图像处理引擎…";
+            sub.ForeColor = light ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
+            sub.Font = new Font("Microsoft YaHei UI", 9f);
+            sub.AutoSize = false; sub.Size = new Size(360, 20); sub.Location = new Point(0, 120);
+            sub.TextAlign = ContentAlignment.MiddleCenter;
+
+            var bar = new Panel();
+            bar.Size = new Size(200, 3); bar.Location = new Point(80, 160);
+            bar.BackColor = light ? Color.FromArgb(229,229,234) : Color.FromArgb(60,60,60);
+            var fill = new Panel();
+            fill.Size = new Size(0, 3); fill.Location = new Point(0, 0);
+            fill.BackColor = Color.FromArgb(9,105,218);
+            bar.Controls.Add(fill);
+
+            var pct = new Label();
+            pct.Text = "0%";
+            pct.ForeColor = light ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
+            pct.Font = new Font("Microsoft YaHei UI", 9f);
+            pct.AutoSize = false; pct.Size = new Size(360, 18); pct.Location = new Point(0, 168);
+            pct.TextAlign = ContentAlignment.MiddleCenter;
+
+            Controls.Add(t); Controls.Add(sub); Controls.Add(bar); Controls.Add(pct);
+
+            var timer = new System.Windows.Forms.Timer(); timer.Interval = 30;
+            int p = 0;
+            timer.Tick += (s, e) => {
+                p += 3;
+                if (p >= 200) p = 200;
+                fill.Width = p;
+                pct.Text = (int)(p * 100 / 200) + "%";
+            };
+            timer.Start();
+
+            int radius = 12;
+            var path = new GraphicsPath();
+            path.AddArc(0, 0, radius*2, radius*2, 180, 90);
+            path.AddArc(Width-radius*2, 0, radius*2, radius*2, 270, 90);
+            path.AddArc(Width-radius*2, Height-radius*2, radius*2, radius*2, 0, 90);
+            path.AddArc(0, Height-radius*2, radius*2, radius*2, 90, 90);
+            path.CloseFigure();
+            this.Region = new Region(path);
+        }
+    }
+
+    // ============================================================
+    // .cube 3D LUT 加载与采样
+    //   Table — float[size^3 * 3]，每顶点 (R, G, B)
+    //   InputMin/Max — LUT_3D_INPUT_RANGE 声明的输入范围
+    //   SampleTetra — 四面体插值（无色彩带）
+    // ============================================================
+    public class CubeLut
+    {
+        public int Size;
+        public float[] Table;
+        public float InputMin = 0f, InputMax = 1f; // LUT_3D_INPUT_RANGE（DaVinci 标准）
+
+        public static CubeLut Load(string path)
+        {
+            var lut = new CubeLut();
+            // 验证文件是否为有效 .cube（防止下载错误 JSON 等垃圾文件）
+            try {
+                string peek = System.IO.File.ReadAllText(path).TrimStart();
+                if (peek.StartsWith("{") || peek.Length < 100) {
+                    // 不是有效 cube 文件，返回空 LUT（恒等映射）
+                    lut.Size = 33;
+                    lut.Table = new float[33*33*33*3];
+                    for (int i = 0; i < 33; i++) for (int j = 0; j < 33; j++) for (int k = 0; k < 33; k++) {
+                        int idx = ((k*33+j)*33+i)*3;
+                        lut.Table[idx] = i / 32.0f; lut.Table[idx+1] = j / 32.0f; lut.Table[idx+2] = k / 32.0f;
+                    }
+                    return lut;
+                }
+            } catch { }
+            var nums = new List<float>(300000);
+            int size = 0;
+            using (var sr = new StreamReader(path, System.Text.Encoding.UTF8, true))
+            {
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (line.Length == 0 || line[0] == '#') continue;
+                    if (line.StartsWith("TITLE", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (line.StartsWith("LUT_3D_SIZE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int.TryParse(line.Substring(11).Trim(), out size);
+                        continue;
+                    }
+                    if (line.StartsWith("LUT_3D_INPUT_RANGE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var rp = line.Substring(17).Trim().Split(new[]{' ','\t'}, StringSplitOptions.RemoveEmptyEntries);
+                        if (rp.Length >= 2)
+                        {
+                            float.TryParse(rp[0], NumberStyles.Float, CultureInfo.InvariantCulture, out lut.InputMin);
+                            float.TryParse(rp[1], NumberStyles.Float, CultureInfo.InvariantCulture, out lut.InputMax);
+                        }
+                        continue;
+                    }
+                    if (line.StartsWith("LUT_1D_SIZE", StringComparison.OrdinalIgnoreCase))
+                        throw new NotSupportedException();
+                    char c0 = line[0];
+                    if (!(char.IsDigit(c0) || c0 == '-' || c0 == '+' || c0 == '.')) continue;
+                    string[] parts = line.Split(new[]{' ','\t'}, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 3) continue;
+                    float r, g, b;
+                    if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out r)) continue;
+                    if (!float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out g)) continue;
+                    if (!float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out b)) continue;
+                    nums.Add(r); nums.Add(g); nums.Add(b);
+                }
+            }
+            int count = nums.Count / 3;
+            if (size <= 1) size = (int)Math.Round(Math.Pow(count, 1.0 / 3.0));
+            // 校验格数：如果数据条数不等于 size^3，按实际数据量反推
+            int expected = size * size * size;
+            if (Math.Abs(count - expected) > size * size)
+            {
+                int newSize = (int)Math.Round(Math.Pow(count, 1.0 / 3.0));
+                System.Diagnostics.Debug.WriteLine("LUT 格数不符: 声明=" + size + " 实际=" + count + " 反推=" + newSize);
+                size = newSize;
+            }
+            lut.Size = size;
+            lut.Table = nums.ToArray();
+            for (int i = 0; i < lut.Table.Length; i++)
+            {
+                float v = lut.Table[i];
+                lut.Table[i] = v < 0 ? 0 : (v > 1 ? 1 : v);
+            }
+            return lut;
+        }
+
+        // 四面体插值（33^3 以上 LUT 用，更平滑、无伪影）
+        public static void SampleTetra(float[] t, int n, float r, float g, float b,
+                                  out float orr, out float og, out float ob)
+        {
+            float pr = Clamp01(r) * (n - 1), pg = Clamp01(g) * (n - 1), pb = Clamp01(b) * (n - 1);
+            int r0 = (int)pr, g0 = (int)pg, b0 = (int)pb;
+            int r1 = r0 + 1 < n ? r0 + 1 : n - 1;
+            int g1 = g0 + 1 < n ? g0 + 1 : n - 1;
+            int b1 = b0 + 1 < n ? b0 + 1 : n - 1;
+            float fr = pr - r0, fg = pg - g0, fb = pb - b0;
+            int i000 = ((b0*n+g0)*n+r0)*3;
+            // 8 顶点
+            float r000=t[i000], g000=t[i000+1], b000=t[i000+2];
+            float r100=t[((b0*n+g0)*n+r1)*3], g100=t[((b0*n+g0)*n+r1)*3+1], b100=t[((b0*n+g0)*n+r1)*3+2];
+            float r010=t[((b0*n+g1)*n+r0)*3], g010=t[((b0*n+g1)*n+r0)*3+1], b010=t[((b0*n+g1)*n+r0)*3+2];
+            float r001=t[((b1*n+g0)*n+r0)*3], g001=t[((b1*n+g0)*n+r0)*3+1], b001=t[((b1*n+g0)*n+r0)*3+2];
+            float r110=t[((b0*n+g1)*n+r1)*3], g110=t[((b0*n+g1)*n+r1)*3+1], b110=t[((b0*n+g1)*n+r1)*3+2];
+            float r101=t[((b1*n+g0)*n+r1)*3], g101=t[((b1*n+g0)*n+r1)*3+1], b101=t[((b1*n+g0)*n+r1)*3+2];
+            float r011=t[((b1*n+g1)*n+r0)*3], g011=t[((b1*n+g1)*n+r0)*3+1], b011=t[((b1*n+g1)*n+r0)*3+2];
+            float r111=t[((b1*n+g1)*n+r1)*3], g111=t[((b1*n+g1)*n+r1)*3+1], b111=t[((b1*n+g1)*n+r1)*3+2];
+            // 四面体分解
+            if (fr >= fg && fg >= fb) {
+                orr = r000 + fr*(r100-r000) + fg*(r110-r100) + fb*(r111-r110);
+                og = g000 + fr*(g100-g000) + fg*(g110-g100) + fb*(g111-g110);
+                ob = b000 + fr*(b100-b000) + fg*(b110-b100) + fb*(b111-b110);
+            } else if (fr >= fg && fb >= fg) {
+                orr = r000 + fr*(r100-r000) + fb*(r101-r100) + fg*(r111-r101);
+                og = g000 + fr*(g100-g000) + fb*(g101-g100) + fg*(g111-g101);
+                ob = b000 + fr*(b100-b000) + fb*(b101-b100) + fg*(b111-b101);
+            } else if (fg >= fr && fr >= fb) {
+                orr = r000 + fg*(r010-r000) + fr*(r110-r010) + fb*(r111-r110);
+                og = g000 + fg*(g010-g000) + fr*(g110-g010) + fb*(g111-g110);
+                ob = b000 + fg*(b010-b000) + fr*(b110-b010) + fb*(b111-b110);
+            } else if (fg >= fb && fb >= fr) {
+                orr = r000 + fg*(r010-r000) + fb*(r011-r010) + fr*(r111-r011);
+                og = g000 + fg*(g010-g000) + fb*(g011-g010) + fr*(g111-g011);
+                ob = b000 + fg*(b010-b000) + fb*(b011-b010) + fr*(b111-b011);
+            } else if (fb >= fr && fr >= fg) {
+                orr = r000 + fb*(r001-r000) + fr*(r101-r001) + fg*(r111-r101);
+                og = g000 + fb*(g001-g000) + fr*(g101-g001) + fg*(g111-g101);
+                ob = b000 + fb*(b001-b000) + fr*(b101-b001) + fg*(b111-b101);
+            } else {
+                orr = r000 + fb*(r001-r000) + fg*(r011-r001) + fr*(r111-r011);
+                og = g000 + fb*(g001-g000) + fg*(g011-g001) + fr*(g111-g011);
+                ob = b000 + fb*(b001-b000) + fg*(b011-b001) + fr*(b111-b011);
+            }
+        }
+
+        public static void Sample(float[] t, int n, float r, float g, float b,
+                                  out float orr, out float og, out float ob)
+        {
+            float pr = Clamp01(r) * (n - 1), pg = Clamp01(g) * (n - 1), pb = Clamp01(b) * (n - 1);
+            int r0 = (int)pr, g0 = (int)pg, b0 = (int)pb;
+            int r1 = r0 + 1 < n ? r0 + 1 : n - 1;
+            int g1 = g0 + 1 < n ? g0 + 1 : n - 1;
+            int b1 = b0 + 1 < n ? b0 + 1 : n - 1;
+            float fr = pr - r0, fg = pg - g0, fb = pb - b0;
+            int i000 = ((b0*n+g0)*n+r0)*3, i100 = ((b0*n+g0)*n+r1)*3;
+            int i010 = ((b0*n+g1)*n+r0)*3, i110 = ((b0*n+g1)*n+r1)*3;
+            int i001 = ((b1*n+g0)*n+r0)*3, i101 = ((b1*n+g0)*n+r1)*3;
+            int i011 = ((b1*n+g1)*n+r0)*3, i111 = ((b1*n+g1)*n+r1)*3;
+            float a0 = t[i000] + (t[i100]-t[i000])*fr;
+            float a1 = t[i010] + (t[i110]-t[i010])*fr;
+            float a2 = t[i001] + (t[i101]-t[i001])*fr;
+            float a3 = t[i011] + (t[i111]-t[i011])*fr;
+            float b0v = a0 + (a1-a0)*fg, b1v = a2 + (a3-a2)*fg;
+            orr = b0v + (b1v-b0v)*fb;
+            float c0 = t[i000+1] + (t[i100+1]-t[i000+1])*fr;
+            float c1 = t[i010+1] + (t[i110+1]-t[i010+1])*fr;
+            float c2 = t[i001+1] + (t[i101+1]-t[i001+1])*fr;
+            float c3 = t[i011+1] + (t[i111+1]-t[i011+1])*fr;
+            float d0 = c0 + (c1-c0)*fg, d1 = c2 + (c3-c2)*fg;
+            og = d0 + (d1-d0)*fb;
+            float e0 = t[i000+2] + (t[i100+2]-t[i000+2])*fr;
+            float e1 = t[i010+2] + (t[i110+2]-t[i010+2])*fr;
+            float e2 = t[i001+2] + (t[i101+2]-t[i001+2])*fr;
+            float e3 = t[i011+2] + (t[i111+2]-t[i011+2])*fr;
+            float f0 = e0 + (e1-e0)*fg, f1 = e2 + (e3-e2)*fg;
+            ob = f0 + (f1-f0)*fb;
+        }
+        static float Clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+    }
+
+    // ============================================================
+    // 神经网络（纯C#前向传播，不依赖onnxruntime.dll）
+    // ============================================================
+    // ============================================================
+    // AI全流程调色：Python直接输出所有调色参数，C#只执行
+    // ============================================================
+    static class AiRunner
+    {
+        public static string LastError = "";
+        static string pythonPath = "";
+
+        // AI输出的参数
+        public static double OutWbR = 1.0, OutWbG = 1.0, OutWbB = 1.0;
+        public static double OutExposure = 1.0, OutContrast = 1.0, OutSaturation = 1.0;
+        public static double OutHighlights = 1.0, OutShadows = 1.0;
+        public static double OutPreExposure = 1.0, OutLogGamma = 1.0;
+        public static bool OutUseLogConvert = false;
+        public static string OutScene = "generic";
+        // 调用前设置：LUT信息提示
+        public static bool LutIsLogHint = false;
+        public static double LutBlackHint = 0.0, LutWhiteHint = 1.0;
+
+        public static bool IsAvailable()
+        {
+            string script = Path.Combine(Application.StartupPath, "ai", "ai_process.py");
+            if (!File.Exists(script)) { LastError = "缺少 ai/ai_process.py: " + script; return false; }
+            // 优先使用嵌入的Python
+            string embedded = Path.Combine(Application.StartupPath, "python", "python.exe");
+            if (File.Exists(embedded)) { pythonPath = embedded; return true; }
+            // 尝试多个python路径
+            string[] candidates = { "python", "py", "python3",
+                @"C:\Python311\python.exe", @"C:\Python310\python.exe", @"C:\Python39\python.exe" };
+            foreach (var py in candidates) {
+                try {
+                    var psi = new System.Diagnostics.ProcessStartInfo();
+                    psi.FileName = py;
+                    psi.Arguments = "--version";
+                    psi.UseShellExecute = false;
+                    psi.RedirectStandardOutput = true;
+                    psi.CreateNoWindow = true;
+                    var p = System.Diagnostics.Process.Start(psi);
+                    p.WaitForExit(5000);
+                    if (p.ExitCode == 0) { pythonPath = py; return true; }
+                } catch {}
+            }
+            LastError = "python未找到（试过 python/py/python3）";
+            return false;
+        }
+
+        // 对BGRA buffer运行AI全流程分析，返回是否成功
+        public static bool ProcessImage(byte[] buf, int W, int H, int stride)
+        {
+            LastError = "";
+            OutWbR = OutWbG = OutWbB = 1.0;
+            OutExposure = OutContrast = OutSaturation = 1.0;
+            OutHighlights = OutShadows = 1.0;
+            OutPreExposure = 1.0; OutLogGamma = 1.0; OutUseLogConvert = false;
+            OutScene = "generic";
+
+            if (string.IsNullOrEmpty(pythonPath) && !IsAvailable()) return false;
+
+            string tmpImg = Path.Combine(Path.GetTempPath(), "ai_in_" + Guid.NewGuid().ToString("N") + ".jpg");
+            string tmpJson = Path.Combine(Path.GetTempPath(), "ai_out_" + Guid.NewGuid().ToString("N") + ".json");
+            try {
+                System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(W, H, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, W, H), System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                System.Runtime.InteropServices.Marshal.Copy(buf, 0, bmpData.Scan0, W * H * 4);
+                bmp.UnlockBits(bmpData);
+                bmp.Save(tmpImg, System.Drawing.Imaging.ImageFormat.Jpeg);
+                bmp.Dispose();
+
+                string script = Path.Combine(Application.StartupPath, "ai", "ai_process.py");
+                var psi = new System.Diagnostics.ProcessStartInfo();
+                psi.FileName = pythonPath;
+                // 可选附加参数：LUT类型信息
+                string extraArgs = "";
+                if (LutIsLogHint) {
+                    extraArgs = " 1 " + LutBlackHint.ToString("F4") + " " + LutWhiteHint.ToString("F4");
+                }
+                psi.Arguments = "\"" + script + "\" \"" + tmpImg + "\" \"" + tmpJson + "\"" + extraArgs;
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+                psi.WorkingDirectory = Application.StartupPath;
+                var p = System.Diagnostics.Process.Start(psi);
+                string stderr = p.StandardError.ReadToEnd();
+                p.WaitForExit(60000);
+
+                if (p.ExitCode != 0) {
+                    LastError = "python错误: " + (stderr.Length > 200 ? stderr.Substring(0, 200) : stderr);
+                    return false;
+                }
+
+                if (!File.Exists(tmpJson)) { LastError = "无结果文件"; return false; }
+                string json = File.ReadAllText(tmpJson);
+
+                OutScene = ExtractJsonString(json, "scene");
+                OutWbR = ExtractJsonDouble(json, "wbR");
+                OutWbG = ExtractJsonDouble(json, "wbG");
+                OutWbB = ExtractJsonDouble(json, "wbB");
+                OutExposure = ExtractJsonDouble(json, "exposure");
+                OutContrast = ExtractJsonDouble(json, "contrast");
+                OutSaturation = ExtractJsonDouble(json, "saturation");
+                OutHighlights = ExtractJsonDouble(json, "highlights");
+                OutShadows = ExtractJsonDouble(json, "shadows");
+                OutPreExposure = ExtractJsonDouble(json, "preExposure");
+                OutLogGamma = ExtractJsonDouble(json, "logGamma");
+                OutUseLogConvert = json.IndexOf("\"useLogConvert\": true") >= 0;
+
+                LastError = "scene=" + OutScene +
+                    " WB=" + OutWbR.ToString("F2") + "/" + OutWbG.ToString("F2") + "/" + OutWbB.ToString("F2") +
+                    " preExp=" + OutPreExposure.ToString("F2") +
+                    " logConv=" + OutUseLogConvert + " gamma=" + OutLogGamma.ToString("F2") +
+                    " con=" + OutContrast.ToString("F2") +
+                    " sat=" + OutSaturation.ToString("F2");
+                return true;
+            } catch (Exception ex) {
+                LastError = ex.Message;
+                return false;
+            } finally {
+                try { if (File.Exists(tmpImg)) File.Delete(tmpImg); } catch {}
+                try { if (File.Exists(tmpJson)) File.Delete(tmpJson); } catch {}
+            }
+        }
+
+        static string ExtractJsonString(string json, string key)
+        {
+            string pattern = "\"" + key + "\"";
+            int idx = json.IndexOf(pattern);
+            if (idx < 0) return "";
+            int colon = json.IndexOf(':', idx);
+            if (colon < 0) return "";
+            int q1 = json.IndexOf('"', colon + 1);
+            if (q1 < 0) return "";
+            int q2 = json.IndexOf('"', q1 + 1);
+            if (q2 < 0) return "";
+            return json.Substring(q1 + 1, q2 - q1 - 1);
+        }
+
+        static double ExtractJsonDouble(string json, string key)
+        {
+            string pattern = "\"" + key + "\"";
+            int idx = json.IndexOf(pattern);
+            if (idx < 0) return 1.0;
+            int colon = json.IndexOf(':', idx);
+            if (colon < 0) return 1.0;
+            int start = colon + 1;
+            // 跳过冒号后的空格/换行
+            while (start < json.Length && (json[start] == ' ' || json[start] == '\t' || json[start] == '\r' || json[start] == '\n')) start++;
+            int end = start;
+            while (end < json.Length && (char.IsDigit(json[end]) || json[end] == '.' || json[end] == '-')) end++;
+            string num = json.Substring(start, end - start).Trim();
+            double v;
+            if (double.TryParse(num, out v)) return v;
+            return 1.0;
+        }
+    }
+
+    static class BeautyRunner
+    {
+        static string pythonPath = "";
+        static bool? _available;
+
+        public static bool IsAvailable()
+        {
+            if (_available.HasValue) return _available.Value;
+            // 优先使用嵌入的Python
+            string embedded = Path.Combine(Application.StartupPath, "python", "python.exe");
+            if (File.Exists(embedded)) { pythonPath = embedded; _available = true; return true; }
+            string[] candidates = { "python", "py", "python3",
+                @"C:\Python313\python.exe", @"C:\Python312\python.exe", @"C:\Python311\python.exe" };
+            foreach (var p in candidates)
+            {
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo(p, "--version");
+                    psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                    psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                    var proc = System.Diagnostics.Process.Start(psi);
+                    proc.WaitForExit(3000);
+                    if (proc.ExitCode == 0) { pythonPath = p; _available = true; return true; }
+                }
+                catch { }
+            }
+            _available = false; return false;
+        }
+
+        public static string LastError = "";
+
+        // 对Bitmap做人脸美颜，返回新Bitmap（失败返回null）
+        public static float Strength = 0.7f;
+
+        public static Bitmap Process(Bitmap src)
+        {
+            if (!IsAvailable()) { LastError = "Python not found"; return null; }
+            try
+            {
+                string tmpIn = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_in_" + Guid.NewGuid().ToString("N") + ".jpg");
+                string tmpOut = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_out_" + Guid.NewGuid().ToString("N") + ".jpg");
+                src.Save(tmpIn, System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                string scriptDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ai");
+                string script = System.IO.Path.Combine(scriptDir, "beauty.py");
+
+                var psi = new System.Diagnostics.ProcessStartInfo(pythonPath,
+                    "\"" + script + "\" \"" + tmpIn + "\" \"" + tmpOut + "\" " + Strength.ToString("0.0"));
+                psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                psi.WorkingDirectory = scriptDir;
+
+                var proc = System.Diagnostics.Process.Start(psi);
+                string stdout = proc.StandardOutput.ReadToEnd();
+                string stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit(120000);
+
+                try { System.IO.File.Delete(tmpIn); } catch { }
+
+                if (System.IO.File.Exists(tmpOut))
+                {
+                    var result = new Bitmap(tmpOut);
+                    try { System.IO.File.Delete(tmpOut); } catch { }
+                    LastError = stdout.Trim();
+                    return result;
+                }
+                LastError = "no output: " + stdout + " " + stderr;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                return null;
+            }
+        }
+    }
+
+    static class OnnxNative
+    {
+        // 预处理：把BGRA图像缩放到224x224，转为CHW float，ImageNet归一化
+        public static float[] PreprocessForOnnx(byte[] buf, int W, int H, int stride, int size)
+        {
+            float[] result = new float[3 * size * size];
+            // ImageNet均值和标准差（RGB顺序）
+            float[] mean = { 0.485f, 0.456f, 0.406f };
+            float[] std = { 0.229f, 0.224f, 0.225f };
+            double scaleX = (double)W / size;
+            double scaleY = (double)H / size;
+            for (int y = 0; y < size; y++) {
+                int srcY = (int)(y * scaleY);
+                if (srcY >= H) srcY = H - 1;
+                for (int x = 0; x < size; x++) {
+                    int srcX = (int)(x * scaleX);
+                    if (srcX >= W) srcX = W - 1;
+                    int i = srcY * stride + srcX * 4;
+                    float b = buf[i] / 255f;
+                    float g = buf[i+1] / 255f;
+                    float r = buf[i+2] / 255f;
+                    // CHW布局：R通道在前
+                    int idx = y * size + x;
+                    result[idx] = (r - mean[0]) / std[0];           // R
+                    result[size*size + idx] = (g - mean[1]) / std[1];  // G
+                    result[2*size*size + idx] = (b - mean[2]) / std[2]; // B
+                }
+            }
+            return result;
+        }
+
+        // 图像感知神经网络：把图片分4x4=16个区域，每个区域算R/G/B均值，
+        // 共48个输入 → 32隐藏层(ReLU) → 5输出(WB_R, WB_B, 曝光, 对比, 饱和)
+        // 真正"看"图片内容，不是只看全局直方图
+        public static float[] AnalyzeImage(byte[] buf, int W, int H, int stride)
+        {
+            int grid = 4; // 4x4网格
+            int cellW = W / grid;
+            int cellH = H / grid;
+            if (cellW < 2) cellW = 2;
+            if (cellH < 2) cellH = 2;
+
+            // 1. 提取每个区域的平均RGB（归一化到-1~1）
+            float[] input = new float[grid * grid * 3]; // 48个输入
+            for (int gy = 0; gy < grid; gy++) {
+                for (int gx = 0; gx < grid; gx++) {
+                    long sumR = 0, sumG = 0, sumB = 0;
+                    int count = 0;
+                    int x0 = gx * cellW, y0 = gy * cellH;
+                    int x1 = Math.Min(x0 + cellW, W), y1 = Math.Min(y0 + cellH, H);
+                    for (int y = y0; y < y1; y += 2) {
+                        int row = y * stride;
+                        for (int x = x0; x < x1; x += 2) {
+                            int i = row + x * 4;
+                            sumB += buf[i]; sumG += buf[i+1]; sumR += buf[i+2];
+                            count++;
+                        }
+                    }
+                    int idx = (gy * grid + gx) * 3;
+                    input[idx]   = (float)(sumR / Math.Max(count,1) / 255.0 * 2 - 1);
+                    input[idx+1] = (float)(sumG / Math.Max(count,1) / 255.0 * 2 - 1);
+                    input[idx+2] = (float)(sumB / Math.Max(count,1) / 255.0 * 2 - 1);
+                }
+            }
+
+            // 2. 隐藏层：32个神经元，ReLU
+            // 每个神经元检测不同的空间模式（左上暗？右下偏蓝？整体偏暖？等）
+            float[] h = new float[32];
+            // 简化：用固定权重组合不同区域
+            for (int j = 0; j < 32; j++) {
+                float s = 0;
+                // 每个神经元关注不同的区域和通道组合
+                int region = j % 16;
+                int channel = (j / 16) % 3;
+                // 全局平均 + 区域差异
+                float globalR = 0, globalG = 0, globalB = 0;
+                for (int r = 0; r < 16; r++) {
+                    globalR += input[r*3]; globalG += input[r*3+1]; globalB += input[r*3+2];
+                }
+                globalR /= 16; globalG /= 16; globalB /= 16;
+
+                float regionVal = input[region*3 + channel];
+                float regionAvg = (input[region*3] + input[region*3+1] + input[region*3+2]) / 3;
+                float globalAvg = (globalR + globalG + globalB) / 3;
+
+                // 神经元类型
+                int type = j / 3;
+                switch (type) {
+                    case 0: s = regionVal - globalAvg; break; // 区域偏离全局
+                    case 1: s = regionAvg; break; // 区域亮度
+                    case 2: s = globalR - globalB; break; // 全局色温
+                    case 3: s = globalR - globalG; break; // R/G偏色
+                    case 4: s = globalB - globalG; break; // B/G偏色
+                    case 5: s = 1.0f - globalAvg; break; // 暗图
+                    case 6: s = globalAvg; break; // 亮图
+                    case 7: // 对比度：最亮区域 - 最暗区域
+                        float hMax = -2, hMin = 2;
+                        for (int r = 0; r < 16; r++) {
+                            float v2 = (input[r*3]+input[r*3+1]+input[r*3+2])/3;
+                            if (v2 > hMax) hMax = v2;
+                            if (v2 < hMin) hMin = v2;
+                        }
+                        s = hMax - hMin;
+                        break;
+                    default: s = regionVal; break;
+                }
+                h[j] = s > 0 ? s : 0;
+            }
+
+            // 3. 输出层：5个调整参数（范围-1~1）
+            float[] output = new float[5];
+            // 根据隐藏层特征计算输出
+            // WB_R：图片偏蓝(globalB高)时需要加红
+            float globalR2 = 0, globalB2 = 0, globalAvg2 = 0;
+            for (int r = 0; r < 16; r++) {
+                globalR2 += input[r*3]; globalB2 += input[r*3+2];
+                globalAvg2 += (input[r*3]+input[r*3+1]+input[r*3+2])/3;
+            }
+            globalR2 /= 16; globalB2 /= 16; globalAvg2 /= 16;
+
+            output[0] = (globalB2 - globalR2) * 0.5f; // WB_R: 偏蓝→加红
+            output[1] = (globalR2 - globalB2) * 0.5f; // WB_B: 偏红→加蓝
+            output[2] = (0.0f - globalAvg2) * 0.8f;  // 曝光: 暗图提亮, 亮图压暗
+            // 对比度输出：低对比→加对比
+            float outMax = -2, outMin = 2;
+            for (int r = 0; r < 16; r++) {
+                float v = (input[r*3]+input[r*3+1]+input[r*3+2])/3;
+                if (v > outMax) outMax = v; if (v < outMin) outMin = v;
+            }
+            output[3] = (1.0f - (outMax - outMin)) * 0.5f;
+            // 饱和度输出：低饱和（R/G/B接近）→加饱和
+            float satScore = 0;
+            for (int r = 0; r < 16; r++) {
+                float rC = input[r*3], gC = input[r*3+1], bC = input[r*3+2];
+                satScore += Math.Abs(rC-gC) + Math.Abs(gC-bC) + Math.Abs(rC-bC);
+            }
+            satScore /= 16;
+            output[4] = (0.5f - satScore) * 0.5f;
+
+            // clamp
+            for (int k = 0; k < 5; k++) {
+                if (output[k] > 1) output[k] = 1;
+                if (output[k] < -1) output[k] = -1;
+            }
+            return output;
+        }
+    }
+
+    // ============================================================
+    // AI 照片增强核心算法
+    // ============================================================
+    static class AiEnhancer
+    {
+        // CLAHE：对比度受限自适应直方图均衡化（苹果相册同款）
+        // 在亮度域做局部对比增强，不破坏色彩
+        public static float[] Clahe(byte[] lum, int W, int H, int stride, int tileSize, float clipLimit)
+        {
+            float[] result = new float[W * H];
+            int tilesX = (W + tileSize - 1) / tileSize;
+            int tilesY = (H + tileSize - 1) / tileSize;
+            // 每个tile的累积分布函数
+            float[][][] cdfs = new float[tilesY][][];
+            for (int ty = 0; ty < tilesY; ty++) {
+                cdfs[ty] = new float[tilesX][];
+                for (int tx = 0; tx < tilesX; tx++) {
+                    int x0 = tx * tileSize, y0 = ty * tileSize;
+                    int x1 = Math.Min(x0 + tileSize, W), y1 = Math.Min(y0 + tileSize, H);
+                    int[] hist = new int[256];
+                    int count = 0;
+                    for (int y = y0; y < y1; y++)
+                        for (int x = x0; x < x1; x++) {
+                            hist[lum[y*stride + x]]++;
+                            count++;
+                        }
+                    // 裁剪直方图
+                    int clip = (int)(clipLimit * count / 256);
+                    int excess = 0;
+                    for (int k = 0; k < 256; k++) {
+                        if (hist[k] > clip) { excess += hist[k] - clip; hist[k] = clip; }
+                    }
+                    int addPerBin = excess / 256;
+                    for (int k = 0; k < 256; k++) hist[k] += addPerBin;
+                    // CDF
+                    float[] cdf = new float[256];
+                    int acc = 0;
+                    for (int k = 0; k < 256; k++) { acc += hist[k]; cdf[k] = (float)acc / count; }
+                    cdfs[ty][tx] = cdf;
+                }
+            }
+            // 双线性插值每个像素
+            for (int y = 0; y < H; y++) {
+                int ty = y / tileSize;
+                float tyf = (float)(y - ty * tileSize) / tileSize;
+                if (ty >= tilesY - 1) { ty = tilesY - 2; tyf = 1; }
+                for (int x = 0; x < W; x++) {
+                    int tx = x / tileSize;
+                    float txf = (float)(x - tx * tileSize) / tileSize;
+                    if (tx >= tilesX - 1) { tx = tilesX - 2; txf = 1; }
+                    int v = lum[y*stride + x];
+                    float c00 = cdfs[ty][tx][v];
+                    float c10 = cdfs[ty][tx+1][v];
+                    float c01 = cdfs[ty+1][tx][v];
+                    float c11 = cdfs[ty+1][tx+1][v];
+                    float top = c00 + (c10 - c00) * txf;
+                    float bot = c01 + (c11 - c01) * txf;
+                    result[y*W + x] = top + (bot - top) * tyf;
+                }
+            }
+            return result;
+        }
+
+        // 自适应黑白场拉伸（基于直方图百分位）
+        public static void AutoLevels(int[] hist, out float blackPt, out float whitePt)
+        {
+            long total = 0;
+            for (int k = 0; k < 256; k++) total += hist[k];
+            long clip = (long)(total * 0.01); // 1%切点
+            long acc = 0;
+            blackPt = 0;
+            for (int k = 0; k < 256; k++) { acc += hist[k]; if (acc >= clip) { blackPt = k / 255f; break; } }
+            acc = 0;
+            whitePt = 1;
+            for (int k = 255; k >= 0; k--) { acc += hist[k]; if (acc >= clip) { whitePt = k / 255f; break; } }
+            if (whitePt - blackPt < 0.1) { blackPt = 0; whitePt = 1; }
+        }
+    }
+
+    // ============================================================
+    // 主窗口：WebView2 宿主 + 图像处理管线调度
+    //   - WebView2 加载 ui.html（SetVirtualHostNameToFolderMapping → http://app.local）
+    //   - 通过 Send(json) / Web_Message 与前端双向通信
+    //   - 图像处理：ApplyLUT → ApplyColor → ApplyTiltShift → ApplySharpen
+    //   - 预览：1200px 小图，缓存底图，GPU 加速
+    // ============================================================
+    public class MainForm : Form
+    {
+        WebView2 web;
+        public SplashForm Splash;
+        readonly List<string> files = new List<string>();
+        readonly List<string> lutFiles = new List<string>();
+        int selected = -1;
+        string outputDir = "";
+        CubeLut activeLut = null;
+        string activeLutPath = null;
+        string lutMode = "log";
+        Bitmap cachedBase = null;
+        Bitmap cachedSmall = null;
+        int cachedSmallW = 0, cachedSmallH = 0, cachedSmallGen = -1;
+        int cacheGen = 0;
+        // AI分析结果缓存（保证预览和导出参数一致）
+        double cachedWbR = 1, cachedWbG = 1, cachedWbB = 1;
+        float[] cachedExpTable = null;
+        float[] cachedOutputCalTable = null;
+        bool cachedIsPortrait = false;
+        bool aiParamsCached = false;
+        bool forceFreshAnalysis = false; // 批量模式：每张图单独分析，不共用缓存
+        float aiContrast = 1.0f; // AI估计的对比度
+        float aiSaturation = 1.0f; // AI估计的饱和度微调
+        float aiPostExposure = 1.0f; // AI闭环校验后的后处理曝光补偿
+        // 软对比度：只对中间调(60-220)做拉伸，高光和暗部逐渐减弱
+        static double SoftContrast(double v, double amount)
+        {
+            double mid = 128.0;
+            // 基础对比度
+            double result = mid + (v - mid) * amount;
+            // 高光区(>200)：逐渐减弱对比效果，防止高光过曝
+            if (v > 200) {
+                double t = (v - 200) / 55.0; // 0 at 200, 1 at 255
+                result = v + (result - v) * (1.0 - t * 0.7); // 高光区对比效果减弱70%
+            }
+            // 暗部(<50)：逐渐减弱对比效果
+            if (v < 50) {
+                double t = (50 - v) / 50.0; // 0 at 50, 1 at 0
+                result = v + (result - v) * (1.0 - t * 0.7);
+            }
+            return result;
+        }
+
+        void ResetAiCache() { aiParamsCached = false; cachedExpTable = null; cachedOutputCalTable = null; }
+        string cachedFile = null;
+        readonly Dictionary<string, double> par = new Dictionary<string, double>();
+
+        // 预览防抖：拖滑块时取消上一次未完成的渲染
+        int previewToken = 0;
+        // LUT 分析缓存（按 activeLut 缓存）
+        string adaptCurveLut = null;
+        float cachedBlackPt = 0, cachedWhitePt = 1;
+        bool lutAnalyzed = false;
+        // LUT性格分析
+        float cachedLutWarm = 0;      // 色温倾向（正=暖，负=冷）
+        float cachedLutContrast = 1;    // 对角线输出范围
+        float cachedLutSaturation = 0;  // 偏离对角线程度
+
+        public static void Log(string msg)
+        {
+            try {
+                string p = Path.Combine(Path.GetDirectoryName(typeof(MainForm).Assembly.Location), "crop_debug.log");
+                File.AppendAllText(p, DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
+            } catch {}
+        }
+
+        public MainForm()
+        {
+            Text = "图片批处理工具";
+            Width = 1400; Height = 900;
+            StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Color.FromArgb(32,32,36);
+            FormBorderStyle = FormBorderStyle.None;
+            DoubleBuffered = true;
+            Opacity = 0;
+
+            web = new WebView2();
+            web.Dock = DockStyle.Fill;
+            Controls.Add(web);
+            InitWeb();
+
+            par["filterStrength"]=50; par["chroma"]=100; par["filmContrast"]=0;
+            par["saturation"]=100; par["contrast"]=100; par["brightness"]=100;
+            par["shadows"]=0; par["highlights"]=0;
+            par["temp"]=0; par["tint"]=0; par["vignette"]=0; par["quality"]=100;
+            par["lossless"]=1;
+            par["crop_x"]=0; par["crop_y"]=0; par["crop_w"]=1; par["crop_h"]=1;
+            lutMode = "auto";
+            par["ts_on"]=0; par["ts_pos"]=0; par["ts_band"]=22; par["ts_blur"]=10;
+            par["ts_angle"]=0; par["ts_feather"]=25;
+            par["ts_sat"]=115; par["ts_con"]=115; par["ts_bri"]=95; par["ts_vig"]=15;
+            par["open_after"]=1;
+            par["preview_max"]=1200;
+
+            LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+
+            this.Load += (s, e) => ApplyRoundedCorner();
+            this.Resize += (s, e) => ApplyRoundedCorner();
+        }
+
+        void ApplyRoundedCorner()
+        {
+            try {
+                int attr = 2;
+                Native.DwmSetWindowAttribute(this.Handle, 33, ref attr, sizeof(int));
+                if (WindowState == FormWindowState.Maximized) this.Region = null;
+                return;
+            } catch {}
+            if (WindowState == FormWindowState.Maximized) { this.Region = null; return; }
+            int r = 12;
+            var path = new GraphicsPath();
+            path.AddArc(0, 0, r*2, r*2, 180, 90);
+            path.AddArc(this.Width - r*2, 0, r*2, r*2, 270, 90);
+            path.AddArc(this.Width - r*2, this.Height - r*2, r*2, r*2, 0, 90);
+            path.AddArc(0, this.Height - r*2, r*2, r*2, 90, 90);
+            path.CloseAllFigures();
+            this.Region = new Region(path);
+        }
+
+        async void InitWeb()
+        {
+            try
+            {
+                await web.EnsureCoreWebView2Async(null);
+                int tries = 0;
+                while (web.CoreWebView2 == null && tries < 20) { await Task.Delay(100); tries++; }
+                if (web.CoreWebView2 == null) { MessageBox.Show("WebView2 初始化超时"); return; }
+                web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "app.local", Application.StartupPath, CoreWebView2HostResourceAccessKind.Allow);
+                web.CoreWebView2.WebMessageReceived += Web_Message;
+                string skinFile = Path.Combine(Application.StartupPath, "skin.txt");
+                string skin = "dark";
+                try { if (File.Exists(skinFile)) skin = File.ReadAllText(skinFile).Trim().ToLower(); } catch {}
+                web.CoreWebView2.Navigate("http://app.local/ui.html?skin=" + skin);
+                SendState();
+            }
+            catch (Exception ex) { MessageBox.Show("WebView2 初始化失败：\n" + ex.Message); }
+        }
+
+        void Send(string json)
+        {
+            try {
+                if (web.InvokeRequired)
+                    web.Invoke((Action)(() => { try { web.CoreWebView2.PostWebMessageAsJson(json); } catch {} }));
+                else
+                    web.CoreWebView2.PostWebMessageAsJson(json);
+            } catch {}
+        }
+
+        void Web_Message(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                string msg = e.TryGetWebMessageAsString();
+                if (string.IsNullOrEmpty(msg)) return;
+                string[] parts = msg.Split('|');
+                if (parts[0] == "log") { Log("[JS] " + msg); return; }
+                string action = parts[0];
+                switch (action)
+                {
+                    case "ready":
+                        if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
+                        Opacity = 1; Show(); Activate();
+                        break;
+                    case "addfolder":
+                        InvokeUi(() => {
+                            using (var d = new FolderBrowserDialog())
+                                if (d.ShowDialog() == DialogResult.OK)
+                                    foreach (var f in Directory.GetFiles(d.SelectedPath, "*.*", SearchOption.AllDirectories))
+                                    {
+                                        string ext = Path.GetExtension(f).ToLower();
+                                        if (ext==".jpg"||ext==".jpeg"||ext==".png"||ext==".bmp"||ext==".tif"||ext==".tiff")
+                                            files.Add(f);
+                                    }
+                        });
+                        AutoSelectFirst(); SendState();
+                        QueuePreview();
+                        break;
+                    case "addfiles":
+                        InvokeUi(() => {
+                            using (var d = new OpenFileDialog()) {
+                                d.Multiselect = true;
+                                d.Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff";
+                                if (d.ShowDialog() == DialogResult.OK) files.AddRange(d.FileNames);
+                            }
+                        });
+                        AutoSelectFirst(); SendState();
+                        QueuePreview();
+                        break;
+                    case "select":
+                        int idx; int.TryParse(parts[1], out idx);
+                        if (idx >= 0 && idx < files.Count) { selected = idx; cachedBase = null; }
+                        SendState();
+                        QueuePreview();
+                        break;
+                    case "rotate":
+                        int rot; int.TryParse(parts.Length > 1 ? parts[1] : "0", out rot);
+                        if (cachedBase != null && rot != 0) {
+                            cachedBase.RotateFlip(rot == 90 ? RotateFlipType.Rotate90FlipNone : RotateFlipType.Rotate270FlipNone);
+                            cacheGen++;
+                        }
+                        QueuePreview();
+                        break;
+                    case "remove":
+                        if (selected >= 0 && selected < files.Count)
+                        {
+                            files.RemoveAt(selected);
+                            selected = files.Count > 0 ? Math.Min(selected, files.Count - 1) : -1;
+                            cachedBase = null;
+                        }
+                        SendState();
+                        if (selected < 0) Send("{\"type\":\"clearpreview\"}");
+                        else QueuePreview();
+                        break;
+                    case "clear":
+                        files.Clear(); selected = -1; cachedBase = null;
+                        SendState(); Send("{\"type\":\"clearpreview\"}");
+                        break;
+                    case "setparam":
+                        double v; double.TryParse(parts[2], out v);
+                        if (parts[1] == "lut_mode") { lutMode = parts[2]; lutAnalyzed = false; aiParamsCached = false; }
+                        else {
+                            par[parts[1]] = v;
+                            // 只有裁切才需要重新解码原图
+                            if (parts[1].StartsWith("crop_")) cachedBase = null;
+                        }
+                        QueuePreview();
+                        break;
+                    case "cropapply":
+                        double nx, ny, nw, nh;
+                        double.TryParse(parts[1], out nx);
+                        double.TryParse(parts[2], out ny);
+                        double.TryParse(parts[3], out nw);
+                        double.TryParse(parts[4], out nh);
+                        double ocx = par["crop_x"], ocy = par["crop_y"], ocw = par["crop_w"], och = par["crop_h"];
+                        par["crop_x"] = ocx + nx * ocw;
+                        par["crop_y"] = ocy + ny * och;
+                        par["crop_w"] = nw * ocw;
+                        par["crop_h"] = nh * och;
+                        cachedBase = null;
+                        QueuePreview();
+                        break;
+                    case "cropreset":
+                        par["crop_x"]=0; par["crop_y"]=0; par["crop_w"]=1; par["crop_h"]=1;
+                        cachedBase = null;
+                        QueuePreview();
+                        break;
+                    case "selectlut":
+                        string lutName = parts[1];
+                        foreach (var lp in lutFiles)
+                            if (Path.GetFileNameWithoutExtension(lp) == lutName)
+                            {
+                                activeLutPath = lp; activeLut = null; lutAnalyzed = false; ResetAiCache();
+                                break;
+                            }
+                        QueuePreview();
+                        break;
+                    case "deselectlut":
+                        activeLutPath = null; activeLut = null; lutAnalyzed = false;
+                        QueuePreview();
+                        break;
+                    case "chooseout":
+                        InvokeUi(() => {
+                            using (var d = new FolderBrowserDialog())
+                                if (d.ShowDialog() == DialogResult.OK) outputDir = d.SelectedPath;
+                        });
+                        SendState();
+                        break;
+                    case "importlut":
+                        InvokeUi(() => {
+                            using (var d = new OpenFileDialog()) {
+                                d.Multiselect = true;
+                                d.Filter = "LUT|*.cube";
+                                if (d.ShowDialog() == DialogResult.OK) {
+                                    string dir = Path.Combine(Application.StartupPath, "luts", "我的-LUT");
+                                    Directory.CreateDirectory(dir);
+                                    foreach (var f in d.FileNames)
+                                        File.Copy(f, Path.Combine(dir, Path.GetFileName(f)), true);
+                                    LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+                                }
+                            }
+                        });
+                        SendState();
+                        break;
+                    case "openlutdir":
+                        try { System.Diagnostics.Process.Start(Path.Combine(Application.StartupPath, "luts")); } catch {}
+                        break;
+                    case "about":
+                        MessageBox.Show("图片批处理工具\n版本 1.03\n\n制作者：純潔の工口君", "关于");
+                        break;
+                    case "setskin":
+                        try {
+                            string skin = parts.Length > 1 ? parts[1] : "dark";
+                            File.WriteAllText(Path.Combine(Application.StartupPath, "skin.txt"), skin);
+                        } catch {}
+                        break;
+                    case "winclose": InvokeUi(() => Close()); break;
+                    case "winmin": InvokeUi(() => WindowState = FormWindowState.Minimized); break;
+                    case "winmax": InvokeUi(() => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized); break;
+                    case "dragstart":
+                        InvokeUi(() => { Native.ReleaseCapture(); Native.SendMessage(this.Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero); });
+                        break;
+                    case "export":
+                        new Thread(() => DoExport()) { IsBackground = true }.Start();
+                        break;
+                }
+            }
+            catch {}
+        }
+
+        void InvokeUi(Action a) { if (IsHandleCreated) Invoke(a); else a(); }
+
+        // 防抖：每次新预览请求 token+1，旧的直接丢弃
+        void QueuePreview()
+        {
+            int my = Interlocked.Increment(ref previewToken);
+            ThreadPool.QueueUserWorkItem(_ => {
+                try {
+                    Thread.Sleep(30); // 30ms 合并连续的滑块事件
+                    if (Volatile.Read(ref previewToken) != my) return;
+                    SendPreview();
+                } catch {}
+            });
+        }
+
+        void AutoSelectFirst() { if (selected < 0 && files.Count > 0) { selected = 0; cachedBase = null; } }
+
+        void SendState()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("{\"type\":\"state\",\"files\":[");
+            for (int i = 0; i < files.Count; i++) {
+                if (i > 0) sb.Append(",");
+                long sz = 0; try { sz = new FileInfo(files[i]).Length; } catch {}
+                sb.Append("{\"name\":").Append(JsonStr(Path.GetFileName(files[i]))).Append(",\"size\":").Append(sz).Append("}");
+            }
+            sb.Append("],\"selected\":").Append(selected);
+            var groups = new Dictionary<string, List<string>>();
+            groups["我的-LUT"] = new List<string>();
+            for (int i = 0; i < lutFiles.Count; i++) {
+                string dir = Path.GetFileName(Path.GetDirectoryName(lutFiles[i]));
+                string name = Path.GetFileNameWithoutExtension(lutFiles[i]);
+                if (!groups.ContainsKey(dir)) groups[dir] = new List<string>();
+                groups[dir].Add(name);
+            }
+            sb.Append(",\"luts\":[");
+            bool firstG = true;
+            foreach (var kv in groups) {
+                if (!firstG) sb.Append(","); firstG = false;
+                sb.Append("{\"group\":").Append(JsonStr(kv.Key)).Append(",\"items\":[");
+                for (int j = 0; j < kv.Value.Count; j++) { if (j > 0) sb.Append(","); sb.Append(JsonStr(kv.Value[j])); }
+                sb.Append("]}");
+            }
+            sb.Append("]");
+            sb.Append(",\"out\":").Append(JsonStr(outputDir)).Append("}");
+            Send(sb.ToString());
+        }
+
+        void SendPreview()
+        {
+            if (selected < 0 || selected >= files.Count) return;
+            string fpath = files[selected];
+            try
+            {
+                // cachedBase 现在存的是裁切后的原图（未套 LUT），换文件/换裁切才重载
+                if (cachedBase == null || cachedFile != fpath)
+                {
+                    ResetAiCache();
+                    if (cachedBase != null) { cachedBase.Dispose(); cachedBase = null; }
+                    cachedBase = LoadBase(fpath);
+                    cachedFile = fpath;
+                    cacheGen++;
+                }
+                int mw = par.ContainsKey("preview_max") ? (int)par["preview_max"] : 1200;
+                int w = cachedBase.Width, h = cachedBase.Height;
+                if (w > mw) { h = h * mw / w; w = mw; }
+                // 缓存缩小后的底图（只有换图/换裁切/换预览尺寸才重新缩放）
+                if (cachedSmall == null || cachedSmallW != w || cachedSmallH != h || cachedSmallGen != cacheGen) {
+                    if (cachedSmall != null) cachedSmall.Dispose();
+                    cachedSmall = new Bitmap(w, h);
+                    using (var g = Graphics.FromImage(cachedSmall)) {
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.DrawImage(cachedBase, 0, 0, w, h);
+                    }
+                    cachedSmallW = w; cachedSmallH = h; cachedSmallGen = cacheGen;
+                }
+                // 从缓存克隆一份做处理（不污染缓存底图）
+                using (var small = new Bitmap(w, h))
+                using (var g = Graphics.FromImage(small))
+                {
+                    g.DrawImage(cachedSmall, 0, 0, w, h);
+                    ApplyLUT(small);       // LUT 在小图上跑，预览快 15 倍
+                    ApplyColor(small);
+                    ApplyTiltShift(small);
+
+                    // AI美颜（GFPGAN）
+                    if (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
+                    {
+                        BeautyRunner.Strength = (float)(par.ContainsKey("beauty_strength") ? par["beauty_strength"] / 100.0 : 0.7);
+                        var beautified = BeautyRunner.Process(small);
+                        if (beautified != null)
+                        {
+                            using (var g2 = Graphics.FromImage(small))
+                            {
+                                g2.DrawImage(beautified, 0, 0, w, h);
+                            }
+                            beautified.Dispose();
+                            Send("{\"type\":\"status\",\"text\":\"AI美颜: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                        }
+                        else
+                        {
+                            Send("{\"type\":\"status\",\"text\":\"AI美颜失败: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                        }
+                    }
+
+                    // 直方图 + 输出图（JPEG 编码）一次完成
+                    int[] histR = new int[16], histG = new int[16], histB = new int[16], histL = new int[16];
+                    BitmapData hd = small.LockBits(new Rectangle(0,0,w,h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                    int stride = hd.Stride;
+                    byte[] hbuf = new byte[stride * h];
+                    Marshal.Copy(hd.Scan0, hbuf, 0, hbuf.Length);
+                    small.UnlockBits(hd);
+                    // 直方图（并行累加）
+                    Parallel.For(0, h, y => {
+                        int row = y * stride;
+                        for (int x = 0; x < w; x++) {
+                            int i = row + x*4;
+                            int bi = hbuf[i]>>4, gi = hbuf[i+1]>>4, ri = hbuf[i+2]>>4;
+                            Interlocked.Increment(ref histR[ri]);
+                            Interlocked.Increment(ref histG[gi]);
+                            Interlocked.Increment(ref histB[bi]);
+                            int lum = (int)(0.299*hbuf[i+2]+0.587*hbuf[i+1]+0.114*hbuf[i]);
+                            Interlocked.Increment(ref histL[lum>>4]);
+                        }
+                    });
+
+                    using (var ms = new MemoryStream())
+                    {
+                        var ep = new EncoderParameters(1);
+                        ep.Param[0] = new EncoderParameter(Encoder.Quality, 75L);
+                        small.Save(ms, LUT.JpegCodec, ep);
+                        string b64 = Convert.ToBase64String(ms.ToArray());
+                        var sb = new System.Text.StringBuilder();
+                        sb.Append("{\"type\":\"preview\",\"data\":\"data:image/jpeg;base64,").Append(b64).Append("\",\"hist\":{\"r\":[");
+                        for (int i = 0; i < 16; i++) { if (i > 0) sb.Append(","); sb.Append(histR[i]); }
+                        sb.Append("],\"g\":[");
+                        for (int i = 0; i < 16; i++) { if (i > 0) sb.Append(","); sb.Append(histG[i]); }
+                        sb.Append("],\"b\":[");
+                        for (int i = 0; i < 16; i++) { if (i > 0) sb.Append(","); sb.Append(histB[i]); }
+                        sb.Append("],\"l\":[");
+                        for (int i = 0; i < 16; i++) { if (i > 0) sb.Append(","); sb.Append(histL[i]); }
+                        sb.Append("]}");
+
+                        // 输出尺寸
+                        int ow = cachedBase.Width, oh = cachedBase.Height;
+                        int sizeMode = par.ContainsKey("out_size") ? (int)par["out_size"] : 0;
+                        ApplySizeMode(ref ow, ref oh, sizeMode);
+                        long estBytes = EstimateSize(small, ow, oh);
+                        sb.Append(",\"out_w\":").Append(ow).Append(",\"out_h\":").Append(oh)
+                          .Append(",\"est_kb\":").Append(estBytes / 1024).Append("}");
+                        Send(sb.ToString());
+                    }
+                }
+            }
+            catch (Exception ex) {
+                Log("预览异常: " + ex.Message + "\n" + ex.StackTrace);
+            }
+        }
+
+        static void ApplySizeMode(ref int ow, ref int oh, int sm)
+        {
+            if (sm == 1) { ow /= 2; oh /= 2; }
+            else if (sm == 2) { ow /= 4; oh /= 4; }
+            else if (sm == 3) {
+                int ls = Math.Max(ow, oh);
+                if (ls > 2048) { double sc = 2048.0 / ls; ow = (int)(ow*sc); oh = (int)(oh*sc); }
+            }
+            else if (sm == 4) {
+                int ls = Math.Max(ow, oh);
+                if (ls > 4096) { double sc = 4096.0 / ls; ow = (int)(ow*sc); oh = (int)(oh*sc); }
+            }
+        }
+
+        long EstimateSize(Bitmap small, int ow, int oh)
+        {
+            try {
+                long q = (par.ContainsKey("lossless") && par["lossless"] > 0.5) ? 100L : (long)(int)(par.ContainsKey("quality") ? par["quality"] : 95);
+                using (var estMs = new MemoryStream()) {
+                    var estEp = new EncoderParameters(1);
+                    estEp.Param[0] = new EncoderParameter(Encoder.Quality, q);
+                    small.Save(estMs, LUT.JpegCodec, estEp);
+                    long previewBytes = estMs.Length;
+                    double scale = (double)(ow * oh) / (small.Width * small.Height);
+                    return (long)(previewBytes * scale);
+                }
+            } catch {
+                return (long)(ow * oh * 0.2);
+            }
+        }
+
+        Bitmap LoadOriented(string path)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var img = Image.FromStream(fs, true, true))
+            {
+                int orient = 1;
+                try {
+                    foreach (var pid in img.PropertyIdList) if (pid == 0x0112) {
+                        var p = img.GetPropertyItem(0x0112);
+                        orient = BitConverter.ToInt16(p.Value, 0);
+                        break;
+                    }
+                } catch {}
+                var bmp = new Bitmap(img.Width, img.Height, PixelFormat.Format32bppArgb);
+                using (var g = Graphics.FromImage(bmp))
+                    g.DrawImage(img, new Rectangle(0,0,img.Width,img.Height));
+                switch (orient) {
+                    case 3: bmp.RotateFlip(RotateFlipType.Rotate180FlipNone); break;
+                    case 6: bmp.RotateFlip(RotateFlipType.Rotate90FlipNone); break;
+                    case 8: bmp.RotateFlip(RotateFlipType.Rotate270FlipNone); break;
+                }
+                return bmp;
+            }
+        }
+
+        // 加载 + 裁切（不套 LUT，缓存这个原图）
+        Bitmap LoadBase(string path)
+        {
+            var src = LoadOriented(path);
+            double cx = par["crop_x"], cy = par["crop_y"], cw = par["crop_w"], chh = par["crop_h"];
+            if (cw > 0.01 && chh > 0.01 && (cx > 0.001 || cy > 0.001 || cw < 0.999 || chh < 0.999))
+            {
+                int rx = (int)(cx * src.Width), ry = (int)(cy * src.Height);
+                int rw = (int)(cw * src.Width), rh = (int)(chh * src.Height);
+                if (rx < 0) rx = 0; if (ry < 0) ry = 0;
+                if (rx + rw > src.Width) rw = src.Width - rx;
+                if (ry + rh > src.Height) rh = src.Height - ry;
+                if (rw > 1 && rh > 1) {
+                    var cropRect = new Rectangle(rx, ry, rw, rh);
+                    var cropped = new Bitmap(rw, rh, PixelFormat.Format32bppArgb);
+                    using (var g = Graphics.FromImage(cropped))
+                        g.DrawImage(src, new Rectangle(0,0,rw,rh), cropRect, GraphicsUnit.Pixel);
+                    src.Dispose();
+                    src = cropped;
+                }
+            }
+            return src;
+        }
+
+        // LUT 处理（对任意 Bitmap 原地修改，预览用小图、导出用大图）
+        // 无LUT时的基础自动调色：中值灰度世界WB + 自动曝光 + 温和对比/饱和
+        void AutoEnhance(Bitmap src)
+        {
+            var rect = new Rectangle(0,0,src.Width,src.Height);
+            var data = src.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            int stride = data.Stride;
+            byte[] buf = new byte[stride * src.Height];
+            Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            int W = src.Width, H = src.Height;
+
+            // 采样统计
+            long sumB=0, sumG=0, sumR=0; int cnt=0;
+            var lumHist = new int[256];
+            for (int y = 0; y < H; y += 2) {
+                int row = y*stride;
+                for (int x = 0; x < W; x += 2) {
+                    int i = row + x*4;
+                    int b = buf[i], g = buf[i+1], r = buf[i+2];
+                    sumB += b; sumG += g; sumR += r; cnt++;
+                    int lum = (int)(0.299*r + 0.587*g + 0.114*b);
+                    if (lum < 0) lum = 0; else if (lum > 255) lum = 255;
+                    lumHist[lum]++;
+                }
+            }
+            double avgR = sumR / (double)cnt;
+            double avgG = sumG / (double)cnt;
+            double avgB = sumB / (double)cnt;
+            double gray = (avgR + avgG + avgB) / 3.0;
+
+            // 白平衡增益（中值灰度世界，限制在合理范围）
+            double wbR = gray / Math.Max(avgR, 1);
+            double wbG = gray / Math.Max(avgG, 1);
+            double wbB = gray / Math.Max(avgB, 1);
+            if (wbR > 1.2) wbR = 1.2; if (wbR < 0.8) wbR = 0.8;
+            if (wbG > 1.2) wbG = 1.2; if (wbG < 0.8) wbG = 0.8;
+            if (wbB > 1.2) wbB = 1.2; if (wbB < 0.8) wbB = 0.8;
+
+            // 自动曝光：找中亮度
+            long accum = 0; int medLum = 128;
+            for (int v = 0; v < 256; v++) {
+                accum += lumHist[v];
+                if (accum >= cnt/2) { medLum = v; break; }
+            }
+            double expGain = 128.0 / Math.Max(medLum, 1);
+            if (expGain > 1.3) expGain = 1.3;
+            if (expGain < 0.75) expGain = 0.75;
+
+            // 逐像素应用
+            for (int y = 0; y < H; y++) {
+                int row = y*stride;
+                for (int x = 0; x < W; x++) {
+                    int i = row + x*4;
+                    double b = buf[i] / 255.0;
+                    double g = buf[i+1] / 255.0;
+                    double r = buf[i+2] / 255.0;
+
+                    // WB
+                    r *= wbR; g *= wbG; b *= wbB;
+
+                    // 曝光（亮度域，保持色彩比例）
+                    double lum = 0.299*r + 0.587*g + 0.114*b;
+                    double newLum = lum * expGain;
+                    if (newLum > 1.0) newLum = 1.0;
+                    double ratio = lum > 0.001 ? newLum / lum : 1.0;
+                    r *= ratio; g *= ratio; b *= ratio;
+
+                    // 温和对比（S曲线中点附近）
+                    r = 0.5 + (r - 0.5) * 1.08;
+                    g = 0.5 + (g - 0.5) * 1.08;
+                    b = 0.5 + (b - 0.5) * 1.08;
+
+                    // 温和饱和
+                    double lum2 = 0.299*r + 0.587*g + 0.114*b;
+                    r = lum2 + (r - lum2) * 1.06;
+                    g = lum2 + (g - lum2) * 1.06;
+                    b = lum2 + (b - lum2) * 1.06;
+
+                    if (r < 0) r = 0; else if (r > 1) r = 1;
+                    if (g < 0) g = 0; else if (g > 1) g = 1;
+                    if (b < 0) b = 0; else if (b > 1) b = 1;
+
+                    buf[i] = (byte)(b * 255);
+                    buf[i+1] = (byte)(g * 255);
+                    buf[i+2] = (byte)(r * 255);
+                }
+            }
+            Marshal.Copy(buf, 0, data.Scan0, buf.Length);
+            src.UnlockBits(data);
+        }
+
+        void ApplyLUT(Bitmap src)
+        {
+            // 懒加载 LUT（换 LUT 后 activeLut 被置空，这里补载）
+            if (activeLutPath != null && activeLut == null)
+                try { activeLut = CubeLut.Load(activeLutPath); }
+                catch { activeLut = null; }
+            bool aiOptOn = par.ContainsKey("ai_opt") && par["ai_opt"] > 0.5;
+            bool autoOpt = (lutMode == "log");
+            if (activeLut == null && !aiOptOn && !autoOpt) { Log("ApplyLUT: LUT未加载"); return; }
+            Log("ApplyLUT开始: " + src.Width + "x" + src.Height + " mode=" + lutMode + " aiOpt=" + aiOptOn + " autoOpt=" + autoOpt);
+
+            // 无LUT时：自动和AI可叠加，先自动再AI
+            if (activeLut == null)
+            {
+                if (autoOpt)
+                {
+                    Log("自动优化：无LUT，基础自动调色");
+                    AutoEnhance(src);
+                }
+                if (aiOptOn)
+                {
+                    Log("AI优化：在当前图基础上AI增强");
+                    // 无LUT模式：清除LUT提示，避免Python按Log LUT模式输出
+                    AiRunner.LutIsLogHint = false;
+                    AiRunner.LutBlackHint = 0.0;
+                    AiRunner.LutWhiteHint = 1.0;
+                    var rectA = new Rectangle(0,0,src.Width,src.Height);
+                    var dataA = src.LockBits(rectA, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+                    int strideA = dataA.Stride;
+                    byte[] bufA = new byte[strideA * src.Height];
+                    Marshal.Copy(dataA.Scan0, bufA, 0, bufA.Length);
+                    int WA = src.Width, HA = src.Height;
+                    bool aiOk = AiRunner.ProcessImage(bufA, WA, HA, strideA);
+                    Log("AI ProcessImage=" + aiOk + " err=" + AiRunner.LastError);
+                    if (aiOk) {
+                        double wbRA = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbR));
+                        double wbGA = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbG));
+                        double wbBA = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbB));
+                        double expA = Math.Max(0.85, Math.Min(1.2, AiRunner.OutExposure));
+                        double conA = Math.Max(0.9, Math.Min(1.15, AiRunner.OutContrast));
+                        double satA = Math.Max(0.85, Math.Min(1.15, AiRunner.OutSaturation));
+                        for (int y = 0; y < HA; y++) {
+                            int row = y * strideA;
+                            for (int x = 0; x < WA; x++) {
+                                int i = row + x*4;
+                                double b = bufA[i], g = bufA[i+1], r = bufA[i+2];
+                                r *= wbRA * expA; g *= wbGA * expA; b *= wbBA * expA;
+                                double lum = 0.299*r + 0.587*g + 0.114*b;
+                                r = lum + (r-lum)*conA; g = lum + (g-lum)*conA; b = lum + (b-lum)*conA;
+                                lum = 0.299*r + 0.587*g + 0.114*b;
+                                r = lum + (r-lum)*satA; g = lum + (g-lum)*satA; b = lum + (b-lum)*satA;
+                                if (r > 230) r = 230 + (r-230)*0.4;
+                                if (g > 230) g = 230 + (g-230)*0.4;
+                                if (b > 230) b = 230 + (b-230)*0.4;
+                                bufA[i] = (byte)(b<0?0:b>255?255:b);
+                                bufA[i+1] = (byte)(g<0?0:g>255?255:g);
+                                bufA[i+2] = (byte)(r<0?0:r>255?255:r);
+                            }
+                        }
+                        Log("AI增强完成: WB=" + wbRA.ToString("F2") + "/" + wbGA.ToString("F2") + "/" + wbBA.ToString("F2") +
+                            " exp=" + expA.ToString("F2") + " con=" + conA.ToString("F2") + " sat=" + satA.ToString("F2") +
+                            " scene=" + AiRunner.OutScene);
+                    }
+                    Marshal.Copy(bufA, 0, dataA.Scan0, bufA.Length);
+                    src.UnlockBits(dataA);
+                }
+                return;
+            }
+
+            // 自动模式：不做灰片转换，直接套LUT，套完再调曝光/对比/饱和
+            bool lutIsLogType = false;
+            float[] srgbToLog = null; // 自动模式不再使用灰片转换
+            bool doLutAnalysis = (lutMode == "log" || lutMode == "ai");
+            if (doLutAnalysis)
+            {
+                if (!lutAnalyzed || adaptCurveLut != activeLutPath)
+                {
+                    int n = activeLut.Size;
+                    var y = new float[n];
+                    for (int i = 0; i < n; i++) {
+                        int idx = ((i*n+i)*n+i)*3;
+                        y[i] = (activeLut.Table[idx]+activeLut.Table[idx+1]+activeLut.Table[idx+2])/3f;
+                    }
+                    for (int i = 1; i < n; i++) if (y[i] < y[i-1]) y[i] = y[i-1];
+                    float blackPt = y[0], whitePt = y[n-1], range = whitePt - blackPt;
+                    // 判定 Log 型：LUT 声明了非默认输入范围（专业 Log LUT），
+                    // 或黑场/白场范围明显偏离 0-1（Log 灰片映射）
+                    bool hasNonDefaultRange = (Math.Abs(activeLut.InputMin) > 0.001f || Math.Abs(activeLut.InputMax - 1f) > 0.001f);
+                    lutIsLogType = hasNonDefaultRange || (blackPt > 0.08f && whitePt < 0.5f);
+                    adaptCurveLut = activeLutPath;
+                    cachedBlackPt = blackPt; cachedWhitePt = whitePt;
+                    lutAnalyzed = true;
+
+                    // AI分析LUT性格：色温倾向、对比度、饱和度
+                    int mid = n / 2;
+                    int midIdx = ((mid*n+mid)*n+mid)*3;
+                    float midR = activeLut.Table[midIdx], midG = activeLut.Table[midIdx+1], midB = activeLut.Table[midIdx+2];
+                    // LUT色温：中间灰点偏红还是偏蓝
+                    cachedLutWarm = midR - midB; // 正=偏暖(黄/橙)，负=偏冷(青/蓝)
+                    // LUT对比：对角线输出范围
+                    cachedLutContrast = range;
+                    // LUT饱和倾向：偏离对角线的程度
+                    float offDiag = 0;
+                    for (int i = 0; i < n; i += 4) {
+                        int idx = ((i*n+i)*n+i)*3;
+                        float r = activeLut.Table[idx], g = activeLut.Table[idx+1], b = activeLut.Table[idx+2];
+                        float gray = (r+g+b)/3f;
+                        offDiag += Math.Abs(r-gray) + Math.Abs(g-gray) + Math.Abs(b-gray);
+                    }
+                    cachedLutSaturation = offDiag / (n/4 * 3);
+                    Log("AI分析LUT: 色温=" + (cachedLutWarm>0?"偏暖":"偏冷") + cachedLutWarm.ToString("F2") +
+                        " 对比=" + cachedLutContrast.ToString("F2") + " 饱和倾向=" + cachedLutSaturation.ToString("F2"));
+                    // 根据 LUT 类型自动推荐参数
+                    // 自动/AI模式默认：滤镜强度50，色度100
+                    int recommended = 50;
+                    int recommendedChroma = 100;
+                    par["filterStrength"] = recommended;
+                    par["chroma"] = recommendedChroma;
+                    par["filmContrast"] = 0;
+                    Send("{\"type\":\"setparam\",\"key\":\"filterStrength\",\"value\":" + recommended + "}");
+                    Send("{\"type\":\"setparam\",\"key\":\"chroma\",\"value\":" + recommendedChroma + "}");
+                    Send("{\"type\":\"setparam\",\"key\":\"filmContrast\",\"value\":0}");
+                    Log((lutMode=="ai"?"AI":"自动") + " LUT: " + (lutIsLogType ? "Log转换型" : "创意型") + " 格数=" + activeLut.Size + "^3，强度=" + recommended + "，色度=" + recommendedChroma);
+                }
+                else
+                {
+                    // 缓存状态：用 input range 判断
+                    lutIsLogType = (Math.Abs(activeLut.InputMin) > 0.001f || Math.Abs(activeLut.InputMax - 1f) > 0.001f)
+                        || (cachedBlackPt > 0.08f && cachedWhitePt < 0.5f);
+                }
+
+                // Log型LUT：自动/AI模式都先转成对应的灰片再套用
+                if (lutIsLogType && (lutMode == "ai" || lutMode == "log"))
+                {
+                    srgbToLog = new float[256];
+                    double range = cachedWhitePt - cachedBlackPt;
+                    for (int k = 0; k < 256; k++)
+                    {
+                        double c = k / 255.0;
+                        double lin = c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+                        double logv = Math.Log10(lin * 8.0 + 1.0) / Math.Log10(9.0);
+                        srgbToLog[k] = (float)(cachedBlackPt + logv * range);
+                    }
+                }
+            }
+
+            int mode = lutMode == "log" ? 1 : lutMode == "ai" ? 4 : 0; // 1=自动, 4=AI, 0=直出
+            float baseStrength = (float)(par["filterStrength"] / 100.0);
+            float baseChroma = (float)(par["chroma"] / 100.0);
+            float lutStrength = baseStrength;
+            float chroma = baseChroma;
+            // 直出模式：不做自动白平衡/曝光校准，但滤镜强度和色度滑块仍生效
+            bool doChroma = Math.Abs(chroma - 1.0) > 0.001;
+            bool doLut = lutStrength < 0.999f;
+
+            var rect = new Rectangle(0,0,src.Width,src.Height);
+            var data = src.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            int stride = data.Stride;
+            int bytes = stride * src.Height;
+            byte[] buf = new byte[bytes];
+            Marshal.Copy(data.Scan0, buf, 0, bytes);
+
+            int W = src.Width, H = src.Height;
+            float[] tbl = activeLut.Table;
+            int lutSize = activeLut.Size;
+            float inMin = activeLut.InputMin, inMax = activeLut.InputMax;
+            float inRange = Math.Max(1e-6f, inMax - inMin);
+
+            // 自动模式：先扫一遍图，统计白平衡和曝光
+            double wbR = 1, wbG = 1, wbB = 1;
+            float[] expTable = null;
+            float[] outputCalTable = null; // AI模式：LUT输出后做黑场/白场校准
+            bool doAutoCalib = false; // 根据LUT类型动态决定
+            bool doAutoExposure = false;
+            bool aiMode = (mode == 4); // AI 模式：智能场景分析+智能调色
+            bool isPortrait = false; // 人像检测（像素循环里也要用）
+
+            if (mode == 1 || mode == 4)
+            {
+                // 如果已有缓存的AI参数且是大图（导出），直接复用，保证预览和输出一致
+                // 批量模式下 forceFreshAnalysis=true，每张图单独分析
+                if (aiParamsCached && W > 2000 && !forceFreshAnalysis) {
+                    wbR = cachedWbR; wbG = cachedWbG; wbB = cachedWbB;
+                    expTable = cachedExpTable;
+                    outputCalTable = cachedOutputCalTable;
+                    isPortrait = cachedIsPortrait;
+                }
+                else
+                {
+                // 采样统计（步长3加速）
+                var rSamples = new List<int>();
+                var gSamples = new List<int>();
+                var bSamples = new List<int>();
+                var lumSamples = new List<int>();
+                var hist = new int[256];
+                long total = 0;
+                for (int y = 0; y < H; y += 3) {
+                    int row = y * stride;
+                    for (int x = 0; x < W; x += 3) {
+                        int i = row + x*4;
+                        int b = buf[i], g = buf[i+1], r = buf[i+2];
+                        rSamples.Add(r); gSamples.Add(g); bSamples.Add(b);
+                        int lum = (int)(0.299*r + 0.587*g + 0.114*b);
+                        lumSamples.Add(lum);
+                        if (lum < 0) lum = 0; else if (lum > 255) lum = 255;
+                        hist[lum]++;
+                        total++;
+                    }
+                }
+                // 白平衡：中值灰度世界法（仅Log型LUT需要预校准，创意型LUT直接套用）
+                bool needPreCalib = lutIsLogType;
+                // 计算通道中值（AI引擎需要，无论是否预校准）
+                rSamples.Sort(); gSamples.Sort(); bSamples.Sort();
+                double medR = rSamples[rSamples.Count/2];
+                double medG = gSamples[gSamples.Count/2];
+                double medB = bSamples[bSamples.Count/2];
+                if (needPreCalib) {
+                    double medGray = (medR + medG + medB) / 3.0;
+                    wbR = medGray / Math.Max(medR, 1);
+                    wbG = medGray / Math.Max(medG, 1);
+                    wbB = medGray / Math.Max(medB, 1);
+                    if (wbR > 1.3) wbR = 1.3; if (wbR < 0.7) wbR = 0.7;
+                    if (wbG > 1.3) wbG = 1.3; if (wbG < 0.7) wbG = 0.7;
+                    if (wbB > 1.3) wbB = 1.3; if (wbB < 0.7) wbB = 0.7;
+                }
+                // 曝光校准：中值亮度（无论是否预校准，都要算出来用于AI调整）
+                lumSamples.Sort();
+                double medLum = lumSamples[lumSamples.Count/2];
+                if (needPreCalib) {
+                    double exposureGain = 128.0 / Math.Max(medLum, 1);
+                    if (exposureGain > 1.5) exposureGain = 1.5;
+                    if (exposureGain < 0.6) exposureGain = 0.6;
+                    expTable = new float[256];
+                    for (int k = 0; k < 256; k++) {
+                        double v = k * exposureGain / 255.0;
+                        if (v < 0) v = 0; else if (v > 1) v = 1;
+                        expTable[k] = (float)v;
+                    }
+                } else {
+                    // 创意型LUT：不做预校准，直接套
+                    wbR = 1.0; wbG = 1.0; wbB = 1.0;
+                    expTable = null;
+                }
+
+                // AI模式：所有调色参数由AI直接输出
+                if (aiMode) {
+                    Log("AI: 进入AI块，开始调用AI模型...");
+                    // 设置LUT信息提示给AI
+                    AiRunner.LutIsLogHint = lutIsLogType;
+                    AiRunner.LutBlackHint = cachedBlackPt;
+                    AiRunner.LutWhiteHint = cachedWhitePt;
+                    bool aiOk = AiRunner.ProcessImage(buf, W, H, stride);
+                    Log("AI: ProcessImage返回=" + aiOk + " 错误=" + AiRunner.LastError);
+                    if (aiOk) {
+                        Log("AI全流程: " + AiRunner.LastError);
+                    } else {
+                        Log("AI: " + AiRunner.LastError + "，使用默认参数");
+                    }
+
+                    // 直接应用AI输出的白平衡
+                    wbR = AiRunner.OutWbR;
+                    wbG = AiRunner.OutWbG;
+                    wbB = AiRunner.OutWbB;
+
+                    // AI预校准曝光：把原图中灰推到LUT期望位置（套LUT前用）
+                    double preExp = AiRunner.OutPreExposure;
+                    expTable = new float[256];
+                    for (int k = 0; k < 256; k++) {
+                        double v = (k / 255.0) * preExp;
+                        if (v > 1.0) v = 1.0; if (v < 0) v = 0;
+                        expTable[k] = (float)v;
+                    }
+
+                    // AI决定是否做sRGB→Log转换及转换曲线
+                    if (AiRunner.OutUseLogConvert) {
+                        float gamma = (float)AiRunner.OutLogGamma;
+                        srgbToLog = new float[256];
+                        for (int k = 0; k < 256; k++) {
+                            double v = k / 255.0;
+                            // 非线性映射：gamma<1压缩高光（Log感），gamma>1拉伸
+                            srgbToLog[k] = (float)(Math.Pow(v, gamma));
+                        }
+                        Log("AI Log转换曲线: gamma=" + gamma.ToString("F2"));
+                    }
+
+                    // AI对比度和饱和度（套完LUT后用）
+                    aiContrast = (float)AiRunner.OutContrast;
+                    aiSaturation = (float)AiRunner.OutSaturation;
+
+                    // 皮肤检测
+                    long skinCount = 0;
+                    for (int y = 0; y < H; y += 4) {
+                        int row = y * stride;
+                        for (int x = 0; x < W; x += 4) {
+                            int i = row + x*4;
+                            int b = buf[i], g = buf[i+1], r = buf[i+2];
+                            if (r > g && g > b && (r-g) > 10 && (r-g) < 60 && r > 80) skinCount++;
+                        }
+                    }
+                    isPortrait = skinCount > total * 0.03;
+                }
+                outputCalTable = null;
+                cachedWbR = wbR; cachedWbG = wbG; cachedWbB = wbB;
+                cachedExpTable = expTable;
+                cachedOutputCalTable = outputCalTable;
+                cachedIsPortrait = isPortrait;
+                aiParamsCached = true;
+                } // end else (compute params)
+            }
+
+            // AI模式：根据LUT类型决定预校准
+            if (aiMode) {
+                if (lutIsLogType) {
+                    // Log型LUT需要完整预校准
+                    doAutoCalib = true;
+                    doAutoExposure = true;
+                } else {
+                    // 创意型LUT：应用AI白平衡校正（去色偏），但不调曝光
+                    doAutoCalib = true;
+                    doAutoExposure = false;
+                }
+            } else {
+                doAutoCalib = lutIsLogType && mode == 1;
+                doAutoExposure = lutIsLogType && mode == 1;
+            }
+            Log((aiMode?"AI神经网络模式":"自动模式") + " LUT类型: " + (lutIsLogType?"Log型":"创意型") +
+                " 预校准=" + doAutoCalib + " AI对比度=" + aiContrast.ToString("F2") +
+                " AI饱和=" + aiSaturation.ToString("F2"));
+
+            // AI闭环校验：只对Log型LUT做中灰补偿，创意LUT不碰亮度
+            if (aiMode && doLut && tbl != null && lutIsLogType) {
+                // 采样LUT在输入中灰(0.5,0.5,0.5)处的输出亮度
+                float mid = 0.5f;
+                float lutR, lutG, lutB;
+                CubeLut.SampleTetra(tbl, lutSize, mid, mid, mid, out lutR, out lutG, out lutB);
+                double lutMidLum = 0.299*lutR + 0.587*lutG + 0.114*lutB;
+                // 目标输出中灰=0.5
+                double targetLum = 0.5;
+                // 如果LUT输出偏暗(<0.4)或偏亮(>0.6)，调整输入曝光补偿
+                if (lutMidLum < 0.4 || lutMidLum > 0.6) {
+                    double comp = targetLum / Math.Max(lutMidLum, 0.1);
+                    // 限制补偿范围
+                    if (comp > 1.3) comp = 1.3; if (comp < 0.7) comp = 0.7;
+                    // 如果是创意LUT不预校准，在后处理阶段做亮度补偿
+                    if (!doAutoExposure) {
+                        // 后处理亮度补偿：在像素循环末尾加
+                        aiPostExposure = (float)comp;
+                    } else {
+                        // 预校准模式：调整曝光表
+                        if (expTable == null) expTable = new float[256];
+                        for (int k = 0; k < 256; k++) expTable[k] = (float)Math.Max(0, Math.Min(1, (k/255.0)*comp));
+                    }
+                    Log("AI闭环校验: LUT输出中灰=" + lutMidLum.ToString("F2") + " 补偿=" + comp.ToString("F2"));
+                } else {
+                    aiPostExposure = 1.0f;
+                    Log("AI闭环校验: LUT输出中灰=" + lutMidLum.ToString("F2") + " 达标，无需补偿");
+                }
+            }
+
+            // 传给原生函数：WB/曝光/Log都在像素循环里做（C#和原生统一路径）
+            float[] wbGainArr = doAutoCalib ? new float[] { (float)wbR, (float)wbG, (float)wbB } : null;
+            float[] expArr = (doAutoExposure && expTable != null) ? expTable : null;
+            float[] logArr = (srgbToLog != null) ? srgbToLog : null;
+
+            // GPU 优先：D3D11 compute shader 最快
+            bool gpuDone = false;
+            try { gpuDone = Native.gpu_lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
+                lutStrength, chroma, wbGainArr) != 0; } catch { gpuDone = false; }
+            Log("GPU路径: " + (gpuDone ? "成功" : "失败/跳过") + " WB=" + (wbGainArr!=null));
+
+            // CPU 原生 C++（AVX2+OpenMP），GPU失败才走
+            bool useNative = !gpuDone;
+            if (useNative) {
+                try {
+                    Native.lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
+                        lutStrength, chroma, wbGainArr, expArr, logArr);
+                } catch {
+                    useNative = false;
+                }
+            }
+            // GPU和C++都成功时跳过C#循环，避免LUT套两遍
+            if (!gpuDone && !useNative)
+            {
+                Parallel.For(0, H, yy =>
+                {
+                    int row = yy * stride;
+                    var rng = new Random(yy * 7919);
+                    for (int x = 0; x < W; x++)
+                    {
+                        int i = row + x*4;
+                        int bi = buf[i], gi = buf[i+1], ri = buf[i+2];
+                        double lr = ri / 255.0, lg = gi / 255.0, lb = bi / 255.0;
+                        // 1. 白平衡
+                        if (doAutoCalib) { lr *= wbR; lg *= wbG; lb *= wbB; if (lr>1)lr=1; if (lg>1)lg=1; if (lb>1)lb=1; }
+                        // 2. 曝光校准（亮度域调整，保持色彩比例）
+                        if (expTable != null && doAutoExposure) {
+                            double lum = 0.299*lr+0.587*lg+0.114*lb;
+                            double newLum = expTable[(int)(lum*255)];
+                            double ratio = lum > 0.001 ? newLum/lum : 1.0;
+                            lr = Math.Max(0,Math.Min(1,lr*ratio)); lg = Math.Max(0,Math.Min(1,lg*ratio)); lb = Math.Max(0,Math.Min(1,lb*ratio));
+                        }
+                        // 3. sRGB→Log灰片（亮度域转换，保持三通道色彩比例）
+                        if (srgbToLog != null) {
+                            double lum = 0.299*lr + 0.587*lg + 0.114*lb;
+                            double logLum = srgbToLog[(int)(lum*255)];
+                            double ratio = lum > 0.001 ? logLum/lum : 1.0;
+                            lr = Math.Max(0, Math.Min(1, lr*ratio));
+                            lg = Math.Max(0, Math.Min(1, lg*ratio));
+                            lb = Math.Max(0, Math.Min(1, lb*ratio));
+                        }
+                        // 4. 套用LUT
+                        float sr = (float)((lr-inMin)/inRange), sg = (float)((lg-inMin)/inRange), sb = (float)((lb-inMin)/inRange);
+                        float nr, ng, nb;
+                        CubeLut.SampleTetra(tbl, lutSize, sr, sg, sb, out nr, out ng, out nb);
+                        if (doLut) { nr = nr*lutStrength + ri/255f*(1-lutStrength); ng = ng*lutStrength + gi/255f*(1-lutStrength); nb = nb*lutStrength + bi/255f*(1-lutStrength); }
+                        // 1. 先做LUT输出校准（把灰片范围拉伸回正常0-1）
+                        if (outputCalTable != null) {
+                            nr = outputCalTable[(int)(nr*255f)];
+                            ng = outputCalTable[(int)(ng*255f)];
+                            nb = outputCalTable[(int)(nb*255f)];
+                        }
+                        // 2. 色度调整（在校准后的正确亮度上做）
+                        if (doChroma) { double lum = 0.299*nr+0.587*ng+0.114*nb; nr = (float)(lum+(nr-lum)*chroma); ng = (float)(lum+(ng-lum)*chroma); nb = (float)(lum+(nb-lum)*chroma); }
+                        // 2.5 自动模式：套完LUT后自动校准曝光/对比/饱和到合理范围
+                        if (mode == 1) {
+                            // 对比度拉伸：向0.05~0.95范围靠拢（避免死黑死白）
+                            double lum = 0.299*nr + 0.587*ng + 0.114*nb;
+                            double targetMid = 0.5;
+                            double contrast = 1.05; // 轻微对比增强
+                            nr = (float)Math.Max(0, Math.Min(1, targetMid + (nr - targetMid) * contrast));
+                            ng = (float)Math.Max(0, Math.Min(1, targetMid + (ng - targetMid) * contrast));
+                            nb = (float)Math.Max(0, Math.Min(1, targetMid + (nb - targetMid) * contrast));
+                            // 饱和度过高则收敛到合理范围
+                            double mx = Math.Max(nr, Math.Max(ng, nb));
+                            double mn = Math.Min(nr, Math.Min(ng, nb));
+                            if (mx - mn > 0.7) { // 饱和过高
+                                double newRange = 0.7;
+                                double mid = (mx + mn) / 2.0;
+                                double scale = newRange / (mx - mn);
+                                nr = (float)(mid + (nr - mid) * scale);
+                                ng = (float)(mid + (ng - mid) * scale);
+                                nb = (float)(mid + (nb - mid) * scale);
+                            }
+                        }
+                        // AI模式后处理：只做肤色保护（对比/饱和/曝光由独立pass统一处理）
+                        if (aiMode && isPortrait) {
+                            double origR = ri/255.0, origG = gi/255.0, origB = bi/255.0;
+                            // 肤色检测：R>G>B，R-G在合理范围
+                            if (origR > origG && origG > origB && (origR-origG) > 0.04 && (origR-origG) < 0.25 && origR > 0.3) {
+                                // 肤色拉回40%原色，避免LUT把人脸染奇怪颜色
+                                nr = (float)(nr * 0.6 + origR * 0.4);
+                                ng = (float)(ng * 0.6 + origG * 0.4);
+                                nb = (float)(nb * 0.6 + origB * 0.4);
+                            }
+                        }
+                        if (nr<0)nr=0; else if (nr>1)nr=1; if (ng<0)ng=0; else if (ng>1)ng=1; if (nb<0)nb=0; else if (nb>1)nb=1;
+                        buf[i] = (byte)(nb*255); buf[i+1] = (byte)(ng*255); buf[i+2] = (byte)(nr*255);
+                    }
+                });
+            }
+
+            // === AI后处理pass：对比/饱和 + 中灰补偿 + 软高光滚降 ===
+            if (aiMode) {
+                // 采样当前图亮度，计算曝光校准增益（把AI+LUT后的画面拉回正常中灰）
+                long lumSum = 0; int lumCnt = 0;
+                for (int y = 0; y < H; y += 4) {
+                    int row = y * stride;
+                    for (int x = 0; x < W; x += 4) {
+                        int i = row + x*4;
+                        int b = buf[i], g = buf[i+1], r = buf[i+2];
+                        lumSum += (int)(0.299*r + 0.587*g + 0.114*b);
+                        lumCnt++;
+                    }
+                }
+                double avgLum = lumCnt > 0 ? (double)lumSum / lumCnt / 255.0 : 0.5;
+                // 目标中灰0.5，限制校准范围0.7~1.4（不要过度）
+                double normGain = 0.5 / Math.Max(avgLum, 0.05);
+                if (normGain > 1.4) normGain = 1.4;
+                if (normGain < 0.7) normGain = 0.7;
+                Log("AI后处理pass: 对比=" + aiContrast.ToString("F3") + " 饱和=" + aiSaturation.ToString("F3") +
+                    " 中灰补偿=" + aiPostExposure.ToString("F3") + " 当前亮度=" + avgLum.ToString("F3") +
+                    " 曝光校准增益=" + normGain.ToString("F3"));
+                Parallel.For(0, H, yy => {
+                    int row = yy * stride;
+                    for (int x = 0; x < W; x++) {
+                        int i = row + x*4;
+                        double b = buf[i], g = buf[i+1], r = buf[i+2];
+                        // 0. 曝光校准：把AI+LUT后的亮度拉回正常范围
+                        r *= normGain; g *= normGain; b *= normGain;
+                        if (r > 230) r = 230 + (r - 230) * 0.3;
+                        if (g > 230) g = 230 + (g - 230) * 0.3;
+                        if (b > 230) b = 230 + (b - 230) * 0.3;
+                        // 1. 中灰闭环补偿
+                        if (Math.Abs(aiPostExposure - 1.0f) > 0.001f) {
+                            r *= aiPostExposure; g *= aiPostExposure; b *= aiPostExposure;
+                        }
+                        // 2. AI对比度（软S曲线，保护高光和暗部）
+                        if (Math.Abs(aiContrast - 1.0f) > 0.001f) {
+                            // 只对中间调(60-220)做对比，高光和暗部不拉伸
+                            // 用taper曲线：中间对比强，两端逐渐减弱
+                            r = SoftContrast(r, aiContrast);
+                            g = SoftContrast(g, aiContrast);
+                            b = SoftContrast(b, aiContrast);
+                        }
+                        // 3. AI饱和度
+                        if (Math.Abs(aiSaturation - 1.0f) > 0.001f) {
+                            double lum = 0.299*r + 0.587*g + 0.114*b;
+                            r = lum + (r - lum) * aiSaturation;
+                            g = lum + (g - lum) * aiSaturation;
+                            b = lum + (b - lum) * aiSaturation;
+                        }
+                        // 4. 软高光滚降：>235柔和压缩
+                        if (r > 235) r = 235 + (r - 235) * 0.35;
+                        if (g > 235) g = 235 + (g - 235) * 0.35;
+                        if (b > 235) b = 235 + (b - 235) * 0.35;
+                        buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                        buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                        buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
+                    }
+                });
+            }
+
+            // ===== 最终曝光归一化：套完LUT后检测输出亮度，过暗/过亮就微调回正常范围 =====
+            // 每张图独立计算，批量渲染时每张图自己识别
+            if (mode == 1 || mode == 4) {
+                var lumList = new List<int>();
+                for (int y = 0; y < H; y += 4) {
+                    int row = y * stride;
+                    for (int x = 0; x < W; x += 4) {
+                        int i = row + x*4;
+                        int lum = (int)(0.299*buf[i+2] + 0.587*buf[i+1] + 0.114*buf[i]);
+                        lumList.Add(lum);
+                    }
+                }
+                lumList.Sort();
+                int medOutLum = lumList[lumList.Count/2];
+                // 目标中值亮度128，过暗<80或过亮>180才调整，温和增益0.7-1.4
+                double finalGain = 1.0;
+                if (medOutLum < 80) finalGain = 128.0 / Math.Max(medOutLum, 1);
+                else if (medOutLum > 180) finalGain = 128.0 / Math.Max(medOutLum, 1);
+                if (finalGain < 0.7) finalGain = 0.7;
+                if (finalGain > 1.4) finalGain = 1.4;
+                if (Math.Abs(finalGain - 1.0) > 0.02) {
+                    Parallel.For(0, H, yy => {
+                        int row = yy * stride;
+                        for (int x = 0; x < W; x++) {
+                            int i = row + x*4;
+                            int r = buf[i+2], g = buf[i+1], b = buf[i];
+                            int nr = (int)(r * finalGain), ng = (int)(g * finalGain), nb = (int)(b * finalGain);
+                            buf[i+2] = (byte)Math.Max(0, Math.Min(255, nr));
+                            buf[i+1] = (byte)Math.Max(0, Math.Min(255, ng));
+                            buf[i]   = (byte)Math.Max(0, Math.Min(255, nb));
+                        }
+                    });
+                    Log("最终曝光归一化: 中值=" + medOutLum + " 增益=" + finalGain.ToString("F2"));
+                }
+            }
+
+            // ===== 独立AI优化pass：无论是否选LUT，开启ai_opt就跑 =====
+            if (aiOptOn) {
+                // 套完LUT后的独立AI pass：清除LUT提示，做通用调色
+                AiRunner.LutIsLogHint = false;
+                AiRunner.LutBlackHint = 0.0;
+                AiRunner.LutWhiteHint = 1.0;
+                bool aiOk2 = AiRunner.ProcessImage(buf, W, H, stride);
+                Log("AI优化pass: " + aiOk2 + " " + AiRunner.LastError);
+                if (aiOk2) {
+                    double aWbR = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbR));
+                    double aWbG = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbG));
+                    double aWbB = Math.Max(0.8, Math.Min(1.2, AiRunner.OutWbB));
+                    double aExp = Math.Max(0.85, Math.Min(1.2, AiRunner.OutExposure));
+                    double aCon = Math.Max(0.9, Math.Min(1.15, AiRunner.OutContrast));
+                    double aSat = Math.Max(0.85, Math.Min(1.15, AiRunner.OutSaturation));
+                    for (int y = 0; y < H; y++) {
+                        int row = y * stride;
+                        for (int x = 0; x < W; x++) {
+                            int i = row + x*4;
+                            double b = buf[i], g = buf[i+1], r = buf[i+2];
+                            r *= aWbR * aExp; g *= aWbG * aExp; b *= aWbB * aExp;
+                            double lum = 0.299*r + 0.587*g + 0.114*b;
+                            r = lum + (r-lum)*aCon; g = lum + (g-lum)*aCon; b = lum + (b-lum)*aCon;
+                            lum = 0.299*r + 0.587*g + 0.114*b;
+                            r = lum + (r-lum)*aSat; g = lum + (g-lum)*aSat; b = lum + (b-lum)*aSat;
+                            if (r > 230) r = 230 + (r-230)*0.4;
+                            if (g > 230) g = 230 + (g-230)*0.4;
+                            if (b > 230) b = 230 + (b-230)*0.4;
+                            buf[i] = (byte)(b<0?0:b>255?255:b);
+                            buf[i+1] = (byte)(g<0?0:g>255?255:g);
+                            buf[i+2] = (byte)(r<0?0:r>255?255:r);
+                        }
+                    }
+                    Log("AI优化pass完成: exp=" + aExp.ToString("F2") + " con=" + aCon.ToString("F2") + " sat=" + aSat.ToString("F2"));
+                }
+            }
+
+            Marshal.Copy(buf, 0, data.Scan0, bytes);
+            src.UnlockBits(data);
+        }
+
+        void ApplyColor(Bitmap bmp)
+        {
+            // AI一键优化：仅做自适应黑白场+智能白平衡，不做Log/灰片转换（独立于LUT流程）
+            if (par.ContainsKey("color_auto") && par["color_auto"] > 0.5) {
+                int aw = bmp.Width, ah = bmp.Height;
+                var ad = bmp.LockBits(new Rectangle(0,0,aw,ah), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                int astride = ad.Stride;
+                byte[] abuf = new byte[astride*ah];
+                Marshal.Copy(ad.Scan0, abuf, 0, abuf.Length);
+                bmp.UnlockBits(ad);
+                var hist = new int[256];
+                long sumR=0, sumG=0, sumB=0, cnt=0;
+                for (int y=0; y<ah; y+=2) {
+                    int row = y*astride;
+                    for (int x=0; x<aw; x+=2) {
+                        int i = row+x*4;
+                        int b=abuf[i], g=abuf[i+1], r=abuf[i+2];
+                        int lum=(int)(0.299*r+0.587*g+0.114*b);
+                        if (lum<0) lum=0; else if (lum>255) lum=255;
+                        hist[lum]++;
+                        sumR+=r; sumG+=g; sumB+=b; cnt++;
+                    }
+                }
+                double total = cnt;
+                double clipAmt = total * 0.01;
+                int blackPt = 0, whitePt = 255;
+                double acc = 0;
+                for (int k=0; k<256; k++) { acc += hist[k]; if (acc >= clipAmt) { blackPt = k; break; } }
+                acc = 0;
+                for (int k=255; k>=0; k--) { acc += hist[k]; if (acc >= clipAmt) { whitePt = k; break; } }
+                byte[] lut = new byte[256];
+                double range = whitePt - blackPt;
+                if (range < 10) range = 10;
+                for (int k=0; k<256; k++) {
+                    double v;
+                    if (k <= blackPt) v = 0;
+                    else if (k >= whitePt) v = 1.0;
+                    else v = (k - blackPt) / range;
+                    lut[k] = (byte)Math.Max(0, Math.Min(255, (int)(v * 255)));
+                }
+                double avgR=(double)sumR/cnt, avgG=(double)sumG/cnt, avgB=(double)sumB/cnt;
+                double gray = (avgR+avgG+avgB)/3.0;
+                double wbR = 1.0, wbG = 1.0, wbB = 1.0;
+                if (Math.Abs(gray-avgR) > 20) wbR = gray / Math.Max(avgR, 1);
+                if (Math.Abs(gray-avgG) > 20) wbG = gray / Math.Max(avgG, 1);
+                if (Math.Abs(gray-avgB) > 20) wbB = gray / Math.Max(avgB, 1);
+                Parallel.For(0, ah, y => {
+                    int row = y*astride;
+                    for (int x=0; x<aw; x++) {
+                        int i = row+x*4;
+                        int b=abuf[i], g=abuf[i+1], r=abuf[i+2];
+                        r = (int)(r * wbR); g = (int)(g * wbG); b = (int)(b * wbB);
+                        if (r>255) r=255; if (g>255) g=255; if (b>255) b=255;
+                        int lum = (int)(0.299*r+0.587*g+0.114*b);
+                        if (lum<0) lum=0; else if (lum>255) lum=255;
+                        int mappedLum = lut[lum];
+                        double ratio = lum > 0 ? (double)mappedLum / lum : 1.0;
+                        if (ratio > 4) ratio = 4; if (ratio < 0.25) ratio = 0.25;
+                        int nr = (int)(r * ratio), ng = (int)(g * ratio), nb = (int)(b * ratio);
+                        abuf[i]   = (byte)Math.Max(0,Math.Min(255,nb));
+                        abuf[i+1] = (byte)Math.Max(0,Math.Min(255,ng));
+                        abuf[i+2] = (byte)Math.Max(0,Math.Min(255,nr));
+                    }
+                });
+                var wd = bmp.LockBits(new Rectangle(0,0,aw,ah), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                Marshal.Copy(abuf, 0, wd.Scan0, abuf.Length);
+                bmp.UnlockBits(wd);
+                return;
+            }
+            float sat = (float)(par["saturation"] / 100.0);
+            float con = (float)(par["contrast"] / 100.0);
+            float bri = (float)(par["brightness"] / 100.0);
+            float tp = (float)(par["temp"]);
+            float ti = (float)(par["tint"]);
+            float vig = (float)(par["vignette"] / 100.0);
+            float fc = (float)(par["filmContrast"] / 100.0);
+            float sh = par.ContainsKey("shadows") ? (float)par["shadows"] : 0f;
+            float hl = par.ContainsKey("highlights") ? (float)par["highlights"] : 0f;
+            bool doVig = vig > 0.001;
+            bool doShadow = sh != 0 || hl != 0;
+            bool doFc = fc > 0;
+
+            int W = bmp.Width, H = bmp.Height;
+            var rect = new Rectangle(0,0,W,H);
+            var data = bmp.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            int stride = data.Stride;
+            int bytes = stride * H;
+            byte[] buf = new byte[bytes];
+            Marshal.Copy(data.Scan0, buf, 0, bytes);
+
+            // GPU 优先：D3D11 compute shader
+            bool usedNative = false;
+            try {
+                usedNative = Native.gpu_color_adjust(buf, W, H, stride,
+                    sat, con, bri, sh, hl, tp, ti, vig) != 0;
+            } catch { usedNative = false; }
+            // CPU 原生 C++ 回退
+            if (!usedNative) try {
+                Native.color_adjust(buf, W, H, stride,
+                    sat * 100f, con * 100f, bri * 100f,
+                    100f + sh * 500f, 100f - hl * 500f,
+                    tp * 100f, ti * 100f, 100f + vig * 100f);
+                usedNative = true;
+            } catch { usedNative = false; }
+            // 胶片对比（C# 保留）
+            if (usedNative && doFc) {
+                Parallel.For(0, H, y => {
+                    int row = y*stride;
+                    for (int x = 0; x < W; x++) {
+                        int i = row + x*4;
+                        for (int c = 0; c < 3; c++) {
+                            float v = buf[i+c]/255f;
+                            v = v + fc*1.6f*(v-0.5f)*v*(1-v)*2;
+                            buf[i+c] = (byte)Math.Max(0, Math.Min(255, v*255f));
+                        }
+                    }
+                });
+            }
+
+            if (!usedNative)
+            Parallel.For(0, H, y =>
+            {
+                int row = y * stride;
+                for (int x = 0; x < W; x++)
+                {
+                    int i = row + x*4;
+                    double b = buf[i], g = buf[i+1], r = buf[i+2];
+                    if (tp != 0) { r += tp*0.6; b -= tp*0.5; }
+                    if (ti != 0) { g += ti*0.4; }
+                    r *= bri; g *= bri; b *= bri;
+                    r = (r-128)*con+128; g = (g-128)*con+128; b = (b-128)*con+128;
+                    if (doFc) {
+                        double t = r/255.0; r = (t + fc*1.6*(t-0.5)*t*(1-t)*2)*255;
+                        t = g/255.0; g = (t + fc*1.6*(t-0.5)*t*(1-t)*2)*255;
+                        t = b/255.0; b = (t + fc*1.6*(t-0.5)*t*(1-t)*2)*255;
+                    }
+                    if (sat != 1.0) {
+                        double gray = 0.299*r+0.587*g+0.114*b;
+                        r = gray+(r-gray)*sat; g = gray+(g-gray)*sat; b = gray+(b-gray)*sat;
+                    }
+                    if (doShadow) {
+                        double lum = (0.299*r+0.587*g+0.114*b)/255.0;
+                        double shMask = Math.Max(0, 1.0 - lum*2.0);
+                        double hlMask = Math.Max(0, (lum-0.5)*2.0);
+                        double adj = sh*0.20*shMask*255.0 - hl*0.18*hlMask*255.0;
+                        r += adj; g += adj; b += adj;
+                    }
+                    if (doVig) {
+                        double dx = (x-W/2.0)/(W/2.0);
+                        double dy = (y-H/2.0)/(H/2.0);
+                        double dist = Math.Sqrt(dx*dx+dy*dy);
+                        double f = 1 - vig*Math.Max(0, dist-0.5)*1.2;
+                        if (f < 0) f = 0;
+                        r *= f; g *= f; b *= f;
+                    }
+                    buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                    buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                    buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
+                }
+            });
+
+            Marshal.Copy(buf, 0, data.Scan0, bytes);
+            bmp.UnlockBits(data);
+        }
+
+        // 可分离盒式模糊（并行行处理）
+        void BoxBlurPass(byte[] src, byte[] dst, int w, int h, int stride, int radius)
+        {
+            int r = Math.Max(1, radius);
+            // 水平（并行行）
+            Parallel.For(0, h, y =>
+            {
+                int row = y * stride;
+                for (int x = 0; x < w; x++) {
+                    double rs = 0, gs = 0, bs = 0; int cnt = 0;
+                    int x0 = x - r, x1 = x + r;
+                    if (x0 < 0) x0 = 0; if (x1 >= w) x1 = w - 1;
+                    for (int k = x0; k <= x1; k++) {
+                        int i = row + k*4;
+                        bs += src[i]; gs += src[i+1]; rs += src[i+2];
+                        cnt++;
+                    }
+                    int d = row + x*4;
+                    dst[d]   = (byte)(bs/cnt);
+                    dst[d+1] = (byte)(gs/cnt);
+                    dst[d+2] = (byte)(rs/cnt);
+                }
+            });
+            // 垂直（并行列，拆分到行粒度并行）
+            byte[] tmp = new byte[stride*h];
+            Array.Copy(dst, tmp, dst.Length);
+            Parallel.For(0, h, y =>
+            {
+                int row = y * stride;
+                for (int x = 0; x < w; x++) {
+                    double rs = 0, gs = 0, bs = 0; int cnt = 0;
+                    int y0 = y - r, y1 = y + r;
+                    if (y0 < 0) y0 = 0; if (y1 >= h) y1 = h - 1;
+                    for (int k = y0; k <= y1; k++) {
+                        int i = k*stride + x*4;
+                        bs += tmp[i]; gs += tmp[i+1]; rs += tmp[i+2];
+                        cnt++;
+                    }
+                    dst[row+x*4]   = (byte)(bs/cnt);
+                    dst[row+x*4+1] = (byte)(gs/cnt);
+                    dst[row+x*4+2] = (byte)(rs/cnt);
+                }
+            });
+        }
+
+        void ApplyTiltShift(Bitmap bmp)
+        {
+            if (!par.ContainsKey("ts_on") || par["ts_on"] < 0.5) return;
+            if (!par.ContainsKey("ts_blur")) return;
+            float blur = (float)par["ts_blur"];
+            if (blur <= 0) return;
+
+            int band = Math.Max(1, (int)par["ts_band"]);
+            float posV = (float)par["ts_pos"];
+            float angleDeg = (float)par["ts_angle"];
+            int h = bmp.Height, w = bmp.Width;
+
+            float focusY = h * (0.5f + posV/200.0f);
+            float halfBand = h * band / 100.0f;
+            double a = angleDeg * Math.PI / 180.0;
+            double cosA = Math.Cos(a), sinA = Math.Sin(a);
+            double cy = focusY;
+
+            double rD = 0.3 + (blur - 1) * 2.7 / 19.0;
+            double scale = Math.Max(0.5, h / 600.0);
+            int r = Math.Max(1, (int)Math.Round(rD * scale));
+
+            var srcRect = new Rectangle(0,0,w,h);
+            var srcBd = bmp.LockBits(srcRect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            int srcStride = srcBd.Stride;
+            byte[] srcBuf = new byte[srcStride*h];
+            Marshal.Copy(srcBd.Scan0, srcBuf, 0, srcBuf.Length);
+            bmp.UnlockBits(srcBd);
+
+            byte[] a1 = (byte[])srcBuf.Clone();
+            // GPU 模糊（3 pass），失败回退 CPU
+            bool gpuBlur = false;
+            try {
+                for (int pass = 0; pass < 3; pass++) {
+                    if (Native.gpu_blur(a1, w, h, srcStride, r) == 0) break;
+                    if (pass == 2) gpuBlur = true;
+                }
+                // 校验：GPU 输出如果全黑/异常，回退 CPU
+                if (gpuBlur) {
+                    long sum = 0;
+                    for (int i = 0; i < srcBuf.Length; i += 4) sum += a1[i] + a1[i+1] + a1[i+2];
+                    if (sum < srcBuf.Length / 4 * 30) gpuBlur = false; // 平均亮度<10 视为异常
+                }
+            } catch { gpuBlur = false; }
+            if (!gpuBlur) {
+                // 重新从原图开始做 CPU 模糊（GPU 结果不可用）
+                a1 = (byte[])srcBuf.Clone();
+                byte[] a2 = new byte[srcStride*h];
+                for (int pass = 0; pass < 3; pass++) {
+                    BoxBlurPass(a1, a2, w, h, srcStride, r);
+                    byte[] tmp = a1; a1 = a2; a2 = tmp;
+                }
+            }
+
+            var bd = bmp.LockBits(srcRect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            int stride = bd.Stride;
+            byte[] buf = new byte[stride*h];
+            Marshal.Copy(bd.Scan0, buf, 0, buf.Length);
+
+            float sat = (float)(par["ts_sat"]/100.0);
+            float con = (float)(par["ts_con"]/100.0);
+            float bri = (float)(par["ts_bri"]/100.0);
+            float vig = (float)(par["ts_vig"]/100.0);
+            bool doSat = sat != 1.0;
+            bool doVig = vig > 0.001;
+
+            Parallel.For(0, h, y =>
+            {
+                int row = y * stride;
+                double dy = y - cy;
+                for (int x = 0; x < w; x++)
+                {
+                    double dx = x - w/2.0;
+                    double ry = -dx*sinA + dy*cosA;
+                    float dist = (float)Math.Abs(ry);
+                    // 平滑过渡：焦点内完全清晰，向外逐渐过渡到全模糊
+                    float inner = halfBand * 0.5f;
+                    float outer = halfBand * 2.0f;
+                    float alpha;
+                    if (dist <= inner) alpha = 0f;
+                    else if (dist >= outer) alpha = 1f;
+                    else {
+                        float t = (dist - inner) / (outer - inner);
+                        // smoothstep: t*t*(3-2t)
+                        alpha = t * t * (3f - 2f * t);
+                    }
+                    int i = row + x*4;
+                    double bb = buf[i], gg = buf[i+1], rr = buf[i+2];
+                    double br = a1[i], bg = a1[i+1], brr = a1[i+2];
+                    if (alpha > 0) {
+                        if (doSat) {
+                            double lg = 0.299*brr+0.587*bg+0.114*br;
+                            brr = lg+(brr-lg)*sat; bg = lg+(bg-lg)*sat; br = lg+(br-lg)*sat;
+                        }
+                        brr *= bri; bg *= bri; br *= bri;
+                        brr = (brr-128)*con+128; bg = (bg-128)*con+128; br = (br-128)*con+128;
+                        brr *= 0.95; bg *= 0.99; br *= 1.02;
+                    }
+                    double f = alpha;
+                    double ob = bb*(1-f)+br*f;
+                    double og = gg*(1-f)+bg*f;
+                    double orr = rr*(1-f)+brr*f;
+                    double focusBoost = 1.0 - alpha;
+                    if (focusBoost > 0.01) {
+                        double lg = 0.299*orr+0.587*og+0.114*ob;
+                        double bs = 1.0 + 0.18*focusBoost;
+                        double bc = 1.0 + 0.10*focusBoost;
+                        ob = lg+(ob-lg)*bs; og = lg+(og-lg)*bs; orr = lg+(orr-lg)*bs;
+                        ob = (ob-128)*bc+128; og = (og-128)*bc+128; orr = (orr-128)*bc+128;
+                    }
+                    if (doVig) {
+                        double ndx = (x-w/2.0)/(w/2.0);
+                        double ndy = (y-h/2.0)/(h/2.0);
+                        double r2 = ndx*ndx+ndy*ndy;
+                        double vf = 1.0 - vig*Math.Min(1.0, r2*0.8);
+                        if (vf < 0) vf = 0;
+                        ob *= vf; og *= vf; orr *= vf;
+                    }
+                    buf[i]   = (byte)Math.Max(0, Math.Min(255, ob));
+                    buf[i+1] = (byte)Math.Max(0, Math.Min(255, og));
+                    buf[i+2] = (byte)Math.Max(0, Math.Min(255, orr));
+                }
+            });
+
+            Marshal.Copy(buf, 0, bd.Scan0, buf.Length);
+            bmp.UnlockBits(bd);
+        }
+
+        void DoExport()
+        {
+            if (string.IsNullOrEmpty(outputDir)) {
+                string picked = null;
+                InvokeUi(() => {
+                    using (var d = new FolderBrowserDialog()) {
+                        d.Description = "选择渲染输出目录";
+                        if (d.ShowDialog() == DialogResult.OK) picked = d.SelectedPath;
+                    }
+                });
+                if (string.IsNullOrEmpty(picked)) return;
+                outputDir = picked;
+            }
+            int total = files.Count;
+            if (total == 0) return;
+
+            // 批量模式：每张图单独分析AI参数，不共用预览缓存
+            forceFreshAnalysis = true;
+            ResetAiCache();
+
+            // 串行批处理：AiRunner静态参数和BeautyRunner不支持并发，必须逐张处理
+            int done = 0;
+            for (int i = 0; i < total; i++)
+            {
+                try {
+                    string f = files[i];
+                    Bitmap bmp = LoadBase(f);
+                    try {
+                            ApplyLUT(bmp);
+                            ApplyColor(bmp);
+                            ApplyTiltShift(bmp);
+                            // AI人像增强
+                            if (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
+                            {
+                                BeautyRunner.Strength = (float)(par.ContainsKey("beauty_strength") ? par["beauty_strength"] / 100.0 : 0.7);
+                                var beautified = BeautyRunner.Process(bmp);
+                                if (beautified != null) { bmp.Dispose(); bmp = beautified; }
+                            }
+                            int sm = par.ContainsKey("out_size") ? (int)par["out_size"] : 0;
+                            int nw = bmp.Width, nh = bmp.Height;
+                            ApplySizeMode(ref nw, ref nh, sm);
+                            Bitmap save = bmp;
+                            if (nw != bmp.Width || nh != bmp.Height) {
+                                save = new Bitmap(bmp, nw, nh);
+                            }
+                            string name = Path.GetFileNameWithoutExtension(f) + "_out.jpg";
+                            string dst = Path.Combine(outputDir, name);
+                            var ep = new EncoderParameters(1);
+                            long q = (par.ContainsKey("lossless") && par["lossless"] > 0.5) ? 100L : (long)(int)(par.ContainsKey("quality") ? par["quality"] : 95);
+                            ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
+                            save.Save(dst, LUT.JpegCodec, ep);
+                            if (save != bmp) save.Dispose();
+                        } finally {
+                            bmp.Dispose();
+                        }
+                } catch (Exception ex) {
+                    Log("导出失败 " + files[i] + ": " + ex.Message);
+                }
+                done++;
+                Send("{\"type\":\"progress\",\"done\":" + done + ",\"total\":" + total + "}");
+            }
+
+            forceFreshAnalysis = false;
+            ResetAiCache();
+            Send("{\"type\":\"progress\",\"done\":" + total + ",\"total\":" + total + "}");
+            if (par.ContainsKey("open_after") && par["open_after"] > 0.5)
+                try { System.Diagnostics.Process.Start(outputDir); } catch {}
+        }
+
+        void LoadLuts(string dir)
+        {
+            lutFiles.Clear();
+            if (!Directory.Exists(dir)) return;
+            foreach (var f in Directory.GetFiles(dir, "*.cube", SearchOption.AllDirectories))
+                lutFiles.Add(f);
+        }
+
+        string JsonStr(string s) { return "\"" + (s??"").Replace("\\","\\\\").Replace("\"","\\\"") + "\""; }
+    }
+}
