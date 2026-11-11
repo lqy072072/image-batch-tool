@@ -1,6 +1,18 @@
 # 图片批处理工具
 
+[![Release](https://img.shields.io/badge/下载安装包-v1.0.3-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.0.3/image-batch-tool_v1.03_setup.exe)
+[![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）。
+
+## 下载安装
+
+直接下载最新安装包（约 460MB，已内置 Python 运行时与 AI 模型）：
+
+**[👉 下载 image-batch-tool_v1.03_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.0.3/image-batch-tool_v1.03_setup.exe)**
+
+或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
 ## 功能
 
