@@ -43,3 +43,6 @@ ai_out_*.json
 # OS
 Thumbs.db
 Desktop.ini
+
+# Broken LUT backups (not distributed)
+luts/_失效文件备份/

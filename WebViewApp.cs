@@ -10,7 +10,7 @@
 //       2. CPU 原生（imgproc.dll，MSVC /O2 /arch:AVX2 /openmp）
 //       3. C# Parallel.For 兜底
 //     三层自动降级，全部 try/catch 保护
-//   - LUT 支持：.cube 3D LUT，四面体插值，Log 型/创意型自动识别
+//   - LUT 支持：.cube / .3dl / .lut 3D LUT，四面体插值，Log 型/创意型自动识别
 //   - 其他功能：白平衡、曝光、Log 转换、移轴、裁切、锐化、批量导出
 // 编译：csc.exe /target:winexe /platform:x64 /unsafe
 // ============================================================
@@ -193,6 +193,14 @@ namespace ImageBatchTool
 
         public static CubeLut Load(string path)
         {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".3dl") return Load3dl(path);
+            // Iridas .lut 与 .cube 同构（LUT_3D_SIZE 文本头）
+            return LoadCube(path);
+        }
+
+        static CubeLut LoadCube(string path)
+        {
             var lut = new CubeLut();
             // 验证文件是否为有效 .cube（防止下载错误 JSON 等垃圾文件）
             try {
@@ -264,6 +272,172 @@ namespace ImageBatchTool
                 lut.Table[i] = v < 0 ? 0 : (v > 1 ? 1 : v);
             }
             return lut;
+        }
+
+        // .3dl 3D LUT —— Lustre / Picture Instruments 的 3DMESH 整数格点表
+        //   典型内容：3DMESH / Mesh 4 10 / "0 64 128 … 1023"（输入网格节点声明行）/ 17^3 行 RGB（10-bit）
+        //   关键差异：源文件按 B 最快维排列（.cube 是 R 最快维），载入时必须转置成内部 R 最快表序，
+        //   否则红蓝通道被互换，套用后颜色明显不对。
+        static CubeLut Load3dl(string path)
+        {
+            var lut = new CubeLut();
+            var src = new List<float>(300000);
+            int declared = 0, gridCount = 0;
+            double gridMax = -1, maxAbs = 0;
+
+            using (var sr = new StreamReader(path, System.Text.Encoding.UTF8, true))
+            {
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (line.Length == 0) continue;
+                    char c0 = line[0];
+                    if (c0 == '#' || c0 == ';' || c0 == '*') continue;
+                    if (line.StartsWith("//")) continue;
+                    string[] parts = line.Split(new[] { ' ', '\t', '=', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 0) continue;
+
+                    // 头行（3DMESH / Mesh 4 10 / TITLE / LUT3D / DOMAIN / MATRIX …）首列不是数字，整行跳过
+                    float first;
+                    if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out first)) continue;
+
+                    if (parts.Length == 1)
+                    {
+                        // 单独一行整数 = 声明的格点数
+                        int s;
+                        if (int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out s)
+                            && s >= 2 && s <= 256) declared = s;
+                        continue;
+                    }
+
+                    if (parts.Length > 3)
+                    {
+                        var vals = new float[parts.Length];
+                        bool allNum = true, monotonic = true;
+                        for (int i = 0; i < parts.Length; i++)
+                        {
+                            if (!float.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out vals[i]))
+                            { allNum = false; break; }
+                            if (i > 0 && vals[i] < vals[i - 1]) monotonic = false;
+                        }
+                        if (!allNum) continue;
+                        if (monotonic && vals.Length >= 4)
+                        {
+                            // 输入网格声明行：长度即格点数，末值即满刻度（1023=10bit / 255=8bit）
+                            gridCount = vals.Length;
+                            gridMax = vals[vals.Length - 1];
+                            continue;
+                        }
+                        if (vals.Length == 4)
+                        {
+                            // 少数导出器每行多一列 alpha
+                            maxAbs = Math.Max(maxAbs, Math.Max(Math.Abs(vals[0]), Math.Max(Math.Abs(vals[1]), Math.Abs(vals[2]))));
+                            src.Add(vals[0]); src.Add(vals[1]); src.Add(vals[2]);
+                        }
+                        continue;
+                    }
+
+                    float r, g, b;
+                    if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out r)) continue;
+                    if (!float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out g)) continue;
+                    if (!float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out b)) continue;
+                    if (Math.Abs(r) > maxAbs) maxAbs = Math.Abs(r);
+                    if (Math.Abs(g) > maxAbs) maxAbs = Math.Abs(g);
+                    if (Math.Abs(b) > maxAbs) maxAbs = Math.Abs(b);
+                    src.Add(r); src.Add(g); src.Add(b);
+                }
+            }
+
+            int count = src.Count / 3;
+            if (count < 8) throw new InvalidDataException(".3dl 数据为空: " + Path.GetFileName(path));
+
+            int size = gridCount >= 2 ? gridCount : declared;
+            if (size < 2) size = (int)Math.Round(Math.Pow(count, 1.0 / 3.0));
+            if (size < 2) throw new InvalidDataException(".3dl 格数推断失败: " + Path.GetFileName(path));
+            long cells = (long)size * size * size;
+            // 数据量与格数明显不符时，按实际数据量重新反推
+            if (Math.Abs(count - cells) > (long)size * size)
+            {
+                size = (int)Math.Round(Math.Pow(count, 1.0 / 3.0));
+                if (size < 2) throw new InvalidDataException(".3dl 格数推断失败: " + Path.GetFileName(path));
+                cells = (long)size * size * size;
+            }
+            if (cells > 20000000L) throw new InvalidDataException(".3dl 格数过大: " + size + "^3");
+
+            // 满刻度：优先取网格声明末值，其次按整数/浮点表判断
+            double full = gridMax > 1 ? gridMax : (maxAbs > 1.5 ? (maxAbs > 255 ? 1023.0 : 255.0) : 1.0);
+            if (full <= 0) full = 1.0;
+
+            // 容错：数据行数与格数略有出入时，按格数裁剪/补齐，保证表结构完整
+            if (count != cells)
+            {
+                if (count > cells)
+                    src.RemoveRange((int)cells * 3, src.Count - (int)cells * 3);
+                else
+                {
+                    float lr = src[src.Count - 3], lg = src[src.Count - 2], lb = src[src.Count - 1];
+                    for (long i = count; i < cells; i++) { src.Add(lr); src.Add(lg); src.Add(lb); }
+                }
+            }
+
+            lut.Size = size;
+
+            // 非常规 .3dl（明确 R 最快维）原样使用；标准 .3dl 需 B 最快 → R 最快转置
+            if (DetectRFastest3dl(src, size))
+            {
+                lut.Table = new float[cells * 3];
+                for (int i = 0; i < lut.Table.Length; i++) lut.Table[i] = Norm01(src[i], full);
+                return lut;
+            }
+
+            lut.Table = new float[cells * 3];
+            for (int ib = 0; ib < size; ib++)
+            {
+                for (int ig = 0; ig < size; ig++)
+                {
+                    long drow = (((long)ib * size + ig) * size) * 3;
+                    for (int ir = 0; ir < size; ir++)
+                    {
+                        long si = (((long)ir * size + ig) * size + ib) * 3;
+                        long di = drow + ir * 3;
+                        lut.Table[(int)di] = Norm01(src[(int)si], full);
+                        lut.Table[(int)di + 1] = Norm01(src[(int)si + 1], full);
+                        lut.Table[(int)di + 2] = Norm01(src[(int)si + 2], full);
+                    }
+                }
+            }
+            return lut;
+        }
+
+        static float Norm01(double v, double full)
+        {
+            double x = v / full;
+            return (float)(x < 0 ? 0 : (x > 1 ? 1 : x));
+        }
+
+        // 仅识别“明确无疑是 R 最快维”的非常规 3dl：内层主导变化在 R 且外层主导变化在 B
+        // 标准 .3dl 返回 false（内层主导 B、外层主导 R）；三通道相同的黑白表也返回 false，按标准处理
+        static bool DetectRFastest3dl(List<float> src, int size)
+        {
+            if (size < 3) return false;
+            long cells = (long)size * size * size;
+            if (src.Count < cells * 3) return false;
+            float[] d = src.ToArray();
+            long total = cells;
+            double[] qIn = new double[3], qOut = new double[3];
+            for (long i = 0; i + 1 < total; i++)
+                for (int c = 0; c < 3; c++) qIn[c] += Math.Abs(d[i * 3 + 3 + c] - d[i * 3 + c]);
+            long stepOut = (long)size * size;
+            for (long i = 0; i + stepOut < total; i++)
+                for (int c = 0; c < 3; c++) qOut[c] += Math.Abs(d[(i + stepOut) * 3 + c] - d[i * 3 + c]);
+            int domIn = 0, domOut = 0;
+            for (int c = 1; c < 3; c++)
+            {
+                if (qIn[c] > qIn[domIn]) domIn = c;
+                if (qOut[c] > qOut[domOut]) domOut = c;
+            }
+            return domIn == 0 && domOut == 2;
         }
 
         // 四面体插值（33^3 以上 LUT 用，更平滑、无伪影）
@@ -355,10 +529,143 @@ namespace ImageBatchTool
     // ============================================================
     // AI全流程调色：Python直接输出所有调色参数，C#只执行
     // ============================================================
+    // ===== 自动优化引擎：自适应白平衡（中性样本参考+亮度守恒）+ 智能黑白场 + 中灰锚定 + 高光保护 =====
+    // 相比旧算法的改进：
+    //  1) 白平衡改用"近中性像素"做参考（避免被大面积色块带偏），并用几何均值锁住整体亮度
+    //     （旧算法只做通道缩减，暖偏图会把中灰从 132 压到 31）
+    //  2) 黑白场端点映射到 [8,247] 保留余量 + 高光软滚降（旧算法端点直接拉 0/255，正常图也会产生 4.8% 死白）
+    //  3) 中灰锚定：按画面中值做温和 gamma 回归 128（旧算法过曝图中灰会被压到 50）
+    //  4) 动态范围窄才拉伸，且限制拉伸后中灰不越界 [90,170]
+    static class ColorAutoEngine
+    {
+        static double Clamp(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+        public static void Apply(byte[] buf, int W, int H, int stride)
+        {
+            // ---------- 1. 采样：直方图 + 通道均值 + 近中性样本 ----------
+            var hist = new int[256];
+            long sumR = 0, sumG = 0, sumB = 0, cnt = 0;
+            long nR = 0, nG = 0, nB = 0; int nCnt = 0;
+            for (int y = 0; y < H; y += 2)
+            {
+                int row = y * stride;
+                for (int x = 0; x < W; x += 2)
+                {
+                    int i = row + x * 4;
+                    int b = buf[i], g = buf[i + 1], r = buf[i + 2];
+                    int lum = (int)(0.299 * r + 0.587 * g + 0.114 * b);
+                    if (lum < 0) lum = 0; else if (lum > 255) lum = 255;
+                    hist[lum]++;
+                    sumR += r; sumG += g; sumB += b; cnt++;
+                    int mx = r, mn = r;
+                    if (g > mx) mx = g; if (b > mx) mx = b;
+                    if (g < mn) mn = g; if (b < mn) mn = b;
+                    if (mx - mn <= 14 && lum > 40 && lum < 220) { nR += r; nG += g; nB += b; nCnt++; }
+                }
+            }
+            if (cnt < 100) return;
+            double avgR = (double)sumR / cnt, avgG = (double)sumG / cnt, avgB = (double)sumB / cnt;
+
+            // ---------- 2. 白平衡：近中性样本优先（≥15%），否则灰度世界；限幅；几何均值锁亮度 ----------
+            double refR, refG, refB;
+            if (nCnt >= cnt * 0.15) { refR = (double)nR / nCnt; refG = (double)nG / nCnt; refB = (double)nB / nCnt; }
+            else { refR = avgR; refG = avgG; refB = avgB; }
+            double gray = (refR + refG + refB) / 3.0;
+            double wbR = 1.0, wbG = 1.0, wbB = 1.0;
+            if (Math.Abs(gray - refR) > gray * 0.06) wbR = gray / Math.Max(refR, 1.0);
+            if (Math.Abs(gray - refG) > gray * 0.06) wbG = gray / Math.Max(refG, 1.0);
+            if (Math.Abs(gray - refB) > gray * 0.06) wbB = gray / Math.Max(refB, 1.0);
+            wbR = Clamp(wbR, 0.85, 1.15);
+            wbG = Clamp(wbG, 0.90, 1.10);
+            wbB = Clamp(wbB, 0.85, 1.15);
+            double gm = Math.Pow(wbR * wbG * wbB, 1.0 / 3.0);
+            if (gm > 0.001) { wbR /= gm; wbG /= gm; wbB /= gm; }
+            wbR = Clamp(wbR, 0.82, 1.18);
+            wbG = Clamp(wbG, 0.88, 1.12);
+            wbB = Clamp(wbB, 0.82, 1.18);
+
+            // ---------- 3. 直方图端点（0.5% 裁剪）与中灰 ----------
+            double total = cnt;
+            double clipAmt = total * 0.005;
+            int p05 = 0, p95 = 255; double acc = 0;
+            for (int k = 0; k < 256; k++) { acc += hist[k]; if (acc >= clipAmt) { p05 = k; break; } }
+            acc = 0;
+            for (int k = 255; k >= 0; k--) { acc += hist[k]; if (acc >= clipAmt) { p95 = k; break; } }
+            int med = 128; acc = 0;
+            for (int k = 0; k < 256; k++) { acc += hist[k]; if (acc >= total / 2) { med = k; break; } }
+
+            // ---------- 4. 中灰锚定 gamma（med→128，温和限幅） ----------
+            double gamma = 1.0;
+            if (med >= 6 && med <= 249)
+            {
+                gamma = Math.Log(128.0 / 255.0) / Math.Log(med / 255.0);
+                gamma = Clamp(gamma, 0.68, 1.80);
+            }
+
+            // ---------- 5. 智能对比拉伸（gamma 后空间；范围窄才拉，中灰保持在 [90,170]） ----------
+            double scale = 1.0, offset = 0.0;
+            double g05 = Math.Pow(p05 / 255.0, gamma) * 255.0;
+            double g95 = Math.Pow(p95 / 255.0, gamma) * 255.0;
+            double gmed = Math.Pow(med / 255.0, gamma) * 255.0;
+            double dr = g95 - g05;
+            double d1 = gmed - g05;
+            if (dr >= 40 && d1 >= 8 && (g95 - gmed) >= 8)
+            {
+                double sMax = Math.Min(1.6, (170.0 - 8.0) / d1);  // 拉伸后中灰不超过 170
+                double sMin = (90.0 - 8.0) / d1;                  // 拉伸后中灰不低于 90
+                if (sMax >= sMin)
+                {
+                    scale = Clamp(239.0 / dr, sMin, sMax);        // 端点映射到 [8,247]，保余量防死黑死白
+                    if (scale < 1.0) scale = 1.0;
+                    offset = 8.0 - g05 * scale;
+                }
+            }
+
+            // ---------- 6. 应用：WB → gamma → 拉伸 → 饱和补偿 → 高光滚降 ----------
+            double satComp = scale > 1.12 ? 1.03 : 1.0;
+            bool doGamma = Math.Abs(gamma - 1.0) > 0.002;
+            bool doStretch = scale > 1.002;
+            for (int y = 0; y < H; y++)
+            {
+                int row = y * stride;
+                for (int x = 0; x < W; x++)
+                {
+                    int i = row + x * 4;
+                    double b = buf[i] * wbB, g = buf[i + 1] * wbG, r = buf[i + 2] * wbR;
+                    double lum0 = 0.299 * r + 0.587 * g + 0.114 * b;
+                    double lum = lum0;
+                    if (doGamma)
+                    {
+                        double v = lum / 255.0;
+                        if (v < 0) v = 0; else if (v > 1) v = 1;
+                        lum = Math.Pow(v, gamma) * 255.0;
+                    }
+                    if (doStretch) lum = lum * scale + offset;
+                    if (lum < 0) lum = 0; else if (lum > 255) lum = 255;
+                    double ratio = lum0 > 0.5 ? lum / lum0 : 1.0;
+                    ratio = Clamp(ratio, 0.3, 3.0);
+                    r *= ratio; g *= ratio; b *= ratio;
+                    if (satComp != 1.0)
+                    {
+                        double l2 = 0.299 * r + 0.587 * g + 0.114 * b;
+                        r = l2 + (r - l2) * satComp; g = l2 + (g - l2) * satComp; b = l2 + (b - l2) * satComp;
+                    }
+                    if (r > 235) r = 235 + (r - 235) * 0.35;
+                    if (g > 235) g = 235 + (g - 235) * 0.35;
+                    if (b > 235) b = 235 + (b - 235) * 0.35;
+                    buf[i] = (byte)(b < 0 ? 0 : b > 255 ? 255 : b);
+                    buf[i + 1] = (byte)(g < 0 ? 0 : g > 255 ? 255 : g);
+                    buf[i + 2] = (byte)(r < 0 ? 0 : r > 255 ? 255 : r);
+                }
+            }
+        }
+    }
+
     static class AiRunner
     {
         public static string LastError = "";
         static string pythonPath = "";
+        public static string DebugPythonPath { get { return pythonPath; } }
 
         // AI输出的参数
         public static double OutWbR = 1.0, OutWbG = 1.0, OutWbB = 1.0;
@@ -378,9 +685,35 @@ namespace ImageBatchTool
             // 优先使用嵌入的Python
             string embedded = Path.Combine(Application.StartupPath, "python", "python.exe");
             if (File.Exists(embedded)) { pythonPath = embedded; return true; }
-            // 尝试多个python路径
-            string[] candidates = { "python", "py", "python3",
-                @"C:\Python311\python.exe", @"C:\Python310\python.exe", @"C:\Python39\python.exe" };
+            // 尝试多个python路径（用户双击启动时 PATH 可能不含 python，须探测绝对路径）
+            var candidates = new List<string> { "python", "py", "python3" };
+            string lad = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string[] fixedDirs = {
+                Path.Combine(lad, "Programs", "Python"),
+                Path.Combine(pf, "Python"),
+                @"C:\Python",
+                @"C:\",
+            };
+            // 常见版本目录 Python39~Python314
+            for (int v = 314; v >= 39; v--) {
+                string ver = "Python" + v.ToString("D2");
+                foreach (string dir in fixedDirs) {
+                    string full = Path.Combine(dir, ver);
+                    candidates.Add(Path.Combine(full, "python.exe"));
+                    candidates.Add(Path.Combine(full, "pythonw.exe"));
+                }
+            }
+            // 豆包客户端自带运行时 python（glob 匹配版本 hash 目录）
+            try {
+                string bases = Path.Combine(lad, "Doubao", "User Data", "sandbox_runtime", "bases");
+                if (Directory.Exists(bases)) {
+                    foreach (var d in Directory.GetDirectories(bases)) {
+                        string pp = Path.Combine(d, "python", "python.exe");
+                        if (File.Exists(pp)) candidates.Add(pp);
+                    }
+                }
+            } catch {}
             foreach (var py in candidates) {
                 try {
                     var psi = new System.Diagnostics.ProcessStartInfo();
@@ -394,7 +727,7 @@ namespace ImageBatchTool
                     if (p.ExitCode == 0) { pythonPath = py; return true; }
                 } catch {}
             }
-            LastError = "python未找到（试过 python/py/python3）";
+            LastError = "python未找到（试过 python/py/python3 及常见安装路径）";
             return false;
         }
 
@@ -842,6 +1175,7 @@ namespace ImageBatchTool
         bool aiParamsCached = false;
         bool forceFreshAnalysis = false; // 批量模式：每张图单独分析，不共用缓存
         float aiContrast = 1.0f; // AI估计的对比度
+        float aiHighlights = 1.0f, aiShadows = 1.0f; // AI 高光压缩/阴影提亮
         float aiSaturation = 1.0f; // AI估计的饱和度微调
         float aiPostExposure = 1.0f; // AI闭环校验后的后处理曝光补偿
         // 软对比度：只对中间调(60-220)做拉伸，高光和暗部逐渐减弱
@@ -907,7 +1241,7 @@ namespace ImageBatchTool
             par["temp"]=0; par["tint"]=0; par["vignette"]=0; par["quality"]=100;
             par["lossless"]=1;
             par["crop_x"]=0; par["crop_y"]=0; par["crop_w"]=1; par["crop_h"]=1;
-            lutMode = "auto";
+            lutMode = "log";
             par["ts_on"]=0; par["ts_pos"]=0; par["ts_band"]=22; par["ts_blur"]=10;
             par["ts_angle"]=0; par["ts_feather"]=25;
             par["ts_sat"]=115; par["ts_con"]=115; par["ts_bri"]=95; par["ts_vig"]=15;
@@ -1092,7 +1426,7 @@ namespace ImageBatchTool
                         InvokeUi(() => {
                             using (var d = new OpenFileDialog()) {
                                 d.Multiselect = true;
-                                d.Filter = "LUT|*.cube";
+                                d.Filter = "LUT|*.cube;*.3dl;*.lut";
                                 if (d.ShowDialog() == DialogResult.OK) {
                                     string dir = Path.Combine(Application.StartupPath, "luts", "我的-LUT");
                                     Directory.CreateDirectory(dir);
@@ -1108,7 +1442,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start(Path.Combine(Application.StartupPath, "luts")); } catch {}
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 1.03\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 1.04\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -1545,10 +1879,11 @@ namespace ImageBatchTool
                     }
                     for (int i = 1; i < n; i++) if (y[i] < y[i-1]) y[i] = y[i-1];
                     float blackPt = y[0], whitePt = y[n-1], range = whitePt - blackPt;
-                    // 判定 Log 型：LUT 声明了非默认输入范围（专业 Log LUT），
-                    // 或黑场/白场范围明显偏离 0-1（Log 灰片映射）
+                    // 判定 Log 型：仅以 LUT 声明的输入范围为准（DaVinci 标准的 Log LUT 声明
+                    // 非默认输入范围）。不再用对角线黑场/白场启发式——暗调创意 LUT
+                    // （如夜景滤镜）会被误判为 Log 型，套上灰片转换后颜色全错。
                     bool hasNonDefaultRange = (Math.Abs(activeLut.InputMin) > 0.001f || Math.Abs(activeLut.InputMax - 1f) > 0.001f);
-                    lutIsLogType = hasNonDefaultRange || (blackPt > 0.08f && whitePt < 0.5f);
+                    lutIsLogType = hasNonDefaultRange;
                     adaptCurveLut = activeLutPath;
                     cachedBlackPt = blackPt; cachedWhitePt = whitePt;
                     lutAnalyzed = true;
@@ -1586,22 +1921,23 @@ namespace ImageBatchTool
                 }
                 else
                 {
-                    // 缓存状态：用 input range 判断
-                    lutIsLogType = (Math.Abs(activeLut.InputMin) > 0.001f || Math.Abs(activeLut.InputMax - 1f) > 0.001f)
-                        || (cachedBlackPt > 0.08f && cachedWhitePt < 0.5f);
+                    // 缓存状态：以 LUT 声明的输入范围为准
+                    lutIsLogType = (Math.Abs(activeLut.InputMin) > 0.001f || Math.Abs(activeLut.InputMax - 1f) > 0.001f);
                 }
 
-                // Log型LUT：自动/AI模式都先转成对应的灰片再套用
+                // Log型LUT：自动/AI模式先转成对应的灰片再套用
                 if (lutIsLogType && (lutMode == "ai" || lutMode == "log"))
                 {
+                    // 灰片转换 = 把 sRGB 亮度重映射到 LUT 声明的输入范围。
+                    // 之前用 LUT 对角线的黑场/白场做压缩区间是错的：那是输出范围，
+                    // 会把画面亮度双重压缩，导致颜色发灰、偏色。
                     srgbToLog = new float[256];
-                    double range = cachedWhitePt - cachedBlackPt;
+                    double lo = activeLut.InputMin, hi = activeLut.InputMax;
+                    double span = Math.Max(1e-4, hi - lo);
                     for (int k = 0; k < 256; k++)
                     {
                         double c = k / 255.0;
-                        double lin = c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
-                        double logv = Math.Log10(lin * 8.0 + 1.0) / Math.Log10(9.0);
-                        srgbToLog[k] = (float)(cachedBlackPt + logv * range);
+                        srgbToLog[k] = (float)Math.Max(0.0, Math.Min(1.0, lo + c * span));
                     }
                 }
             }
@@ -1634,6 +1970,8 @@ namespace ImageBatchTool
             float[] outputCalTable = null; // AI模式：LUT输出后做黑场/白场校准
             bool doAutoCalib = false; // 根据LUT类型动态决定
             bool doAutoExposure = false;
+            bool needInputExposure = false; // 输入侧曝光校正（Log型恒true；自动模式创意型仅异常曝光图）
+            bool aiNeedInputExposure = false; // AI模式：AI判定曝光有问题时做输入侧校正
             bool aiMode = (mode == 4); // AI 模式：智能场景分析+智能调色
             bool isPortrait = false; // 人像检测（像素循环里也要用）
 
@@ -1646,6 +1984,9 @@ namespace ImageBatchTool
                     expTable = cachedExpTable;
                     outputCalTable = cachedOutputCalTable;
                     isPortrait = cachedIsPortrait;
+                    // 恢复曝光校正标志：缓存表非空 = 当时需要输入侧曝光校正
+                    needInputExposure = (cachedExpTable != null);
+                    aiNeedInputExposure = (cachedExpTable != null);
                 }
                 else
                 {
@@ -1669,37 +2010,62 @@ namespace ImageBatchTool
                         total++;
                     }
                 }
-                // 白平衡：中值灰度世界法（仅Log型LUT需要预校准，创意型LUT直接套用）
+                // 白平衡：中值灰度世界法
+                // - Log 型 LUT：预校准（0.7~1.3）
+                // - 自动模式 + 创意型 LUT：温和自动白平衡（0.9~1.1），只修图的色偏、不洗 LUT 风格
                 bool needPreCalib = lutIsLogType;
+                bool doMildAuto = (mode == 1 && !lutIsLogType);
                 // 计算通道中值（AI引擎需要，无论是否预校准）
                 rSamples.Sort(); gSamples.Sort(); bSamples.Sort();
                 double medR = rSamples[rSamples.Count/2];
                 double medG = gSamples[gSamples.Count/2];
                 double medB = bSamples[bSamples.Count/2];
-                if (needPreCalib) {
+                if (needPreCalib || doMildAuto) {
                     double medGray = (medR + medG + medB) / 3.0;
                     wbR = medGray / Math.Max(medR, 1);
                     wbG = medGray / Math.Max(medG, 1);
                     wbB = medGray / Math.Max(medB, 1);
-                    if (wbR > 1.3) wbR = 1.3; if (wbR < 0.7) wbR = 0.7;
-                    if (wbG > 1.3) wbG = 1.3; if (wbG < 0.7) wbG = 0.7;
-                    if (wbB > 1.3) wbB = 1.3; if (wbB < 0.7) wbB = 0.7;
+                    if (needPreCalib) {
+                        if (wbR > 1.3) wbR = 1.3; if (wbR < 0.7) wbR = 0.7;
+                        if (wbG > 1.3) wbG = 1.3; if (wbG < 0.7) wbG = 0.7;
+                        if (wbB > 1.3) wbB = 1.3; if (wbB < 0.7) wbB = 0.7;
+                    } else {
+                        // 温和白平衡：±10%，只校正明显色偏
+                        if (wbR > 1.1) wbR = 1.1; if (wbR < 0.9) wbR = 0.9;
+                        if (wbG > 1.1) wbG = 1.1; if (wbG < 0.9) wbG = 0.9;
+                        if (wbB > 1.1) wbB = 1.1; if (wbB < 0.9) wbB = 0.9;
+                    }
+                } else {
+                    wbR = 1.0; wbG = 1.0; wbB = 1.0;
                 }
                 // 曝光校准：中值亮度（无论是否预校准，都要算出来用于AI调整）
                 lumSamples.Sort();
                 double medLum = lumSamples[lumSamples.Count/2];
-                if (needPreCalib) {
+                // 输入侧曝光校正策略：
+                // - Log 型 LUT：恒做（0.8~1.2，灰片转换需要正确的中灰输入）
+                // - 自动模式 + 创意型 LUT：恒做温和校正（0.9~1.1），向中灰靠拢但幅度克制，
+                //   图健康时增益≈1 几乎无感，图偏暗/偏亮时自动模式与直出才有可见区别
+                needInputExposure = needPreCalib || doMildAuto;
+                if (needInputExposure) {
                     double exposureGain = 128.0 / Math.Max(medLum, 1);
-                    if (exposureGain > 1.5) exposureGain = 1.5;
-                    if (exposureGain < 0.6) exposureGain = 0.6;
+                    if (needPreCalib) {
+                        if (exposureGain > 1.2) exposureGain = 1.2; // 收紧上限，防止预曝光把画面推爆
+                        if (exposureGain < 0.8) exposureGain = 0.8;
+                    } else {
+                        if (exposureGain > 1.1) exposureGain = 1.1; // 创意型只做温和校正
+                        if (exposureGain < 0.9) exposureGain = 0.9;
+                    }
                     expTable = new float[256];
                     for (int k = 0; k < 256; k++) {
                         double v = k * exposureGain / 255.0;
                         if (v < 0) v = 0; else if (v > 1) v = 1;
                         expTable[k] = (float)v;
                     }
+                    Log("输入曝光校正: 中值=" + medLum.ToString("F0") + " 增益=" + exposureGain.ToString("F2") +
+                        (needPreCalib ? " (Log型)" : " (创意型温和)") +
+                        " WB=" + wbR.ToString("F3") + "/" + wbG.ToString("F3") + "/" + wbB.ToString("F3"));
                 } else {
-                    // 创意型LUT：不做预校准，直接套
+                    // 直出模式：不做任何输入校正
                     wbR = 1.0; wbG = 1.0; wbB = 1.0;
                     expTable = null;
                 }
@@ -1719,13 +2085,20 @@ namespace ImageBatchTool
                         Log("AI: " + AiRunner.LastError + "，使用默认参数");
                     }
 
-                    // 直接应用AI输出的白平衡
-                    wbR = AiRunner.OutWbR;
-                    wbG = AiRunner.OutWbG;
-                    wbB = AiRunner.OutWbB;
+                    // 直接应用AI输出的白平衡（创意型窄幅±5%，AI优化原图但保留LUT风格）
+                    if (lutIsLogType) {
+                        wbR = AiRunner.OutWbR;
+                        wbG = AiRunner.OutWbG;
+                        wbB = AiRunner.OutWbB;
+                    } else {
+                        wbR = (float)Math.Max(0.95, Math.Min(1.05, AiRunner.OutWbR));
+                        wbG = (float)Math.Max(0.95, Math.Min(1.05, AiRunner.OutWbG));
+                        wbB = (float)Math.Max(0.95, Math.Min(1.05, AiRunner.OutWbB));
+                    }
 
                     // AI预校准曝光：把原图中灰推到LUT期望位置（套LUT前用）
-                    double preExp = AiRunner.OutPreExposure;
+                    double preExp = Math.Max(0.85, Math.Min(1.15, AiRunner.OutPreExposure)); // 限幅防过曝
+                    aiNeedInputExposure = Math.Abs(AiRunner.OutPreExposure - 1.0) > 0.05; // AI判定曝光明显异常才校正
                     expTable = new float[256];
                     for (int k = 0; k < 256; k++) {
                         double v = (k / 255.0) * preExp;
@@ -1733,8 +2106,8 @@ namespace ImageBatchTool
                         expTable[k] = (float)v;
                     }
 
-                    // AI决定是否做sRGB→Log转换及转换曲线
-                    if (AiRunner.OutUseLogConvert) {
+                    // AI决定是否做sRGB→Log转换及转换曲线（仅 Log 型 LUT 才做，创意型保持原色）
+                    if (AiRunner.OutUseLogConvert && lutIsLogType) {
                         float gamma = (float)AiRunner.OutLogGamma;
                         srgbToLog = new float[256];
                         for (int k = 0; k < 256; k++) {
@@ -1748,6 +2121,8 @@ namespace ImageBatchTool
                     // AI对比度和饱和度（套完LUT后用）
                     aiContrast = (float)AiRunner.OutContrast;
                     aiSaturation = (float)AiRunner.OutSaturation;
+                    aiHighlights = (float)AiRunner.OutHighlights;
+                    aiShadows = (float)AiRunner.OutShadows;
 
                     // 皮肤检测
                     long skinCount = 0;
@@ -1777,47 +2152,23 @@ namespace ImageBatchTool
                     doAutoCalib = true;
                     doAutoExposure = true;
                 } else {
-                    // 创意型LUT：应用AI白平衡校正（去色偏），但不调曝光
+                    // 创意型LUT：AI 先优化原图（白平衡已窄幅±5%，见上文），
+                    // 仅当 AI 判定原图曝光明显异常时做输入侧曝光校正；
+                    // 套用后的偏色由"AI校验-校准"闭环处理
                     doAutoCalib = true;
-                    doAutoExposure = false;
+                    doAutoExposure = aiNeedInputExposure;
                 }
             } else {
-                doAutoCalib = lutIsLogType && mode == 1;
-                doAutoExposure = lutIsLogType && mode == 1;
+                // 自动模式：Log型完整预校准；创意型温和白平衡+曝光（±10%）
+                doAutoCalib = (mode == 1);
+                doAutoExposure = needInputExposure;
             }
             Log((aiMode?"AI神经网络模式":"自动模式") + " LUT类型: " + (lutIsLogType?"Log型":"创意型") +
                 " 预校准=" + doAutoCalib + " AI对比度=" + aiContrast.ToString("F2") +
                 " AI饱和=" + aiSaturation.ToString("F2"));
 
-            // AI闭环校验：只对Log型LUT做中灰补偿，创意LUT不碰亮度
-            if (aiMode && doLut && tbl != null && lutIsLogType) {
-                // 采样LUT在输入中灰(0.5,0.5,0.5)处的输出亮度
-                float mid = 0.5f;
-                float lutR, lutG, lutB;
-                CubeLut.SampleTetra(tbl, lutSize, mid, mid, mid, out lutR, out lutG, out lutB);
-                double lutMidLum = 0.299*lutR + 0.587*lutG + 0.114*lutB;
-                // 目标输出中灰=0.5
-                double targetLum = 0.5;
-                // 如果LUT输出偏暗(<0.4)或偏亮(>0.6)，调整输入曝光补偿
-                if (lutMidLum < 0.4 || lutMidLum > 0.6) {
-                    double comp = targetLum / Math.Max(lutMidLum, 0.1);
-                    // 限制补偿范围
-                    if (comp > 1.3) comp = 1.3; if (comp < 0.7) comp = 0.7;
-                    // 如果是创意LUT不预校准，在后处理阶段做亮度补偿
-                    if (!doAutoExposure) {
-                        // 后处理亮度补偿：在像素循环末尾加
-                        aiPostExposure = (float)comp;
-                    } else {
-                        // 预校准模式：调整曝光表
-                        if (expTable == null) expTable = new float[256];
-                        for (int k = 0; k < 256; k++) expTable[k] = (float)Math.Max(0, Math.Min(1, (k/255.0)*comp));
-                    }
-                    Log("AI闭环校验: LUT输出中灰=" + lutMidLum.ToString("F2") + " 补偿=" + comp.ToString("F2"));
-                } else {
-                    aiPostExposure = 1.0f;
-                    Log("AI闭环校验: LUT输出中灰=" + lutMidLum.ToString("F2") + " 达标，无需补偿");
-                }
-            }
+            // AI闭环校验已移到套用之后（校验-校准-验证闭环），此处不再预补偿中灰
+            aiPostExposure = 1.0f;
 
             // 传给原生函数：WB/曝光/Log都在像素循环里做（C#和原生统一路径）
             float[] wbGainArr = doAutoCalib ? new float[] { (float)wbR, (float)wbG, (float)wbB } : null;
@@ -1825,10 +2176,14 @@ namespace ImageBatchTool
             float[] logArr = (srgbToLog != null) ? srgbToLog : null;
 
             // GPU 优先：D3D11 compute shader 最快
+            // 注意：GPU 接口不支持曝光表/灰片表，凡是需要这两张表的路径必须走 CPU，
+            // 否则三路径结果不一致（GPU 成功时自动/AI 模式的曝光与灰片转换会被丢弃）
             bool gpuDone = false;
-            try { gpuDone = Native.gpu_lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
-                lutStrength, chroma, wbGainArr) != 0; } catch { gpuDone = false; }
-            Log("GPU路径: " + (gpuDone ? "成功" : "失败/跳过") + " WB=" + (wbGainArr!=null));
+            bool needTables = (expArr != null) || (logArr != null);
+            if (!needTables)
+                try { gpuDone = Native.gpu_lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
+                    lutStrength, chroma, wbGainArr) != 0; } catch { gpuDone = false; }
+            Log("GPU路径: " + (gpuDone ? "成功" : (needTables ? "跳过(需曝光/灰片表)" : "失败/跳过")) + " WB=" + (wbGainArr!=null));
 
             // CPU 原生 C++（AVX2+OpenMP），GPU失败才走
             bool useNative = !gpuDone;
@@ -1883,27 +2238,10 @@ namespace ImageBatchTool
                         }
                         // 2. 色度调整（在校准后的正确亮度上做）
                         if (doChroma) { double lum = 0.299*nr+0.587*ng+0.114*nb; nr = (float)(lum+(nr-lum)*chroma); ng = (float)(lum+(ng-lum)*chroma); nb = (float)(lum+(nb-lum)*chroma); }
-                        // 2.5 自动模式：套完LUT后自动校准曝光/对比/饱和到合理范围
-                        if (mode == 1) {
-                            // 对比度拉伸：向0.05~0.95范围靠拢（避免死黑死白）
-                            double lum = 0.299*nr + 0.587*ng + 0.114*nb;
-                            double targetMid = 0.5;
-                            double contrast = 1.05; // 轻微对比增强
-                            nr = (float)Math.Max(0, Math.Min(1, targetMid + (nr - targetMid) * contrast));
-                            ng = (float)Math.Max(0, Math.Min(1, targetMid + (ng - targetMid) * contrast));
-                            nb = (float)Math.Max(0, Math.Min(1, targetMid + (nb - targetMid) * contrast));
-                            // 饱和度过高则收敛到合理范围
-                            double mx = Math.Max(nr, Math.Max(ng, nb));
-                            double mn = Math.Min(nr, Math.Min(ng, nb));
-                            if (mx - mn > 0.7) { // 饱和过高
-                                double newRange = 0.7;
-                                double mid = (mx + mn) / 2.0;
-                                double scale = newRange / (mx - mn);
-                                nr = (float)(mid + (nr - mid) * scale);
-                                ng = (float)(mid + (ng - mid) * scale);
-                                nb = (float)(mid + (nb - mid) * scale);
-                            }
-                        }
+                        // 2.5 软高光滚降：只压缩接近纯白的部分，保持 LUT 明暗与色彩关系
+                        if (nr > 0.92f) nr = 0.92f + (nr - 0.92f) * 0.35f;
+                        if (ng > 0.92f) ng = 0.92f + (ng - 0.92f) * 0.35f;
+                        if (nb > 0.92f) nb = 0.92f + (nb - 0.92f) * 0.35f;
                         // AI模式后处理：只做肤色保护（对比/饱和/曝光由独立pass统一处理）
                         if (aiMode && isPortrait) {
                             double origR = ri/255.0, origG = gi/255.0, origB = bi/255.0;
@@ -1921,6 +2259,117 @@ namespace ImageBatchTool
                 });
             }
 
+            // ===== 套用后"校验-校准-验证"闭环（自动/AI 模式）=====
+            // 目标：输出图中灰区的亮度与灰平衡贴合"LUT 想要的颜色"（LUT 在中灰输入的输出），
+            // 而不是把画面强拉到固定中灰——暗调 LUT 保持暗调、亮调保持亮调，风格不被破坏。
+            // 自动模式：算法校验（最多 3 轮）；AI 模式：算法校验 + AI 二次校验（模型看输出图给偏差）。
+            if ((mode == 1 || mode == 4) && doLut && tbl != null)
+            {
+                float lr0, lg0, lb0;
+                CubeLut.SampleTetra(tbl, lutSize, 0.5f, 0.5f, 0.5f, out lr0, out lg0, out lb0);
+                double expLum = 0.299*lr0 + 0.587*lg0 + 0.114*lb0;   // LUT 想要的中灰亮度
+                double expRB = lr0 - lb0;                            // LUT 想要的中灰灰平衡
+                float savedAiCon = aiContrast, savedAiSat = aiSaturation;
+                float savedAiHl = aiHighlights, savedAiSh = aiShadows;
+
+                int maxRounds = (mode == 1) ? 4 : 2; // 自动 4 轮；AI 每轮要跑模型，限 2 轮
+                for (int round = 0; round < maxRounds; round++)
+                {
+                    // 校验：统计输出中灰区（亮度贴近 LUT 期望中灰 ±0.15）的平均亮度与灰平衡
+                    long sLum = 0, sRB = 0; int nMid = 0;
+                    for (int y = 0; y < H; y += 2)
+                    {
+                        int row = y * stride;
+                        for (int x = 0; x < W; x += 2)
+                        {
+                            int i = row + x*4;
+                            double r = buf[i+2], g = buf[i+1], b = buf[i];
+                            double lum = (0.299*r + 0.587*g + 0.114*b) / 255.0;
+                            if (Math.Abs(lum - expLum) < 0.15)
+                            {
+                                sLum += (int)(0.299*r + 0.587*g + 0.114*b);
+                                sRB += (int)(r - b);
+                                nMid++;
+                            }
+                        }
+                    }
+                    if (nMid < 1000) { Log("校验闭环: 中灰区样本不足(" + nMid + ")，跳过"); break; }
+                    double avgLum = (double)sLum / nMid / 255.0;
+                    double avgRB = (double)sRB / nMid / 255.0;
+                    double lumErr = avgLum - expLum;
+                    double balErr = avgRB - expRB;
+                    Log("校验闭环 第" + (round+1) + "轮: 期望中灰=" + expLum.ToString("F3") +
+                        " 实际=" + avgLum.ToString("F3") + " 亮度偏差=" + lumErr.ToString("F3") +
+                        " 灰平衡偏差=" + balErr.ToString("F3"));
+                    if (Math.Abs(lumErr) < 0.08 && Math.Abs(balErr) < 0.05) { Log("校验闭环: 达标"); break; }
+
+                    // 校准（输出侧窄增益，小步进，每轮最多 ±10%）
+                    double lumGain = 1.0 - lumErr * 0.6;
+                    if (lumGain > 1.1) lumGain = 1.1; if (lumGain < 0.9) lumGain = 0.9;
+                    double rGain = 1.0 - balErr * 0.5; // balErr>0 偏红 → 降 R
+                    double bGain = 1.0 + balErr * 0.5; // 同时升 B
+                    if (rGain > 1.1) rGain = 1.1; if (rGain < 0.9) rGain = 0.9;
+                    if (bGain > 1.1) bGain = 1.1; if (bGain < 0.9) bGain = 0.9;
+                    Parallel.For(0, H, yy => {
+                        int row = yy * stride;
+                        for (int x = 0; x < W; x++)
+                        {
+                            int i = row + x*4;
+                            double r = buf[i+2], g = buf[i+1], b = buf[i];
+                            r = r * lumGain * rGain; g = g * lumGain; b = b * lumGain * bGain;
+                            if (r > 235) r = 235 + (r-235)*0.3;
+                            if (g > 235) g = 235 + (g-235)*0.3;
+                            if (b > 235) b = 235 + (b-235)*0.3;
+                            buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
+                            buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                            buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                        }
+                    });
+                    Log("校验闭环 校准: 亮度增益=" + lumGain.ToString("F3") + " R/B增益=" + rGain.ToString("F3") + "/" + bGain.ToString("F3"));
+                }
+
+                // AI 二次校验：AI 看输出图给白平衡偏差，窄幅校准后恢复后处理参数
+                if (aiMode)
+                {
+                    try
+                    {
+                        AiRunner.LutIsLogHint = false;
+                        bool aiOkV = AiRunner.ProcessImage(buf, W, H, stride);
+                        if (aiOkV)
+                        {
+                            double wbDev = Math.Max(Math.Abs(AiRunner.OutWbR-1.0),
+                                Math.Max(Math.Abs(AiRunner.OutWbG-1.0), Math.Abs(AiRunner.OutWbB-1.0)));
+                            Log("AI校验输出图: WB偏差=" + wbDev.ToString("F3") + " " + AiRunner.LastError);
+                            if (wbDev > 0.04)
+                            {
+                                // AI 校准：应用 AI 给出的白平衡（反向窄限幅，防止过度）
+                                double wA = Math.Max(0.95, Math.Min(1.05, AiRunner.OutWbR));
+                                double wB = Math.Max(0.95, Math.Min(1.05, AiRunner.OutWbB));
+                                double wG = Math.Max(0.95, Math.Min(1.05, AiRunner.OutWbG));
+                                for (int y = 0; y < H; y++)
+                                {
+                                    int row = y * stride;
+                                    for (int x = 0; x < W; x++)
+                                    {
+                                        int i = row + x*4;
+                                        double r = buf[i+2]*wA, g = buf[i+1]*wG, b = buf[i]*wB;
+                                        buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
+                                        buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                                        buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                                    }
+                                }
+                                Log("AI校准: WB=" + wA.ToString("F3") + "/" + wG.ToString("F3") + "/" + wB.ToString("F3"));
+                            }
+                        }
+                        else Log("AI校验: 模型调用失败 " + AiRunner.LastError);
+                    }
+                    catch (Exception ex) { Log("AI校验异常: " + ex.Message); }
+                    // 恢复 AI 后处理参数（校验调用会覆盖模型输出字段）
+                    aiContrast = savedAiCon; aiSaturation = savedAiSat;
+                    aiHighlights = savedAiHl; aiShadows = savedAiSh;
+                }
+            }
+
             // === AI后处理pass：对比/饱和 + 中灰补偿 + 软高光滚降 ===
             if (aiMode) {
                 // 采样当前图亮度，计算曝光校准增益（把AI+LUT后的画面拉回正常中灰）
@@ -1935,26 +2384,48 @@ namespace ImageBatchTool
                     }
                 }
                 double avgLum = lumCnt > 0 ? (double)lumSum / lumCnt / 255.0 : 0.5;
-                // 目标中灰0.5，限制校准范围0.7~1.4（不要过度）
-                double normGain = 0.5 / Math.Max(avgLum, 0.05);
-                if (normGain > 1.4) normGain = 1.4;
-                if (normGain < 0.7) normGain = 0.7;
+                // 中灰归一化只用于 Log 型 LUT（转 709 后亮度域可能偏移）；
+                // 创意型 LUT 不拉中灰——暗调/亮调是滤镜本身的风格，强行拉回会破坏观感并导致高光死白
+                double normGain = 1.0;
+                if (lutIsLogType) {
+                    normGain = 0.5 / Math.Max(avgLum, 0.05);
+                    if (normGain > 1.15) normGain = 1.15;
+                    if (normGain < 0.85) normGain = 0.85;
+                }
                 Log("AI后处理pass: 对比=" + aiContrast.ToString("F3") + " 饱和=" + aiSaturation.ToString("F3") +
+                    " 高光=" + aiHighlights.ToString("F3") + " 阴影=" + aiShadows.ToString("F3") +
                     " 中灰补偿=" + aiPostExposure.ToString("F3") + " 当前亮度=" + avgLum.ToString("F3") +
-                    " 曝光校准增益=" + normGain.ToString("F3"));
+                    " 曝光校准增益=" + normGain.ToString("F3") + " (Log型=" + lutIsLogType + ")");
+                double passHl = Math.Max(0.85, Math.Min(1.0, (double)aiHighlights));
+                double passSh = Math.Max(1.0, Math.Min(1.15, (double)aiShadows));
+                bool doHlPass = passHl < 0.999, doShPass = passSh > 1.001;
                 Parallel.For(0, H, yy => {
                     int row = yy * stride;
                     for (int x = 0; x < W; x++) {
                         int i = row + x*4;
                         double b = buf[i], g = buf[i+1], r = buf[i+2];
-                        // 0. 曝光校准：把AI+LUT后的亮度拉回正常范围
+                        // 0. 先软高光滚降再曝光校准：先滚降可避免增益把高光推成死白
+                        if (r > 235) r = 235 + (r - 235) * 0.3;
+                        if (g > 235) g = 235 + (g - 235) * 0.3;
+                        if (b > 235) b = 235 + (b - 235) * 0.3;
                         r *= normGain; g *= normGain; b *= normGain;
-                        if (r > 230) r = 230 + (r - 230) * 0.3;
-                        if (g > 230) g = 230 + (g - 230) * 0.3;
-                        if (b > 230) b = 230 + (b - 230) * 0.3;
                         // 1. 中灰闭环补偿
                         if (Math.Abs(aiPostExposure - 1.0f) > 0.001f) {
                             r *= aiPostExposure; g *= aiPostExposure; b *= aiPostExposure;
+                        }
+                        // 1.5 AI高光压缩 / 阴影提亮（引擎已输出，亮度域渐进生效）
+                        if (doHlPass || doShPass) {
+                            double lum0 = 0.299*r + 0.587*g + 0.114*b;
+                            if (doHlPass && lum0 > 180) {
+                                double t = Math.Min(1.0, (lum0 - 180) / 75.0);
+                                double hg = 1.0 - (1.0 - passHl) * t;
+                                r *= hg; g *= hg; b *= hg;
+                            }
+                            if (doShPass && lum0 < 70) {
+                                double t = 1.0 - lum0 / 70.0;
+                                double sg = 1.0 + (passSh - 1.0) * t;
+                                r *= sg; g *= sg; b *= sg;
+                            }
                         }
                         // 2. AI对比度（软S曲线，保护高光和暗部）
                         if (Math.Abs(aiContrast - 1.0f) > 0.001f) {
@@ -1982,8 +2453,60 @@ namespace ImageBatchTool
                 });
             }
 
-            // ===== 最终曝光归一化：套完LUT后检测输出亮度，过暗/过亮就微调回正常范围 =====
-            // 每张图独立计算，批量渲染时每张图自己识别
+            // ===== 自动模式：总体优化（温和黑白场拉伸 + 轻对比/饱和，不改色相）=====
+            if (mode == 1)
+            {
+                var hist = new int[256];
+                for (int y = 0; y < H; y += 2)
+                {
+                    int row = y * stride;
+                    for (int x = 0; x < W; x += 2)
+                    {
+                        int i = row + x*4;
+                        int lum = (int)(0.299*buf[i+2] + 0.587*buf[i+1] + 0.114*buf[i]);
+                        if (lum < 0) lum = 0; else if (lum > 255) lum = 255;
+                        hist[lum]++;
+                    }
+                }
+                long tot = 0; for (int k = 0; k < 256; k++) tot += hist[k];
+                if (tot > 1000)
+                {
+                    int lo = 0, hi = 255; long acc = 0;
+                    for (int k = 0; k < 256; k++) { acc += hist[k]; if (acc > tot * 0.005) { lo = k; break; } }
+                    acc = 0;
+                    for (int k = 255; k >= 0; k--) { acc += hist[k]; if (acc > tot * 0.005) { hi = k; break; } }
+                    // 温和拉伸：只拉伸 2~255 范围外的黑场/白场，避免改变 LUT 整体风格
+                    if (lo > 0 || hi < 255)
+                    {
+                        double scale = 255.0 / Math.Max(1, hi - lo);
+                        const double contrast = 1.02, sat = 1.02;
+                        Parallel.For(0, H, yy => {
+                            int row = yy * stride;
+                            for (int x = 0; x < W; x++)
+                            {
+                                int i = row + x*4;
+                                double r = buf[i+2], g = buf[i+1], b = buf[i];
+                                r = (r - lo) * scale; g = (g - lo) * scale; b = (b - lo) * scale;
+                                double lum = (0.299*r + 0.587*g + 0.114*b);
+                                r = 128 + (r - 128) * contrast; g = 128 + (g - 128) * contrast; b = 128 + (b - 128) * contrast;
+                                lum = (0.299*r + 0.587*g + 0.114*b);
+                                r = lum + (r - lum) * sat; g = lum + (g - lum) * sat; b = lum + (b - lum) * sat;
+                                if (r > 235) r = 235 + (r-235)*0.3;
+                                if (g > 235) g = 235 + (g-235)*0.3;
+                                if (b > 235) b = 235 + (b-235)*0.3;
+                                buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
+                                buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                                buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                            }
+                        });
+                        Log("自动总体优化: 黑白场[" + lo + "," + hi + "] 对比1.02 饱和1.02");
+                    }
+                }
+            }
+
+            // ===== 最终过曝保护：只压缩极端过曝，不再把暗调/亮调 LUT 强拉回中灰 =====
+            // （旧逻辑对中值<80 的画面做 1.4 倍提亮，把夜景/暗调滤镜的风格抹掉，
+            //   同时高光被 clamp 成大片死白——这就是"自动模式经常过曝"的根源）
             if (mode == 1 || mode == 4) {
                 var lumList = new List<int>();
                 for (int y = 0; y < H; y += 4) {
@@ -1996,25 +2519,25 @@ namespace ImageBatchTool
                 }
                 lumList.Sort();
                 int medOutLum = lumList[lumList.Count/2];
-                // 目标中值亮度128，过暗<80或过亮>180才调整，温和增益0.7-1.4
                 double finalGain = 1.0;
-                if (medOutLum < 80) finalGain = 128.0 / Math.Max(medOutLum, 1);
-                else if (medOutLum > 180) finalGain = 128.0 / Math.Max(medOutLum, 1);
-                if (finalGain < 0.7) finalGain = 0.7;
-                if (finalGain > 1.4) finalGain = 1.4;
-                if (Math.Abs(finalGain - 1.0) > 0.02) {
+                if (medOutLum > 200) finalGain = 200.0 / Math.Max(medOutLum, 1); // 只防极端过曝
+                if (finalGain < 0.8) finalGain = 0.8;
+                if (finalGain < 0.98) {
                     Parallel.For(0, H, yy => {
                         int row = yy * stride;
                         for (int x = 0; x < W; x++) {
                             int i = row + x*4;
                             int r = buf[i+2], g = buf[i+1], b = buf[i];
-                            int nr = (int)(r * finalGain), ng = (int)(g * finalGain), nb = (int)(b * finalGain);
-                            buf[i+2] = (byte)Math.Max(0, Math.Min(255, nr));
-                            buf[i+1] = (byte)Math.Max(0, Math.Min(255, ng));
-                            buf[i]   = (byte)Math.Max(0, Math.Min(255, nb));
+                            double nr = r, ng = g, nb = b;
+                            if (nr > 235) nr = 235 + (nr - 235) * 0.3;
+                            if (ng > 235) ng = 235 + (ng - 235) * 0.3;
+                            if (nb > 235) nb = 235 + (nb - 235) * 0.3;
+                            buf[i+2] = (byte)Math.Max(0, Math.Min(255, nr * finalGain));
+                            buf[i+1] = (byte)Math.Max(0, Math.Min(255, ng * finalGain));
+                            buf[i]   = (byte)Math.Max(0, Math.Min(255, nb * finalGain));
                         }
                     });
-                    Log("最终曝光归一化: 中值=" + medOutLum + " 增益=" + finalGain.ToString("F2"));
+                    Log("最终过曝保护: 中值=" + medOutLum + " 增益=" + finalGain.ToString("F2"));
                 }
             }
 
@@ -2033,6 +2556,10 @@ namespace ImageBatchTool
                     double aExp = Math.Max(0.85, Math.Min(1.2, AiRunner.OutExposure));
                     double aCon = Math.Max(0.9, Math.Min(1.15, AiRunner.OutContrast));
                     double aSat = Math.Max(0.85, Math.Min(1.15, AiRunner.OutSaturation));
+                    // AI 高光/阴影（引擎已输出，这里接入：<1 压高光、>1 提阴影）
+                    double aHl = Math.Max(0.85, Math.Min(1.0, AiRunner.OutHighlights));
+                    double aSh = Math.Max(1.0, Math.Min(1.15, AiRunner.OutShadows));
+                    bool doHl = aHl < 0.999, doSh = aSh > 1.001;
                     for (int y = 0; y < H; y++) {
                         int row = y * stride;
                         for (int x = 0; x < W; x++) {
@@ -2040,6 +2567,19 @@ namespace ImageBatchTool
                             double b = buf[i], g = buf[i+1], r = buf[i+2];
                             r *= aWbR * aExp; g *= aWbG * aExp; b *= aWbB * aExp;
                             double lum = 0.299*r + 0.587*g + 0.114*b;
+                            // 高光区渐进压缩（>180 起效，越高越强），保护高光细节
+                            if (doHl && lum > 180) {
+                                double t = Math.Min(1.0, (lum - 180) / 75.0);
+                                double hg = 1.0 - (1.0 - aHl) * t;
+                                r *= hg; g *= hg; b *= hg;
+                            }
+                            // 阴影区渐进提亮（<70 起效，越暗越强），提回暗部层次
+                            if (doSh && lum < 70) {
+                                double t = 1.0 - lum / 70.0;
+                                double sg = 1.0 + (aSh - 1.0) * t;
+                                r *= sg; g *= sg; b *= sg;
+                            }
+                            lum = 0.299*r + 0.587*g + 0.114*b;
                             r = lum + (r-lum)*aCon; g = lum + (g-lum)*aCon; b = lum + (b-lum)*aCon;
                             lum = 0.299*r + 0.587*g + 0.114*b;
                             r = lum + (r-lum)*aSat; g = lum + (g-lum)*aSat; b = lum + (b-lum)*aSat;
@@ -2051,7 +2591,8 @@ namespace ImageBatchTool
                             buf[i+2] = (byte)(r<0?0:r>255?255:r);
                         }
                     }
-                    Log("AI优化pass完成: exp=" + aExp.ToString("F2") + " con=" + aCon.ToString("F2") + " sat=" + aSat.ToString("F2"));
+                    Log("AI优化pass完成: exp=" + aExp.ToString("F2") + " con=" + aCon.ToString("F2") + " sat=" + aSat.ToString("F2") +
+                        " 高光=" + aHl.ToString("F3") + " 阴影=" + aSh.ToString("F3") + " 场景=" + AiRunner.OutScene);
                 }
             }
 
@@ -2061,71 +2602,16 @@ namespace ImageBatchTool
 
         void ApplyColor(Bitmap bmp)
         {
-            // AI一键优化：仅做自适应黑白场+智能白平衡，不做Log/灰片转换（独立于LUT流程）
+            // AI一键优化：自适应白平衡 + 智能黑白场 + 中灰锚定 + 高光保护（独立于LUT流程）
             if (par.ContainsKey("color_auto") && par["color_auto"] > 0.5) {
                 int aw = bmp.Width, ah = bmp.Height;
-                var ad = bmp.LockBits(new Rectangle(0,0,aw,ah), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                var ad = bmp.LockBits(new Rectangle(0,0,aw,ah), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
                 int astride = ad.Stride;
                 byte[] abuf = new byte[astride*ah];
                 Marshal.Copy(ad.Scan0, abuf, 0, abuf.Length);
+                ColorAutoEngine.Apply(abuf, aw, ah, astride);
+                Marshal.Copy(abuf, 0, ad.Scan0, abuf.Length);
                 bmp.UnlockBits(ad);
-                var hist = new int[256];
-                long sumR=0, sumG=0, sumB=0, cnt=0;
-                for (int y=0; y<ah; y+=2) {
-                    int row = y*astride;
-                    for (int x=0; x<aw; x+=2) {
-                        int i = row+x*4;
-                        int b=abuf[i], g=abuf[i+1], r=abuf[i+2];
-                        int lum=(int)(0.299*r+0.587*g+0.114*b);
-                        if (lum<0) lum=0; else if (lum>255) lum=255;
-                        hist[lum]++;
-                        sumR+=r; sumG+=g; sumB+=b; cnt++;
-                    }
-                }
-                double total = cnt;
-                double clipAmt = total * 0.01;
-                int blackPt = 0, whitePt = 255;
-                double acc = 0;
-                for (int k=0; k<256; k++) { acc += hist[k]; if (acc >= clipAmt) { blackPt = k; break; } }
-                acc = 0;
-                for (int k=255; k>=0; k--) { acc += hist[k]; if (acc >= clipAmt) { whitePt = k; break; } }
-                byte[] lut = new byte[256];
-                double range = whitePt - blackPt;
-                if (range < 10) range = 10;
-                for (int k=0; k<256; k++) {
-                    double v;
-                    if (k <= blackPt) v = 0;
-                    else if (k >= whitePt) v = 1.0;
-                    else v = (k - blackPt) / range;
-                    lut[k] = (byte)Math.Max(0, Math.Min(255, (int)(v * 255)));
-                }
-                double avgR=(double)sumR/cnt, avgG=(double)sumG/cnt, avgB=(double)sumB/cnt;
-                double gray = (avgR+avgG+avgB)/3.0;
-                double wbR = 1.0, wbG = 1.0, wbB = 1.0;
-                if (Math.Abs(gray-avgR) > 20) wbR = gray / Math.Max(avgR, 1);
-                if (Math.Abs(gray-avgG) > 20) wbG = gray / Math.Max(avgG, 1);
-                if (Math.Abs(gray-avgB) > 20) wbB = gray / Math.Max(avgB, 1);
-                Parallel.For(0, ah, y => {
-                    int row = y*astride;
-                    for (int x=0; x<aw; x++) {
-                        int i = row+x*4;
-                        int b=abuf[i], g=abuf[i+1], r=abuf[i+2];
-                        r = (int)(r * wbR); g = (int)(g * wbG); b = (int)(b * wbB);
-                        if (r>255) r=255; if (g>255) g=255; if (b>255) b=255;
-                        int lum = (int)(0.299*r+0.587*g+0.114*b);
-                        if (lum<0) lum=0; else if (lum>255) lum=255;
-                        int mappedLum = lut[lum];
-                        double ratio = lum > 0 ? (double)mappedLum / lum : 1.0;
-                        if (ratio > 4) ratio = 4; if (ratio < 0.25) ratio = 0.25;
-                        int nr = (int)(r * ratio), ng = (int)(g * ratio), nb = (int)(b * ratio);
-                        abuf[i]   = (byte)Math.Max(0,Math.Min(255,nb));
-                        abuf[i+1] = (byte)Math.Max(0,Math.Min(255,ng));
-                        abuf[i+2] = (byte)Math.Max(0,Math.Min(255,nr));
-                    }
-                });
-                var wd = bmp.LockBits(new Rectangle(0,0,aw,ah), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-                Marshal.Copy(abuf, 0, wd.Scan0, abuf.Length);
-                bmp.UnlockBits(wd);
                 return;
             }
             float sat = (float)(par["saturation"] / 100.0);
@@ -2470,8 +2956,9 @@ namespace ImageBatchTool
         {
             lutFiles.Clear();
             if (!Directory.Exists(dir)) return;
-            foreach (var f in Directory.GetFiles(dir, "*.cube", SearchOption.AllDirectories))
-                lutFiles.Add(f);
+            foreach (var pattern in new[] { "*.cube", "*.3dl", "*.lut" })
+                foreach (var f in Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))
+                    lutFiles.Add(f);
         }
 
         string JsonStr(string s) { return "\"" + (s??"").Replace("\\","\\\\").Replace("\"","\\\"") + "\""; }
