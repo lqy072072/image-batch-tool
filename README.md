@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v1.05-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.05/image-batch-tool_v1.05_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v1.06-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.06_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,9 +8,9 @@
 
 ## 下载安装
 
-直接下载最新安装包（约 516MB，已内置 Python 运行时与 AI 模型）：
+直接下载最新安装包（约 604MB，已内置 Python 运行时与 AI 模型）：
 
-**[👉 下载 image-batch-tool_v1.05_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.05/image-batch-tool_v1.05_setup.exe)**
+**[👉 下载 image-batch-tool_v1.06_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.06_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -99,6 +99,10 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 - 新增 **景深虚化**（Depth Anything V2 Small，人像解析保护主体）、**2× 放大/超分**（有 Real-ESRGAN onnx 时自动启用）
 - 新增 **证件照**（换底 + 尺寸预设 + 六寸排版）、**自动挑片**（清晰度/曝光/闭眼）、**配色提取**、**参考图→LUT 生成**
 - 新增 **交互**：前后对比拉帘、单张重做、预设保存/读取/记忆、文件列表只渲染可视窗口
+- 新增 **滤镜列表 LUT 分类与右键管理**：参考图生成的 LUT 单独成组（`luts/参考图生成`），任意 LUT 可右键 **重命名 / 删除**，并自动处理当前生效 LUT
+- 证件照：**按头部轮廓自动水平居中**；排版相纸可选（五寸 / 六寸 / 七寸 / 八寸 / A4），不再写死 1800×1200
+- 界面重排：美颜、证件照各自独立成面板；超分与景深并入「色彩调整」；输出与批处理、辅助工具移到左栏；「并发」更名「导出线程并发数量」
+- 修复挑片 / 配色结果中文乱码（改 ASCII 转义 + 强制 UTF-8），结果框限高 132px 且与应用互斥
 - 关于页版本号改为 1.06
 
 ### v1.05
