@@ -851,33 +851,140 @@ namespace ImageBatchTool
             if (_available.HasValue) return _available.Value;
             // 优先使用嵌入的Python
             string embedded = Path.Combine(Application.StartupPath, "python", "python.exe");
-            if (File.Exists(embedded)) { pythonPath = embedded; _available = true; return true; }
+            if (File.Exists(embedded) && HasDeps(embedded)) { pythonPath = embedded; _available = true; return true; }
             string[] candidates = { "python", "py", "python3",
                 @"C:\Python313\python.exe", @"C:\Python312\python.exe", @"C:\Python311\python.exe" };
             foreach (var p in candidates)
             {
-                try
-                {
-                    var psi = new System.Diagnostics.ProcessStartInfo(p, "--version");
-                    psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
-                    psi.UseShellExecute = false; psi.CreateNoWindow = true;
-                    var proc = System.Diagnostics.Process.Start(psi);
-                    proc.WaitForExit(3000);
-                    if (proc.ExitCode == 0) { pythonPath = p; _available = true; return true; }
-                }
-                catch { }
+                if (HasDeps(p)) { pythonPath = p; _available = true; return true; }
             }
             // 复用 AiRunner 更完整的探测（常见安装路径 + 豆包客户端运行时）
             try {
-                if (AiRunner.IsAvailable()) { pythonPath = AiRunner.DebugPythonPath; _available = true; return true; }
+                if (AiRunner.IsAvailable()) {
+                    string ap = AiRunner.DebugPythonPath;
+                    if (HasDeps(ap)) { pythonPath = ap; _available = true; return true; }
+                }
             } catch { }
+            if (string.IsNullOrEmpty(LastError))
+                LastError = "python未找到可用解释器（需带 cv2/numpy/onnxruntime）";
             _available = false; return false;
+        }
+
+        // 解释器必须同时具备 cv2 / numpy / onnxruntime，否则脚本一启动就 ImportError
+        static bool HasDeps(string exe)
+        {
+            if (string.IsNullOrEmpty(exe)) return false;
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo(exe, "-c \"import cv2,numpy,onnxruntime;print('ok')\"");
+                psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                var proc = System.Diagnostics.Process.Start(psi);
+                string so = proc.StandardOutput.ReadToEnd();
+                proc.StandardError.ReadToEnd();
+                proc.WaitForExit(8000);
+                return proc.ExitCode == 0 && so.Contains("ok");
+            }
+            catch { return false; }
         }
 
         public static string LastError = "";
 
         // 对Bitmap做人脸美颜，返回新Bitmap（失败返回null）
         public static float Strength = 0.7f;
+
+        // 批量并发时不能读静态 Strength，用显式强度（thread-safe）
+        public static string PythonExe { get { IsAvailable(); return pythonPath; } }
+
+        // 通用 图像->图像 Python 管道（景深/超分等新功能复用）
+        static Bitmap RunPipe(Bitmap src, string script, string[] extra, int timeoutMs)
+        {
+            try
+            {
+                string tmpIn = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pipe_in_" + Guid.NewGuid().ToString("N") + ".png");
+                string tmpOut = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pipe_out_" + Guid.NewGuid().ToString("N") + ".png");
+                src.Save(tmpIn, System.Drawing.Imaging.ImageFormat.Png);
+                var args = new List<string> { tmpIn, tmpOut };
+                foreach (var a in extra) args.Add(a);
+                string err;
+                string so = PyTools.Run(PythonExe, script, args.ToArray(), timeoutMs, out err);
+                LastError = (so == null ? "" : so.Trim()) + (string.IsNullOrEmpty(err) ? "" : " | " + err);
+                try { System.IO.File.Delete(tmpIn); } catch { }
+                if (System.IO.File.Exists(tmpOut))
+                {
+                    var r = new Bitmap(tmpOut);
+                    try { System.IO.File.Delete(tmpOut); } catch { }
+                    return r;
+                }
+                return null;
+            }
+            catch (Exception ex) { LastError = ex.Message; return null; }
+        }
+
+        // 景深虚化（Depth Anything V2 Small）
+        public static Bitmap ProcessDof(Bitmap src, int strength, int focus)
+        {
+            return RunPipe(src, "dof.py", new string[] { strength.ToString(), focus.ToString() }, 300000);
+        }
+
+        // 全图超分（Real-ESRGAN 分块）
+        public static Bitmap ProcessSr(Bitmap src, int scale)
+        {
+            return RunPipe(src, "sr.py", new string[] { scale.ToString() }, 900000);
+        }
+
+        // 证件照（裁脸对齐 + 换底 + 尺寸/排版）
+        public static string ProcessIdPhoto(string srcFile, int sizeMode, int bg, int cw, int ch, int sheet, int pw, int ph, string dst)
+        {
+            string err;
+            string so = PyTools.Run(PythonExe, "idphoto.py",
+                new string[] { srcFile, dst, sizeMode.ToString(), bg.ToString(), cw.ToString(), ch.ToString(), sheet.ToString(), pw.ToString(), ph.ToString() },
+                300000, out err);
+            LastError = (so == null ? "" : so.Trim()) + (string.IsNullOrEmpty(err) ? "" : " | " + err);
+            return System.IO.File.Exists(dst) ? dst : null;
+        }
+
+        public static Bitmap Process(Bitmap src, float strength)
+        {
+            if (!IsAvailable()) { LastError = "Python not found"; return null; }
+            try
+            {
+                string tmpIn = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_in_" + Guid.NewGuid().ToString("N") + ".png");
+                string tmpOut = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_out_" + Guid.NewGuid().ToString("N") + ".png");
+                src.Save(tmpIn, System.Drawing.Imaging.ImageFormat.Png);
+
+                string scriptDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ai");
+                string script = System.IO.Path.Combine(scriptDir, "beauty.py");
+
+                var psi = new System.Diagnostics.ProcessStartInfo(pythonPath,
+                    "\"" + script + "\" \"" + tmpIn + "\" \"" + tmpOut + "\" " + strength.ToString("0.0"));
+                psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                psi.WorkingDirectory = scriptDir;
+
+                var proc = System.Diagnostics.Process.Start(psi);
+                string stdout = proc.StandardOutput.ReadToEnd();
+                string stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit(120000);
+
+                try { System.IO.File.Delete(tmpIn); } catch { }
+
+                if (System.IO.File.Exists(tmpOut))
+                {
+                    var result = new Bitmap(tmpOut);
+                    try { System.IO.File.Delete(tmpOut); } catch { }
+                    LastError = stdout.Trim();
+                    return result;
+                }
+                LastError = "no output: " + stdout + " " + stderr;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                return null;
+            }
+        }
 
         // ---- 美颜相机（分项美颜）参数拼装：beauty_pro.py 接受 smooth=60,white=35,... ----
         static readonly string[] ProKeys = { "smooth", "white", "spot", "dark", "eye", "lip",
@@ -1319,7 +1426,22 @@ namespace ImageBatchTool
             par["bps_eye"]=0; par["bps_lip"]=0; par["bps_lipcolor"]=2; par["bps_rosy"]=0;
             par["bps_slim"]=0; par["bps_eyesize"]=0; par["bps_nose"]=0; par["bps_chin"]=0;
             par["bps_aifix"]=0; par["bps_aifix_strength"]=55;
+            // ---- v1.06 新增 ----
+            par["fg_grain"]=0; par["fg_leak"]=0; par["fg_halo"]=0;          // 胶片三件套
+            par["lut_linear"]=0; par["dither"]=0;                            // 线性化套 LUT / 输出抖动
+            par["dup_mode"]=1; par["skip_existing"]=0;                       // 重名策略（1=加序号）/ 断点续跑
+            par["exif_keep"]=1;                                              // 保留 EXIF/ICC
+            par["workers"]=0;                                                // 0=自动
+            par["sr_on"]=0; par["sr_scale"]=2;                               // AI 超分
+            par["dof_on"]=0; par["dof_strength"]=60; par["dof_focus"]=50;    // 景深虚化
+            par["id_on"]=0; par["id_size"]=0; par["id_bg"]=0; par["id_sheet"]=0; // 证件照
+            par["id_custom_w"]=413; par["id_custom_h"]=579;
+            par["id_paper_w"]=1800; par["id_paper_h"]=1200;                  // 相纸排版尺寸
+            par["pick_on"]=0; par["pick_blur"]=35; par["pick_expo"]=25;      // 自动挑片阈值
 
+
+            LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+            MigrateRefLuts();
             LoadLuts(Path.Combine(Application.StartupPath, "luts"));
 
             this.Load += (s, e) => ApplyRoundedCorner();
@@ -1389,6 +1511,7 @@ namespace ImageBatchTool
                     case "ready":
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
                         Opacity = 1; Show(); Activate();
+                        Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
                         break;
                     case "addfolder":
                         InvokeUi(() => {
@@ -1487,6 +1610,41 @@ namespace ImageBatchTool
                         activeLutPath = null; activeLut = null; lutAnalyzed = false;
                         QueuePreview();
                         break;
+                    case "renamelut": {
+                            if (parts.Length < 4) { Send("{\"type\":\"toast\",\"msg\":\"参数不足\"}"); break; }
+                            string grp = parts[1], oldName = parts[2], newName = parts[3].Trim();
+                            foreach (char ch in Path.GetInvalidFileNameChars()) newName = newName.Replace(ch.ToString(), "");
+                            newName = newName.Replace("|", "").Trim();
+                            if (newName.Length == 0) { Send("{\"type\":\"toast\",\"msg\":\"名称不能为空\"}"); break; }
+                            string src = FindLutFile(grp, oldName);
+                            if (src == null) { Send("{\"type\":\"toast\",\"msg\":\"找不到该 LUT：" + oldName + "\"}"); break; }
+                            string dst = Path.Combine(Path.GetDirectoryName(src), newName + Path.GetExtension(src));
+                            if (File.Exists(dst)) { Send("{\"type\":\"toast\",\"msg\":\"已存在同名 LUT\"}"); break; }
+                            bool wasActive = activeLutPath != null && string.Equals(activeLutPath, src, StringComparison.OrdinalIgnoreCase);
+                            try { File.Move(src, dst); }
+                            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"重命名失败：" + ex.Message.Replace("\"", "'") + "\"}"); break; }
+                            LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+                            if (wasActive) { activeLutPath = dst; activeLut = null; lutAnalyzed = false; }
+                            SendState();
+                            Send("{\"type\":\"toast\",\"msg\":\"已重命名为 " + newName + "\"}");
+                            Log("重命名 LUT: " + oldName + " -> " + newName);
+                        }
+                        break;
+                    case "dellut": {
+                            if (parts.Length < 3) { Send("{\"type\":\"toast\",\"msg\":\"参数不足\"}"); break; }
+                            string dgrp = parts[1], dname = parts[2];
+                            string dp = FindLutFile(dgrp, dname);
+                            if (dp == null) { Send("{\"type\":\"toast\",\"msg\":\"找不到该 LUT：" + dname + "\"}"); break; }
+                            bool dActive = activeLutPath != null && string.Equals(activeLutPath, dp, StringComparison.OrdinalIgnoreCase);
+                            try { File.Delete(dp); }
+                            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"删除失败：" + ex.Message.Replace("\"", "'") + "\"}"); break; }
+                            LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+                            if (dActive) { activeLutPath = null; activeLut = null; lutAnalyzed = false; ResetAiCache(); QueuePreview(); }
+                            SendState();
+                            Send("{\"type\":\"toast\",\"msg\":\"已删除 LUT：" + dname + "\"}");
+                            Log("删除 LUT: " + dp);
+                        }
+                        break;
                     case "chooseout":
                         InvokeUi(() => {
                             using (var d = new FolderBrowserDialog())
@@ -1514,7 +1672,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start(Path.Combine(Application.StartupPath, "luts")); } catch {}
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 1.05\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 1.06\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -1527,6 +1685,138 @@ namespace ImageBatchTool
                     case "winmax": InvokeUi(() => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized); break;
                     case "dragstart":
                         InvokeUi(() => { Native.ReleaseCapture(); Native.SendMessage(this.Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero); });
+                        break;
+                    case "retryone": {
+                            int ridx; int.TryParse(parts.Length > 1 ? parts[1] : "-1", out ridx);
+                            if (ridx >= 0 && ridx < files.Count) {
+                                string rf = files[ridx];
+                                new Thread(() => {
+                                    try { ExportOne(rf); } catch (Exception ex) { Log("重做失败: " + ex.Message); }
+                                    Send("{\"type\":\"toast\",\"msg\":\"重做完成：" + Path.GetFileName(rf) + "\"}");
+                                    QueuePreview();
+                                }) { IsBackground = true }.Start();
+                            }
+                        }
+                        break;
+                    case "savepreset": {
+                            string name = parts.Length > 1 ? parts[1] : "";
+                            try { Presets.Save(name, par, activeLutPath, lutMode); Send("{\"type\":\"toast\",\"msg\":\"预设已保存：" + name + "\"}"); }
+                            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"保存失败：" + ex.Message.Replace("\"", "'") + "\"}"); }
+                            Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
+                        }
+                        break;
+                    case "loadpreset": {
+                            string name = parts.Length > 1 ? parts[1] : "";
+                            string json = Presets.Load(name);
+                            if (json != null) ApplyPreset(json);
+                            else Send("{\"type\":\"toast\",\"msg\":\"预设不存在\"}");
+                        }
+                        break;
+                    case "delpreset": {
+                            string name = parts.Length > 1 ? parts[1] : "";
+                            try { File.Delete(Path.Combine(Presets.Dir, name + ".json")); } catch {}
+                            Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
+                        }
+                        break;
+                    case "presetlist":
+                        Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
+                        break;
+                    case "openpresetdir":
+                        try { System.Diagnostics.Process.Start(Presets.Dir); } catch {}
+                        break;
+                    case "getorig":
+                        new Thread(() => SendOrig()) { IsBackground = true }.Start();
+                        break;
+                    case "reflutdialog": {
+                            string pickedImg = null;
+                            InvokeUi(() => {
+                                using (var d = new OpenFileDialog()) {
+                                    d.Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff";
+                                    d.Title = "选择一张喜欢的调色参考图";
+                                    if (d.ShowDialog() == DialogResult.OK) pickedImg = d.FileName;
+                                }
+                            });
+                            if (pickedImg != null)
+                                Send("{\"type\":\"reflutfile\",\"path\":" + JsonStr(pickedImg) + "}");
+                        }
+                        break;
+                    case "reflut": {
+                            if (parts.Length < 3) { Send("{\"type\":\"toast\",\"msg\":\"参数不足\"}"); break; }
+                            string img = parts[1], pname = parts[2];
+                            new Thread(() => {
+                                string dir = Path.Combine(Application.StartupPath, "luts", "参考图生成");
+                                Directory.CreateDirectory(dir);
+                                string outCube = Path.Combine(dir, pname + ".cube");
+                                string err;
+                                string so = PyTools.Run(BeautyRunner.PythonExe, "reflut.py", new string[] { img, outCube }, 60000, out err);
+                                if (File.Exists(outCube)) {
+                                    LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+                                    SendState();
+                                    Send("{\"type\":\"toast\",\"msg\":\"已生成 LUT：" + pname + "\"}");
+                                    Log("参考图生成LUT: " + so + " " + err);
+                                } else Send("{\"type\":\"toast\",\"msg\":\"LUT 生成失败：" + (err ?? "").Replace("\"", "'") + "\"}");
+                            }) { IsBackground = true }.Start();
+                        }
+                        break;
+                    case "palette": {
+                            int n; int.TryParse(parts.Length > 1 ? parts[1] : "6", out n);
+                            if (n < 3) n = 3; if (n > 12) n = 12;
+                            string pf = (selected >= 0 && selected < files.Count) ? files[selected] : null;
+                            if (pf == null) { Send("{\"type\":\"toast\",\"msg\":\"请先选择一张图\"}"); break; }
+                            new Thread(() => {
+                                string err;
+                                string so = PyTools.Run(BeautyRunner.PythonExe, "palette.py", new string[] { pf, n.ToString() }, 60000, out err);
+                                if (so != null) Send("{\"type\":\"palette\",\"data\":" + so.Trim() + "}");
+                                else Send("{\"type\":\"toast\",\"msg\":\"配色提取失败\"}");
+                            }) { IsBackground = true }.Start();
+                        }
+                        break;
+                    case "idpreview": {
+                            if (selected < 0 || selected >= files.Count) break;
+                            string idf = files[selected];
+                            int idSize = par.ContainsKey("id_size") ? (int)par["id_size"] : 0;
+                            int idBg = par.ContainsKey("id_bg") ? (int)par["id_bg"] : 0;
+                            int idSheet = par.ContainsKey("id_sheet") ? (int)par["id_sheet"] : 0;
+                            int idCw = par.ContainsKey("id_custom_w") ? (int)par["id_custom_w"] : 413;
+                            int idCh = par.ContainsKey("id_custom_h") ? (int)par["id_custom_h"] : 579;
+                            int idPw = par.ContainsKey("id_paper_w") ? (int)par["id_paper_w"] : 1800;
+                            int idPh = par.ContainsKey("id_paper_h") ? (int)par["id_paper_h"] : 1200;
+                            new Thread(() => {
+                                string tmp = Path.Combine(Path.GetTempPath(), "idprev_" + Guid.NewGuid().ToString("N") + ".jpg");
+                                string res = BeautyRunner.ProcessIdPhoto(idf, idSize, idBg, idCw, idCh, idSheet, idPw, idPh, tmp);
+                                if (res == null) {
+                                    string e2 = (BeautyRunner.LastError ?? "").Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
+                                    Send("{\"type\":\"toast\",\"msg\":\"证件照预览失败：" + e2 + "\"}");
+                                    return;
+                                }
+                                try {
+                                    byte[] bytes = File.ReadAllBytes(res);
+                                    Send("{\"type\":\"idpreview\",\"data\":\"data:image/jpeg;base64," + Convert.ToBase64String(bytes) + "\"}");
+                                } catch (Exception ex) { Log("证件照预览读取失败: " + ex.Message); }
+                                finally { try { File.Delete(tmp); } catch { } }
+                            }) { IsBackground = true }.Start();
+                        }
+                        break;
+                    case "autopick": {
+                            var names = new List<string>(files);
+                            new Thread(() => {
+                                string listFile = Path.Combine(Path.GetTempPath(), "pick_" + Guid.NewGuid().ToString("N") + ".txt");
+                                try {
+                                    var sb = new System.Text.StringBuilder();
+                                    foreach (var f in names) sb.AppendLine(f);
+                                    File.WriteAllText(listFile, sb.ToString(), new System.Text.UTF8Encoding(false));
+                                    double blurTh = par.ContainsKey("pick_blur") ? par["pick_blur"] : 35;
+                                    double expoTh = par.ContainsKey("pick_expo") ? par["pick_expo"] : 25;
+                                    string err;
+                                    string so = PyTools.Run(BeautyRunner.PythonExe, "pick.py", new string[] { listFile, blurTh.ToString("0"), expoTh.ToString("0") }, 600000, out err);
+                                    if (so != null) {
+                                        Send("{\"type\":\"pickresult\",\"data\":" + so.Trim() + "}");
+                                        Log("自动挑片完成: " + err);
+                                    } else Send("{\"type\":\"toast\",\"msg\":\"挑片失败：" + (err ?? "").Replace("\"", "'") + "\"}");
+                                } catch (Exception ex) { Log("挑片异常: " + ex.Message); }
+                                finally { try { File.Delete(listFile); } catch {} }
+                            }) { IsBackground = true }.Start();
+                        }
                         break;
                     case "export":
                         new Thread(() => DoExport()) { IsBackground = true }.Start();
@@ -1544,7 +1834,10 @@ namespace ImageBatchTool
             int my = Interlocked.Increment(ref previewToken);
             ThreadPool.QueueUserWorkItem(_ => {
                 try {
-                    Thread.Sleep(par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5 ? 260 : 30); // 美颜相机走 Python，拖动时加大合并窗口
+                    int delay = 30;
+                    if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5) delay = 260;
+                    if (par.ContainsKey("dof_on") && par["dof_on"] > 0.5) delay = 420;
+                    Thread.Sleep(delay);
                     if (Volatile.Read(ref previewToken) != my) return;
                     SendPreview();
                 } catch {}
@@ -1552,6 +1845,79 @@ namespace ImageBatchTool
         }
 
         void AutoSelectFirst() { if (selected < 0 && files.Count > 0) { selected = 0; cachedBase = null; } }
+
+        // 预设读取：解析自家格式 {"lut":"...","mode":"...","v":{...}}
+        void ApplyPreset(string json)
+        {
+            int vi = json.IndexOf("\"v\":{");
+            if (vi < 0) return;
+            int end = json.LastIndexOf('}');
+            string body = json.Substring(vi + 5, end - vi - 5);
+            var sb = new System.Text.StringBuilder();
+            foreach (var kv in body.Split(','))
+            {
+                int c = kv.IndexOf(':');
+                if (c <= 0) continue;
+                string k = kv.Substring(0, c).Trim().Trim('"');
+                double v;
+                if (!double.TryParse(kv.Substring(c + 1).Trim(), out v)) continue;
+                par[k] = v;
+                if (sb.Length > 0) sb.Append(",");
+                sb.Append("\"").Append(k).Append("\":").Append(v.ToString("0.###"));
+            }
+            int li = json.IndexOf("\"lut\":\"");
+            if (li > 0) {
+                int s = li + 7; int e2 = json.IndexOf('"', s);
+                if (e2 > s) {
+                    string p = json.Substring(s, e2 - s).Replace("\\\\", "\\");
+                    if (File.Exists(p)) activeLutPath = p;
+                }
+            }
+            Send("{\"type\":\"presetapplied\",\"vals\":{" + sb.ToString() + "}}");
+            SendState();
+            QueuePreview();
+        }
+
+        string B64(Bitmap b, long q)
+        {
+            using (var ms = new MemoryStream())
+            {
+                var ep = new EncoderParameters(1);
+                ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
+                b.Save(ms, LUT.JpegCodec, ep);
+                return Convert.ToBase64String(ms.ToArray());
+            }
+        }
+
+        // 原图（拉帘对比用）：未过任何滤镜的缩小预览
+        void SendOrig()
+        {
+            if (selected < 0 || selected >= files.Count) return;
+            try
+            {
+                using (var b = LoadBase(files[selected]))
+                {
+                    int max = par.ContainsKey("preview_max") ? (int)par["preview_max"] : 1200;
+                    int w = b.Width, h = b.Height;
+                    if (Math.Max(w, h) > max) { double s = (double)max / Math.Max(w, h); w = (int)(w * s); h = (int)(h * s); }
+                    Bitmap small;
+                    if (w != b.Width || h != b.Height)
+                    {
+                        small = new Bitmap(w, h, PixelFormat.Format24bppRgb);
+                        using (var g = Graphics.FromImage(small))
+                        {
+                            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                            g.DrawImage(b, 0, 0, w, h);
+                        }
+                    }
+                    else small = b.Clone() as Bitmap;
+                    string data;
+                    try { data = B64(small, 85); } finally { small.Dispose(); }
+                    Send("{\"type\":\"orig\",\"data\":\"data:image/jpeg;base64," + data + "\"}");
+                }
+            }
+            catch (Exception ex) { Log("原图预览失败: " + ex.Message); }
+        }
 
         void SendState()
         {
@@ -1620,6 +1986,20 @@ namespace ImageBatchTool
                     ApplyLUT(small);       // LUT 在小图上跑，预览快 15 倍
                     ApplyColor(small);
                     ApplyTiltShift(small);
+                    // 胶片质感（与导出流程一致）
+                    if (par.ContainsKey("fg_grain") || par.ContainsKey("fg_leak") || par.ContainsKey("fg_halo"))
+                        FilmFx.Apply(small, par["fg_grain"], par["fg_leak"], par["fg_halo"]);
+
+                    // 景深虚化（仅在开启时，预览用同一模型；超分不在预览里跑，避免拖慢）
+                    if (par.ContainsKey("dof_on") && par["dof_on"] > 0.5)
+                    {
+                        var dofb = BeautyRunner.ProcessDof(small, par.ContainsKey("dof_strength") ? (int)par["dof_strength"] : 60,
+                                                          par.ContainsKey("dof_focus") ? (int)par["dof_focus"] : 50);
+                        if (dofb != null) {
+                            using (var gd = Graphics.FromImage(small)) gd.DrawImage(dofb, 0, 0, w, h);
+                            dofb.Dispose();
+                        } else Send("{\"type\":\"status\",\"text\":\"景深虚化失败: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                    }
 
                     // 美颜相机：分项美颜（磨皮/美白/祛斑/黑眼圈/亮眼/口红/红润/瘦脸/大眼/瘦鼻/下巴）
                     if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5)
@@ -2271,13 +2651,16 @@ namespace ImageBatchTool
             // 否则三路径结果不一致（GPU 成功时自动/AI 模式的曝光与灰片转换会被丢弃）
             bool gpuDone = false;
             bool needTables = (expArr != null) || (logArr != null);
+            // 线性化套 LUT：GPU/原生路径不支持，强制走 C# 逐像素（保证预览与导出行为一致）
+            bool linLut = par.ContainsKey("lut_linear") && par["lut_linear"] > 0.5;
+            if (linLut) needTables = true;
             if (!needTables)
                 try { gpuDone = Native.gpu_lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
                     lutStrength, chroma, wbGainArr) != 0; } catch { gpuDone = false; }
             Log("GPU路径: " + (gpuDone ? "成功" : (needTables ? "跳过(需曝光/灰片表)" : "失败/跳过")) + " WB=" + (wbGainArr!=null));
 
             // CPU 原生 C++（AVX2+OpenMP），GPU失败才走
-            bool useNative = !gpuDone;
+            bool useNative = !gpuDone && !linLut;
             if (useNative) {
                 try {
                     Native.lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
@@ -2316,11 +2699,16 @@ namespace ImageBatchTool
                             lg = Math.Max(0, Math.Min(1, lg*ratio));
                             lb = Math.Max(0, Math.Min(1, lb*ratio));
                         }
-                        // 4. 套用LUT
+                        // 4. 线性化（可选）：LUT 若按线性空间制作，先转到线性再查表
+                        if (linLut) { lr = LinSpace.DecodeF((float)lr); lg = LinSpace.DecodeF((float)lg); lb = LinSpace.DecodeF((float)lb); }
                         float sr = (float)((lr-inMin)/inRange), sg = (float)((lg-inMin)/inRange), sb = (float)((lb-inMin)/inRange);
                         float nr, ng, nb;
                         CubeLut.SampleTetra(tbl, lutSize, sr, sg, sb, out nr, out ng, out nb);
-                        if (doLut) { nr = nr*lutStrength + ri/255f*(1-lutStrength); ng = ng*lutStrength + gi/255f*(1-lutStrength); nb = nb*lutStrength + bi/255f*(1-lutStrength); }
+                        // 5. 反线性化回 sRGB（在线性输出上做强度混合更自然）
+                        if (linLut) { nr = LinSpace.EncodeF(nr); ng = LinSpace.EncodeF(ng); nb = LinSpace.EncodeF(nb); }
+                        if (doLut) {
+                            nr = nr*lutStrength + (float)(ri/255f)*(1-lutStrength); ng = ng*lutStrength + (float)(gi/255f)*(1-lutStrength); nb = nb*lutStrength + (float)(bi/255f)*(1-lutStrength);
+                        }
                         // 1. 先做LUT输出校准（把灰片范围拉伸回正常0-1）
                         if (outputCalTable != null) {
                             nr = outputCalTable[(int)(nr*255f)];
@@ -2974,6 +3362,150 @@ namespace ImageBatchTool
             bmp.UnlockBits(bd);
         }
 
+        // 单张完整渲染（导出与「重做」共用）
+        Bitmap RenderOne(string f)
+        {
+            Bitmap bmp = LoadBase(f);
+            bool ok = false;
+            try
+            {
+                ApplyLUT(bmp);
+                ApplyColor(bmp);
+                ApplyTiltShift(bmp);
+                // 胶片质感
+                if (par.ContainsKey("fg_grain") || par.ContainsKey("fg_leak") || par.ContainsKey("fg_halo"))
+                    FilmFx.Apply(bmp, par["fg_grain"], par["fg_leak"], par["fg_halo"]);
+                // 景深虚化（深度模型）
+                if (par.ContainsKey("dof_on") && par["dof_on"] > 0.5)
+                {
+                    var dof = BeautyRunner.ProcessDof(bmp, (int)par["dof_strength"], (int)par["dof_focus"]);
+                    if (dof != null) { bmp.Dispose(); bmp = dof; }
+                    else Log("景深虚化跳过: " + BeautyRunner.LastError);
+                }
+                // 美颜相机：分项美颜（先做，GFPGAN 细节修复在其后）
+                if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5)
+                {
+                    var pro = BeautyRunner.ProcessPro(bmp, BeautyRunner.BuildParams(par));
+                    if (pro != null) { bmp.Dispose(); bmp = pro; }
+                    else Log("美颜相机失败 " + f + ": " + BeautyRunner.LastError);
+                }
+                // AI人像增强
+                if (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
+                {
+                    float st = (float)(par.ContainsKey("beauty_strength") ? par["beauty_strength"] / 100.0 : 0.7);
+                    var beautified = BeautyRunner.Process(bmp, st);
+                    if (beautified != null) { bmp.Dispose(); bmp = beautified; }
+                }
+                // AI 超分 2×（放在尺寸模式之前，先放大再按需缩小）
+                if (par.ContainsKey("sr_on") && par["sr_on"] > 0.5)
+                {
+                    var sr = BeautyRunner.ProcessSr(bmp, par.ContainsKey("sr_scale") ? (int)par["sr_scale"] : 2);
+                    if (sr != null) { bmp.Dispose(); bmp = sr; }
+                    else Log("AI超分跳过: " + BeautyRunner.LastError);
+                }
+                ok = true;
+            }
+            finally
+            {
+                if (!ok) { try { bmp.Dispose(); } catch { } bmp = null; }
+            }
+            return bmp;
+        }
+
+        // 输出路径：重名策略 0=覆盖 1=加序号 2=跳过
+        string ResolveDst(string srcPath, out bool skip)
+        {
+            skip = false;
+            string baseName = Path.GetFileNameWithoutExtension(srcPath) + "_out";
+            string ext = ".jpg";
+            int mode = par.ContainsKey("dup_mode") ? (int)par["dup_mode"] : 1;
+            bool resume = par.ContainsKey("skip_existing") && par["skip_existing"] > 0.5;
+            string first = Path.Combine(outputDir, baseName + ext);
+            if (resume && File.Exists(first) && new FileInfo(first).Length > 0) { skip = true; return first; }
+            if (mode == 0) return first;
+            if (!File.Exists(first)) return first;
+            if (mode == 2) { skip = true; return first; }
+            for (int k = 2; k < 10000; k++)
+            {
+                string p = Path.Combine(outputDir, baseName + "_" + k + ext);
+                if (!File.Exists(p)) return p;
+            }
+            return first;
+        }
+
+        void ExportOne(string f)
+        {
+            bool skip;
+            string dst = ResolveDst(f, out skip);
+            if (skip) { Log("跳过已存在: " + Path.GetFileName(dst)); return; }
+
+            // 证件照走独立流程
+            if (par.ContainsKey("id_on") && par["id_on"] > 0.5)
+            {
+                ExportIdPhoto(f, dst);
+                return;
+            }
+
+            Bitmap bmp = RenderOne(f);
+            if (bmp == null) return;
+            try
+            {
+                int sm = par.ContainsKey("out_size") ? (int)par["out_size"] : 0;
+                int nw = bmp.Width, nh = bmp.Height;
+                ApplySizeMode(ref nw, ref nh, sm);
+                Bitmap outBmp = bmp;
+                if (nw != bmp.Width || nh != bmp.Height)
+                {
+                    outBmp = new Bitmap(nw, nh, PixelFormat.Format24bppRgb);
+                    using (var g = Graphics.FromImage(outBmp))
+                    {
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.DrawImage(bmp, 0, 0, nw, nh);
+                    }
+                }
+                else if (NeedSoloCopy()) { outBmp = bmp.Clone() as Bitmap; }
+
+                try
+                {
+                    if (par.ContainsKey("dither") && par["dither"] > 0.5) DitherFx.Apply(outBmp);
+                    if (!par.ContainsKey("exif_keep") || par["exif_keep"] > 0.5) MetaWriter.CopyMeta(f, outBmp);
+                    long q = (par.ContainsKey("lossless") && par["lossless"] > 0.5) ? 100L : (long)(int)(par.ContainsKey("quality") ? par["quality"] : 95);
+                    var ep = new EncoderParameters(1);
+                    ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
+                    outBmp.Save(dst, LUT.JpegCodec, ep);
+                }
+                finally
+                {
+                    if (outBmp != bmp) outBmp.Dispose();
+                }
+            }
+            finally { bmp.Dispose(); }
+        }
+
+        bool NeedSoloCopy()
+        {
+            return (par.ContainsKey("dither") && par["dither"] > 0.5)
+                || (!par.ContainsKey("exif_keep") || par["exif_keep"] > 0.5);
+        }
+
+        void ExportIdPhoto(string f, string dst)
+        {
+            int sizeMode = par.ContainsKey("id_size") ? (int)par["id_size"] : 0;
+            int bg = par.ContainsKey("id_bg") ? (int)par["id_bg"] : 0;
+            int sheet = par.ContainsKey("id_sheet") ? (int)par["id_sheet"] : 0;
+            int cw = par.ContainsKey("id_custom_w") ? (int)par["id_custom_w"] : 413;
+            int ch = par.ContainsKey("id_custom_h") ? (int)par["id_custom_h"] : 579;
+            int pw = par.ContainsKey("id_paper_w") ? (int)par["id_paper_w"] : 1800;
+            int ph = par.ContainsKey("id_paper_h") ? (int)par["id_paper_h"] : 1200;
+            string res = BeautyRunner.ProcessIdPhoto(f, sizeMode, bg, cw, ch, sheet, pw, ph, dst);
+            if (res == null) {
+                string e = (BeautyRunner.LastError ?? "").Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
+                Log("证件照失败 " + Path.GetFileName(f) + ": " + e);
+                Send("{\"type\":\"toast\",\"msg\":\"证件照失败：" + e + "\"}");
+            }
+            else Log("证件照完成: " + Path.GetFileName(res));
+        }
+
         void DoExport()
         {
             if (string.IsNullOrEmpty(outputDir)) {
@@ -2994,64 +3526,45 @@ namespace ImageBatchTool
             forceFreshAnalysis = true;
             ResetAiCache();
 
-            // 串行批处理：AiRunner静态参数和BeautyRunner不支持并发，必须逐张处理
-            int done = 0;
-            for (int i = 0; i < total; i++)
+            // 并发：AI 模式会共享模型/静态状态，强制串行；其余按 CPU 数并行
+            bool aiHeavy = (lutMode == "ai") || (par.ContainsKey("ai_opt") && par["ai_opt"] > 0.5)
+                        || (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
+                        || (par.ContainsKey("sr_on") && par["sr_on"] > 0.5)
+                        || (par.ContainsKey("dof_on") && par["dof_on"] > 0.5);
+            int want = par.ContainsKey("workers") ? (int)par["workers"] : 0;
+            int workers = aiHeavy ? 1 : (want > 0 ? want : Math.Max(1, Math.Min(4, Environment.ProcessorCount - 1)));
+            Log("开始渲染: " + total + " 张，并发 " + workers);
+
+            int cursor = -1, done = 0;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var threads = new List<Thread>();
+            for (int w = 0; w < workers; w++)
             {
-                try {
-                    string f = files[i];
-                    Bitmap bmp = LoadBase(f);
-                    try {
-                            ApplyLUT(bmp);
-                            ApplyColor(bmp);
-                            ApplyTiltShift(bmp);
-                            // 美颜相机：分项美颜（先做，GFPGAN 细节修复在其后）
-                            if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5)
-                            {
-                                var pro = BeautyRunner.ProcessPro(bmp, BeautyRunner.BuildParams(par));
-                                if (pro != null)
-                                {
-                                    bmp.Dispose(); bmp = pro;
-                                }
-                                else Log("美颜相机失败 " + files[i] + ": " + BeautyRunner.LastError);
-                            }
-                            // AI人像增强
-                            if (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
-                            {
-                                BeautyRunner.Strength = (float)(par.ContainsKey("beauty_strength") ? par["beauty_strength"] / 100.0 : 0.7);
-                                var beautified = BeautyRunner.Process(bmp);
-                                if (beautified != null) { bmp.Dispose(); bmp = beautified; }
-                            }
-                            int sm = par.ContainsKey("out_size") ? (int)par["out_size"] : 0;
-                            int nw = bmp.Width, nh = bmp.Height;
-                            ApplySizeMode(ref nw, ref nh, sm);
-                            Bitmap save = bmp;
-                            if (nw != bmp.Width || nh != bmp.Height) {
-                                save = new Bitmap(bmp, nw, nh);
-                            }
-                            string name = Path.GetFileNameWithoutExtension(f) + "_out.jpg";
-                            string dst = Path.Combine(outputDir, name);
-                            var ep = new EncoderParameters(1);
-                            long q = (par.ContainsKey("lossless") && par["lossless"] > 0.5) ? 100L : (long)(int)(par.ContainsKey("quality") ? par["quality"] : 95);
-                            ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
-                            save.Save(dst, LUT.JpegCodec, ep);
-                            if (save != bmp) save.Dispose();
-                        } finally {
-                            bmp.Dispose();
-                        }
-                } catch (Exception ex) {
-                    Log("导出失败 " + files[i] + ": " + ex.Message);
-                }
-                done++;
-                Send("{\"type\":\"progress\",\"done\":" + done + ",\"total\":" + total + "}");
+                var t = new Thread(() => {
+                    while (true)
+                    {
+                        int idx = Interlocked.Increment(ref cursor);
+                        if (idx >= total) break;
+                        try { ExportOne(files[idx]); }
+                        catch (Exception ex) { Log("导出失败 " + files[idx] + ": " + ex.Message); }
+                        int d = Interlocked.Increment(ref done);
+                        Send("{\"type\":\"progress\",\"done\":" + d + ",\"total\":" + total + "}");
+                    }
+                });
+                t.IsBackground = true;
+                t.Start();
+                threads.Add(t);
             }
+            foreach (var t in threads) t.Join();
 
             forceFreshAnalysis = false;
             ResetAiCache();
             Send("{\"type\":\"progress\",\"done\":" + total + ",\"total\":" + total + "}");
+            Log("渲染结束: 用时 " + sw.Elapsed.TotalSeconds.ToString("F1") + "s");
             if (par.ContainsKey("open_after") && par["open_after"] > 0.5)
                 try { System.Diagnostics.Process.Start(outputDir); } catch {}
         }
+
 
         void LoadLuts(string dir)
         {
@@ -3060,6 +3573,41 @@ namespace ImageBatchTool
             foreach (var pattern in new[] { "*.cube", "*.3dl", "*.lut" })
                 foreach (var f in Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))
                     lutFiles.Add(f);
+        }
+
+        // 按「分组名 + LUT 名」定位磁盘文件（重命名/删除用）
+        string FindLutFile(string group, string name)
+        {
+            if (string.IsNullOrEmpty(group) || string.IsNullOrEmpty(name)) return null;
+            foreach (var p in lutFiles)
+            {
+                string g = Path.GetFileName(Path.GetDirectoryName(p));
+                if (!string.Equals(g, group, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(Path.GetFileNameWithoutExtension(p), name, StringComparison.OrdinalIgnoreCase)) return p;
+            }
+            return null;
+        }
+
+        // 早期「参考图→LUT」直接写进 我的-LUT，升级后统一归到「参考图生成」分组
+        void MigrateRefLuts()
+        {
+            try
+            {
+                string root = Path.Combine(Application.StartupPath, "luts");
+                string from = Path.Combine(root, "我的-LUT");
+                string to = Path.Combine(root, "参考图生成");
+                if (!Directory.Exists(from)) return;
+                Directory.CreateDirectory(to);
+                int n = 0;
+                foreach (var f in Directory.GetFiles(from, "参考_*.cube", SearchOption.TopDirectoryOnly))
+                {
+                    string dst = Path.Combine(to, Path.GetFileName(f));
+                    if (File.Exists(dst)) continue;
+                    try { File.Move(f, dst); n++; } catch { }
+                }
+                if (n > 0) Log("已把 " + n + " 个参考图 LUT 归入「参考图生成」分组");
+            }
+            catch { }
         }
 
         string JsonStr(string s) { return "\"" + (s??"").Replace("\\","\\\\").Replace("\"","\\\"") + "\""; }

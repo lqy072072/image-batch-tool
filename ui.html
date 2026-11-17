@@ -48,6 +48,10 @@ body { display:flex; flex-direction:column; }
 .lut-radio { width:12px; height:12px; border:1.5px solid #666; border-radius:50%; flex-shrink:0; position:relative; transition:all .15s; }
 .lut-item.sel .lut-radio { border-color:#0969da; }
 .lut-item.sel .lut-radio::after { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:6px; height:6px; background:#0969da; border-radius:50%; }
+.lut-menu { position:fixed; z-index:9999; background:#2c2c2e; border:1px solid #48484a; border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); padding:4px; min-width:120px; }
+.lut-menu-item { padding:6px 10px; font-size:11px; color:#ddd; border-radius:4px; cursor:pointer; }
+.lut-menu-item:hover { background:#3a3a3c; }
+.lut-menu-item.danger { color:#ff8b8b; }
 
 /* 深色滚动条 */
 * { scrollbar-width: thin; scrollbar-color: #555 #2b2b2b; }
@@ -97,6 +101,8 @@ body { display:flex; flex-direction:column; }
 .section-header .arrow { color:#888; font-size:10px; display:inline-block; transition:transform .15s; width:12px; text-align:center; }
 .section-header.collapsed .arrow { transform:rotate(-90deg); }
 .section-body { padding:8px 12px 12px; }
+.panel-divider { margin-top:12px; padding-top:10px; border-top:1px solid #2a2a2a; }
+.sub-title { font-size:11px; color:#888; margin-bottom:6px; }
 
 /* 直方图 */
 .hist-tabs { display:flex; gap:6px; padding:8px 12px 6px; }
@@ -153,7 +159,8 @@ body.skin-light .left { background:#ebebef; border-right:1px solid #d1d1d6; }
 body.skin-light .right { background:#f5f5f7; border-left:1px solid #d1d1d6; }
 body.skin-light .center { background:#ffffff; }
 body.skin-light .preview-area { background:#e5e5ea; }
-body.skin-light .left-section, body.skin-light .right-section, body.skin-light .left-footer, body.skin-light .lut-header { border-color:#d1d1d6; }
+body.skin-light .left-section, body.skin-light .right-section, body.skin-light .left-footer, body.skin-light .lut-header, body.skin-light .panel-divider { border-color:#d1d1d6; }
+body.skin-light .sub-title { color:#6e6e73; }
 body.skin-light .vsplitter { background:#d1d1d6; }
 body.skin-light .ruler-row, body.skin-light .ruler-v-col { background:#ececef; border-color:#d1d1d6; }
 body.skin-light .ruler-corner { border-color:#d1d1d6; }
@@ -182,6 +189,10 @@ body.skin-light .lut-item:hover { background:rgba(0,0,0,0.05); }
 body.skin-light .lut-item.sel { background:rgba(9,105,218,0.12); color:#0a4a8a; }
 body.skin-light .lut-item.sel .lut-radio { border-color:#0969da; }
 body.skin-light .lut-item.sel .lut-radio::after { background:#0969da; }
+body.skin-light .lut-menu { background:#ffffff; border-color:#d1d1d6; box-shadow:0 8px 24px rgba(0,0,0,.16); }
+body.skin-light .lut-menu-item { color:#1d1d1f; }
+body.skin-light .lut-menu-item:hover { background:#eef2f7; }
+body.skin-light .lut-menu-item.danger { color:#d1332e; }
 
 body.skin-light .slider-row input[type=range] { background:#c7c7cc; height:4px; }
 body.skin-light .slider-row input[type=range]::-webkit-slider-thumb { background:#ffffff; border:0.5px solid #c7c7cc; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
@@ -243,6 +254,17 @@ body.skin-light .slider-row input[type=range]::-webkit-slider-thumb {
   border:0.5px solid #c7c7cc;
   box-shadow:0 1px 3px rgba(0,0,0,0.2);
 }
+/* v1.06 新增控件 */
+.row-line { display:flex; align-items:center; gap:6px; font-size:11px; color:#bbb; margin-bottom:8px; }
+.row-line > span { white-space:nowrap; color:#999; }
+.chk { display:flex; align-items:center; gap:6px; font-size:11px; color:#bbb; margin-bottom:8px; cursor:pointer; }
+.chk input { accent-color:#0969da; width:13px; height:13px; }
+.mini-sel { background:#1a1a1a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:11px; padding:3px 4px; }
+.mini-btn { background:#2a2a2a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:11px; padding:4px 8px; cursor:pointer; }
+.mini-btn:hover { background:#383838; }
+.mini-input { background:#1a1a1a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:11px; padding:4px 6px; outline:none; }
+.tool-btn.on { background:#0969da; color:#fff; border-color:#0969da; }
+.swatch { display:inline-block; width:18px; height:18px; border-radius:3px; margin-right:4px; border:1px solid #444; }
 </style>
 <script>
 // 启动时先读皮肤偏好（URL 参数由 C# 注入），避免闪烁
@@ -330,6 +352,56 @@ window.addEventListener('mouseup', function(e) {
       <div class="file-list" id="fileList" style="flex:1;overflow-y:auto;min-height:40px"><span style="color:#555">还没有添加照片</span></div>
     </div>
 
+    <div class="left-section" style="padding:0;flex-shrink:0">
+      <div class="section-header"><span>输出与批处理</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div class="row-line"><span>重名策略</span>
+          <select class="mini-sel" id="dupSel" onchange="setParam('dup_mode',this.value)">
+            <option value="1" selected>加序号</option>
+            <option value="0">覆盖</option>
+            <option value="2">跳过</option>
+          </select>
+        </div>
+        <label class="chk"><input type="checkbox" onchange="setParam('skip_existing',this.checked?1:0)"> 断点续跑（已导出则跳过）</label>
+        <label class="chk"><input type="checkbox" checked onchange="setParam('exif_keep',this.checked?1:0)"> 保留 EXIF / ICC</label>
+        <label class="chk"><input type="checkbox" onchange="setParam('dither',this.checked?1:0)"> 8bit 抖动（消渐变断层）</label>
+        <label class="chk"><input type="checkbox" onchange="setParam('lut_linear',this.checked?1:0)"> 线性空间套 LUT</label>
+        <div class="row-line"><span>导出线程并发数量</span>
+          <select class="mini-sel" id="wrkSel" onchange="setParam('workers',this.value)" style="flex:1;min-width:0">
+            <option value="0" selected>自动</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="4">4</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+        <div class="row-line"><span>预设</span>
+          <select class="mini-sel" id="presetSel" style="flex:1;min-width:0"></select>
+          <button class="mini-btn" style="flex-shrink:0;white-space:nowrap" onclick="loadPreset()">读取</button>
+        </div>
+        <div class="row-line">
+          <input id="presetName" class="mini-input" placeholder="预设名" style="flex:1;min-width:0">
+          <button class="mini-btn" style="flex-shrink:0;white-space:nowrap" onclick="savePreset()">保存</button>
+          <button class="mini-btn" style="flex-shrink:0;white-space:nowrap;padding:4px 10px" onclick="delPreset()">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="left-section" style="padding:0;flex-shrink:0">
+      <div class="section-header"><span>辅助工具</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div class="row-line" style="gap:6px">
+          <button class="mini-btn" style="flex:1" onclick="post('autopick')">自动挑片</button>
+          <button class="mini-btn" style="flex:1" onclick="post('palette|6')">配色提取</button>
+        </div>
+        <div class="row-line">
+          <button class="mini-btn" style="flex:1" onclick="post('reflutdialog')">参考图→LUT</button>
+        </div>
+        <div id="paletteBox" style="display:none;margin-top:8px;max-height:132px;overflow-y:auto"></div>
+        <div id="pickBox" style="display:none;margin-top:8px;font-size:11px;color:#aaa;max-height:132px;overflow-y:auto"></div>
+      </div>
+    </div>
+
     <div class="vsplitter" id="vSplitter"></div>
 
     <div class="lut-section">
@@ -364,6 +436,8 @@ window.addEventListener('mouseup', function(e) {
       <div class="tool-btn" onclick="zoomFit()">适应</div>
       <div class="tool-btn" onclick="doRotate(-90)">↺ 左旋</div>
       <div class="tool-btn" onclick="doRotate(90)">↻ 右旋</div>
+      <div class="tool-btn" onclick="retryOne()">⟳ 重做</div>
+      <div class="tool-btn" id="wipeBtn" onclick="toggleWipe()">◧ 对比</div>
     </div>
     <div class="preview-row">
       <div class="preview-area" id="preview">
@@ -371,6 +445,11 @@ window.addEventListener('mouseup', function(e) {
         <div id="tsGuide" style="display:none;position:absolute;left:0;right:0;pointer-events:none;border-top:1px dashed rgba(0,200,255,0.95);border-bottom:1px dashed rgba(0,200,255,0.95);background:rgba(0,200,255,0.1);z-index:100"></div>
         <div class="crop-overlay" id="cropOverlay">
           <div class="crop-rect" id="cropRect" style="display:none"></div>
+        </div>
+        <div id="wipeLayer" style="display:none;position:absolute;inset:0;overflow:hidden;z-index:12">
+          <img id="wipeImg" draggable="false" style="max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);-webkit-user-drag:none;user-select:none;clip-path:inset(0 50% 0 0)">
+          <div id="wipeLine" style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:#4ea1ff;box-shadow:0 0 6px rgba(78,161,255,.8)"></div>
+          <div id="wipeTag" style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);color:#ddd;font-size:11px;padding:2px 6px;border-radius:4px">原图</div>
         </div>
       </div>
     </div>
@@ -400,6 +479,10 @@ window.addEventListener('mouseup', function(e) {
           <button class="lut-mode-btn" data-mode="direct" onclick="setLutMode('direct')">直出</button>
         </div>
         <div id="lutSliders"></div>
+        <div class="panel-divider">
+          <div class="sub-title">胶片质感</div>
+          <div id="filmSliders"></div>
+        </div>
       </div>
     </div>
 
@@ -411,6 +494,12 @@ window.addEventListener('mouseup', function(e) {
           <button id="aiOptBtn" onclick="toggleAiOpt()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">AI优化</button>
         </div>
         <div id="colorSliders"></div>
+        <div class="panel-divider">
+          <div class="sub-title">AI 增强（超分 / 景深）</div>
+          <label class="chk"><input type="checkbox" onchange="setParam('sr_on',this.checked?1:0)"> 全图超分 2×（Real-ESRGAN）</label>
+          <label class="chk"><input type="checkbox" onchange="setParam('dof_on',this.checked?1:0)"> 景深虚化（深度模型）</label>
+          <div id="dofSliders"></div>
+        </div>
       </div>
     </div>
 
@@ -439,6 +528,39 @@ window.addEventListener('mouseup', function(e) {
           <div class="slider-row"><span>强度</span><input type="range" min="0" max="100" value="70" id="s_beauty_strength" oninput="document.getElementById('v_beauty_strength').textContent=this.value;setParam('beauty_strength',this.value)"><span class="val" id="v_beauty_strength">70</span></div>
           <div style="font-size:11px;color:#888;margin-top:4px">可选：GFPGAN v1.4 细节修复（在美颜之后叠加）</div>
         </div>
+      </div>
+    </div>
+
+    <div class="right-section">
+      <div class="section-header"><span>证件照</span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <label class="chk"><input type="checkbox" id="idOnChk" onchange="setParam('id_on',this.checked?1:0);idModeHint(this.checked);post(this.checked?'idpreview':'preview')"> 启用证件照模式</label>
+        <div class="row-line"><span>尺寸</span>
+          <select class="mini-sel" onchange="setParam('id_size',this.value);idPreviewRefresh()">
+            <option value="0" selected>一寸 25×35</option>
+            <option value="1">二寸 35×49</option>
+            <option value="2">护照 33×48</option>
+          </select>
+        </div>
+        <div class="row-line"><span>底色</span>
+          <select class="mini-sel" onchange="setParam('id_bg',this.value);idPreviewRefresh()">
+            <option value="0" selected>白</option>
+            <option value="1">蓝</option>
+            <option value="2">红</option>
+            <option value="3">浅灰</option>
+          </select>
+        </div>
+        <label class="chk"><input type="checkbox" id="idSheetChk" onchange="setParam('id_sheet',this.checked?1:0);idSheetState(this.checked);idPreviewRefresh()"> 输出相纸排版（同版多张 + 裁切线）</label>
+        <div class="row-line"><span>相纸</span>
+          <select class="mini-sel" id="idPaperSel" onchange="idSetPaper(this.value)" disabled style="flex:1;min-width:0">
+            <option value="1800x1200" selected>六寸 6×4in（1800×1200）</option>
+            <option value="1500x1050">五寸 5×3.5in（1500×1050）</option>
+            <option value="2100x1500">七寸 7×5in（2100×1500）</option>
+            <option value="2400x1800">八寸 8×6in（2400×1800）</option>
+            <option value="2480x3508">A4 竖版（2480×3508）</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:#888;margin-top:6px">自动裁脸对齐 + 换底；预览即按导出规格渲染</div>
       </div>
     </div>
 
@@ -499,6 +621,28 @@ window.addEventListener('mouseup', function(e) {
 
 <script>
 function post(m){ if(window.chrome&&chrome.webview) chrome.webview.postMessage(m); }
+// 证件照模式提示（该模式只在导出时生效）
+function idModeHint(on){
+  const sb = document.getElementById('statusBox');
+  if (!sb) return;
+  if (on) { sb.textContent = '证件照预览按导出规格渲染中…'; sb.style.color = '#ffd479'; }
+  else { sb.textContent = '就绪'; sb.style.color = ''; }
+}
+function idPreviewRefresh(){
+  const c = document.getElementById('idOnChk');
+  if (c && c.checked) post('idpreview');
+}
+// 证件照相纸排版：勾选后才能选相纸
+function idSheetState(on){
+  const s = document.getElementById('idPaperSel');
+  if (s) s.disabled = !on;
+}
+function idSetPaper(v){
+  const p = String(v).split('x');
+  setParam('id_paper_w', p[0]);
+  setParam('id_paper_h', p[1]);
+  idPreviewRefresh();
+}
 // 滤镜搜索
 document.addEventListener('input', function(e){
   if (e.target && e.target.id === 'lutSearch') {
@@ -718,6 +862,118 @@ const tsSliders = [
 ];
 buildSliders('tsSliders', tsSliders);
 buildSliders('beautySliders', beautySliders);
+
+// ---- v1.06 新增滑块 ----
+buildSliders('filmSliders', [
+  ['fg_grain','颗粒',0,100,0],
+  ['fg_leak','漏光',0,100,0],
+  ['fg_halo','Halation',0,100,0],
+]);
+buildSliders('dofSliders', [
+  ['dof_strength','虚化强度',0,100,60],
+  ['dof_focus','焦平面',0,100,50],
+]);
+
+// ---- 单张重做 ----
+function retryOne() {
+  const i = (typeof window._selIdx === 'number' && window._selIdx >= 0) ? window._selIdx : -1;
+  if (i < 0) { post('getorig'); return; }
+  post('retryone|' + i);
+}
+
+// ---- 前后对比拉帘 ----
+let _wipeOn = false, _wipePos = 50, _origSrc = null, _wipeDragging = false;
+function toggleWipe() {
+  _wipeOn = !_wipeOn;
+  const btn = document.getElementById('wipeBtn');
+  if (btn) btn.classList.toggle('on', _wipeOn);
+  if (_wipeOn && !_origSrc) post('getorig');
+  renderWipe();
+}
+function renderWipe() {
+  const layer = document.getElementById('wipeLayer');
+  if (!layer) return;
+  if (!_wipeOn || !_origSrc) { layer.style.display = 'none'; return; }
+  const img = document.getElementById('wipeImg');
+  if (img.getAttribute('src') !== _origSrc) img.src = _origSrc;
+  layer.style.display = 'block';
+  img.style.clipPath = 'inset(0 ' + (100 - _wipePos) + '% 0 0)';
+  document.getElementById('wipeLine').style.left = _wipePos + '%';
+}
+(function bindWipe() {
+  const prev = document.getElementById('preview');
+  if (!prev) return;
+  prev.addEventListener('mousedown', e => {
+    if (!_wipeOn) return;
+    _wipeDragging = true;
+    const r = prev.getBoundingClientRect();
+    _wipePos = Math.max(2, Math.min(98, (e.clientX - r.left) / r.width * 100));
+    renderWipe();
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!_wipeDragging) return;
+    const r = prev.getBoundingClientRect();
+    _wipePos = Math.max(2, Math.min(98, (e.clientX - r.left) / r.width * 100));
+    renderWipe();
+  });
+  window.addEventListener('mouseup', () => { _wipeDragging = false; });
+})();
+
+// ---- 预设 ----
+function copyHex(h) {
+  try { navigator.clipboard.writeText(h); document.getElementById('statusBox').textContent = '已复制 ' + h; } catch (e) {}
+}
+function savePreset() {
+  const n = document.getElementById('presetName').value.trim();
+  if (!n) { alert('请输入预设名'); return; }
+  post('savepreset|' + n);
+}
+function loadPreset() {
+  const s = document.getElementById('presetSel');
+  if (s && s.value) post('loadpreset|' + s.value);
+  else post('presetlist');
+}
+function delPreset() {
+  const s = document.getElementById('presetSel');
+  if (s && s.value) post('delpreset|' + s.value);
+}
+function renderPresets(items) {
+  const s = document.getElementById('presetSel');
+  if (!s) return;
+  s.innerHTML = (items && items.length)
+    ? items.map(n => `<option>${n}</option>`).join('')
+    : '<option value="">无预设</option>';
+}
+
+// ---- 文件列表：只渲染可视窗口（大量文件时避免卡顿） ----
+window._files = [];
+window._selIdx = -1;
+function renderFileList() {
+  const fl = document.getElementById('fileList');
+  const files = window._files || [];
+  const sel = window._selIdx;
+  if (!files.length) { fl.innerHTML = '<span style="color:#555">还没有添加照片</span>'; return; }
+  const win = 60;
+  let a = 0, b = files.length;
+  if (files.length > win) {
+    a = Math.max(0, Math.min(files.length - win, Math.floor(sel - win / 2)));
+    b = Math.min(files.length, a + win);
+  }
+  const rows = [];
+  if (a > 0) rows.push(`<div class="file-item" style="justify-content:center;color:#666" onclick="post('select|${Math.max(0, sel - 30)}')">↑ 上方 ${a} 项</div>`);
+  for (let i = a; i < b; i++) {
+    const f = files[i];
+    const nm = (typeof f === 'object') ? f.name : f;
+    const sz = (typeof f === 'object') ? f.size : 0;
+    let szStr = '';
+    if (sz > 1024 * 1024) szStr = (sz / 1024 / 1024).toFixed(1) + ' MB';
+    else if (sz > 1024) szStr = (sz / 1024).toFixed(0) + ' KB';
+    rows.push(`<div class="file-item ${i === sel ? 'sel' : ''}" onclick="post('select|${i}')"><span class="fname">${nm}</span><span class="fsize">${szStr}</span></div>`);
+  }
+  if (b < files.length) rows.push(`<div class="file-item" style="justify-content:center;color:#666" onclick="post('select|${Math.min(files.length - 1, sel + 30)}')">↓ 下方 ${files.length - b} 项</div>`);
+  fl.innerHTML = rows.join('');
+}
 updateTsState();
 
 // LUT 树
@@ -726,13 +982,10 @@ function renderLutTree(groups) {
   const q = (document.getElementById('lutSearch').value || '').trim().toLowerCase();
   const tree = document.getElementById('lutTree');
   tree.innerHTML = '';
-  // 把"我的-LUT"置顶
+  // 把"我的-LUT"置顶，「参考图生成」紧随其后
   const arr = window._allLutGroups.slice();
-  arr.sort((a,b) => {
-    const am = a.group.indexOf('我的')>=0 ? 0 : 1;
-    const bm = b.group.indexOf('我的')>=0 ? 0 : 1;
-    return am - bm;
-  });
+  const rank = n => n.indexOf('我的')>=0 ? 0 : (n.indexOf('参考图')>=0 ? 1 : 2);
+  arr.sort((a,b) => rank(a.group) - rank(b.group));
   arr.forEach(g => {
     let items = g.items || [];
     if (q) items = items.filter(n => n.toLowerCase().indexOf(q)>=0);
@@ -749,7 +1002,11 @@ function renderLutTree(groups) {
     items.forEach(name => {
       const item = document.createElement('div');
       item.className = 'lut-item';
+      item.dataset.name = name;
+      item.dataset.group = g.group;
+      item.title = '右键可重命名 / 删除';
       item.innerHTML = `<span class="lut-radio"></span> <span>${name}</span>`;
+      item.oncontextmenu = (ev) => openLutMenu(ev, g.group, name);
       item.onclick = () => {
         const wasSelected = item.classList.contains('sel');
         document.querySelectorAll('.lut-item').forEach(x=>{
@@ -773,6 +1030,45 @@ function renderLutTree(groups) {
     gEl.querySelector('.lut-group-title').onclick = () => gEl.classList.toggle('collapsed');
     tree.appendChild(gEl);
   });
+}
+
+// LUT 右键菜单：重命名 / 删除
+function closeLutMenu(){
+  const m = document.getElementById('lutMenu');
+  if (m) m.remove();
+}
+document.addEventListener('click', closeLutMenu);
+document.addEventListener('scroll', closeLutMenu, true);
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeLutMenu(); });
+function openLutMenu(e, group, name){
+  e.preventDefault();
+  e.stopPropagation();
+  closeLutMenu();
+  const m = document.createElement('div');
+  m.id = 'lutMenu';
+  m.className = 'lut-menu';
+  m.innerHTML = '<div class="lut-menu-item" data-a="rn">重命名</div><div class="lut-menu-item danger" data-a="del">删除</div>';
+  document.body.appendChild(m);
+  const w = 130, h = 68;
+  let x = e.clientX, y = e.clientY;
+  if (x + w > window.innerWidth) x = window.innerWidth - w - 8;
+  if (y + h > window.innerHeight) y = window.innerHeight - h - 8;
+  m.style.left = x + 'px';
+  m.style.top = y + 'px';
+  m.querySelector('[data-a="rn"]').onclick = function(ev){
+    ev.stopPropagation();
+    closeLutMenu();
+    const nn = prompt('重命名 LUT（不要带扩展名）', name);
+    if (nn && nn.trim() && nn.trim() !== name) post('renamelut|' + group + '|' + name + '|' + nn.trim());
+  };
+  m.querySelector('[data-a="del"]').onclick = function(ev){
+    ev.stopPropagation();
+    closeLutMenu();
+    if (!confirm('删除 LUT「' + name + '」？\n文件会从磁盘移除，不可撤销。')) return;
+    const sel = document.querySelector('.lut-item.sel');
+    if (sel && sel.dataset.name === name) post('deselectlut');
+    post('dellut|' + group + '|' + name);
+  };
 }
 
 // 垂直分隔条拖动
@@ -1190,18 +1486,10 @@ if (window.chrome && chrome.webview) {
     }
     if (m.type === 'state') {
       const fl = document.getElementById('fileList');
-      if (!m.files || m.files.length===0) {
-        fl.innerHTML = '<span style="color:#555">还没有添加照片</span>';
-      } else {
-        fl.innerHTML = m.files.map((f,i) => {
-          const nm = (typeof f === 'object') ? f.name : f;
-          const sz = (typeof f === 'object') ? f.size : 0;
-          let szStr = '';
-          if (sz > 1024*1024) szStr = (sz/1024/1024).toFixed(1)+' MB';
-          else if (sz > 1024) szStr = (sz/1024).toFixed(0)+' KB';
-          return `<div class="file-item ${i===m.selected?'sel':''}" onclick="post('select|${i}')"><span class="fname">${nm}</span><span class="fsize">${szStr}</span></div>`;
-        }).join('');
-      }
+      if (window._selIdx !== m.selected) { _origSrc = null; }
+      window._files = m.files || [];
+      window._selIdx = (typeof m.selected === 'number') ? m.selected : -1;
+      renderFileList();
       document.getElementById('fileCount').textContent = (m.files?m.files.length:0)+' 项';
       renderLutTree(m.luts);
       if (m.out) {
@@ -1220,6 +1508,24 @@ if (window.chrome && chrome.webview) {
       document.getElementById('pbar').style.width = '0%';
       document.getElementById('status').textContent = '0%';
       drawHist(null);
+    } else if (m.type === 'idpreview') {
+      const sbId = document.getElementById('statusBox');
+      sbId.textContent = '✓ 证件照预览（导出规格）';
+      sbId.style.color = '#9fff9f';
+      const prevId = document.getElementById('preview');
+      const guideId = document.getElementById('tsGuide');
+      const overlayId = document.getElementById('cropOverlay');
+      const imgId = document.createElement('img');
+      imgId.draggable = false;
+      imgId.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
+      imgId.onload = function(){ updateGuide(); };
+      imgId.src = m.data;
+      prevId.innerHTML = '';
+      prevId.appendChild(imgId);
+      if (guideId) prevId.appendChild(guideId);
+      if (overlayId) prevId.appendChild(overlayId);
+      applyZoom();
+      updateGuide();
     } else if (m.type === 'preview') {
       const sb2 = document.getElementById('statusBox');
       sb2.textContent = '✓ 预览已刷新';
@@ -1241,6 +1547,7 @@ if (window.chrome && chrome.webview) {
       drawHist(m.hist);
       applyZoom();
       updateGuide();
+      renderWipe();
       if (m.out_w) {
         let kb = m.est_kb;
         let sizeStr = kb > 1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB';
@@ -1255,6 +1562,66 @@ if (window.chrome && chrome.webview) {
         document.getElementById('renderName').textContent = m.file;
         document.getElementById('statusBox').textContent = m.file;
       }
+    } else if (m.type === 'orig') {
+      _origSrc = m.data;
+      renderWipe();
+    } else if (m.type === 'presets') {
+      renderPresets(m.items);
+    } else if (m.type === 'presetapplied') {
+      const v = m.vals || {};
+      Object.keys(v).forEach(k => {
+        const sl = document.getElementById('s_'+k);
+        const vl = document.getElementById('v_'+k);
+        if (sl) sl.value = v[k];
+        if (vl) vl.textContent = Math.round(v[k]*((k==='shadows'||k==='highlights')?10:1));
+      });
+      const ip = document.getElementById('idPaperSel');
+      if (ip && v.id_paper_w && v.id_paper_h) {
+        const pv = Math.round(v.id_paper_w) + 'x' + Math.round(v.id_paper_h);
+        if (Array.from(ip.options).some(o => o.value === pv)) ip.value = pv;
+      }
+      const ic = document.getElementById('idOnChk');
+      if (ic && typeof v.id_on !== 'undefined') ic.checked = v.id_on > 0.5;
+      const ish = document.getElementById('idSheetChk');
+      if (ish && typeof v.id_sheet !== 'undefined') { ish.checked = v.id_sheet > 0.5; idSheetState(ish.checked); }
+      document.getElementById('statusBox').textContent = '预设已应用';
+    } else if (m.type === 'palette') {
+      const box = document.getElementById('paletteBox');
+      const other = document.getElementById('pickBox');
+      if (other) other.style.display = 'none';
+      const d = m.data || {};
+      if (d.ok && d.colors) {
+        box.style.display = 'block';
+        box.innerHTML = '<div style="font-size:11px;color:#888;margin-bottom:4px">主色 · 点击复制</div>' +
+          d.colors.map(c => `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;cursor:pointer" onclick="copyHex('${c.hex}')">
+            <span class="swatch" style="background:${c.hex}"></span>
+            <span style="font-size:11px;color:#ccc;font-family:monospace">${c.hex}</span>
+            <span style="font-size:10px;color:#666">${(c.ratio*100).toFixed(1)}%</span></div>`).join('');
+      } else {
+        box.style.display = 'block';
+        box.innerHTML = '<span style="color:#f66;font-size:11px">提取失败</span>';
+      }
+    } else if (m.type === 'pickresult') {
+      const box = document.getElementById('pickBox');
+      const other = document.getElementById('paletteBox');
+      if (other) other.style.display = 'none';
+      const d = m.data || {};
+      box.style.display = 'block';
+      if (d.ok && d.items) {
+        const keep = d.items.filter(x => x.keep).length;
+        box.innerHTML = `<div style="margin-bottom:4px">共 ${d.items.length} 张，建议保留 <b style="color:#9fff9f">${keep}</b> 张</div>` +
+          d.items.slice(0, 10).map(x => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;color:${x.keep?'#bbb':'#f88'}">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.name}</span>
+            <span>${x.score}${x.why.length?' · '+x.why.join('/'):''}</span></div>`).join('');
+      } else {
+        box.innerHTML = '<span style="color:#f66;font-size:11px">挑片失败</span>';
+      }
+    } else if (m.type === 'toast') {
+      const sb3 = document.getElementById('statusBox');
+      if (sb3) { sb3.textContent = m.msg || ''; sb3.style.color = '#ffd479'; }
+    } else if (m.type === 'reflutfile') {
+      const p = prompt('给生成的 LUT 起个名字（不要带 .cube）', '参考_' + Date.now().toString().slice(-4));
+      if (p) post('reflut|' + m.path + '|' + p);
     }
   });
 }

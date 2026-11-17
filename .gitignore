@@ -22,6 +22,11 @@ ai/models/yunet_test.onnx
 # 大体积人脸模型：随 Release 资产发布，不入仓库
 ai/models/bisenet_resnet18.onnx
 ai/models/face_mesh_468.onnx
+ai/models/depth_vits.onnx
+ai/models/depth_vits.onnx.part
+
+# 本地嵌入式 Python 目录联接（由安装包/打包流程提供）
+/python/
 
 # Debug/test files
 crop_debug.log
