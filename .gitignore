@@ -19,6 +19,10 @@ ai/ort-managed/
 ai/models/codeformer.onnx
 ai/models/yunet_test.onnx
 
+# 大体积人脸模型：随 Release 资产发布，不入仓库
+ai/models/bisenet_resnet18.onnx
+ai/models/face_mesh_468.onnx
+
 # Debug/test files
 crop_debug.log
 debug_*.*
@@ -44,5 +48,15 @@ ai_out_*.json
 Thumbs.db
 Desktop.ini
 
+# Root-level preview exports (canonical copies live in docs/screenshots)
+/美颜效果对比.png
+/下巴修复对比.png
+/AI增强对比.png
+/美颜示例_全套.jpg
+
 # Broken LUT backups (not distributed)
 luts/_失效文件备份/
+
+# 本地发布说明草稿
+/.release_body.md
+/.release_id

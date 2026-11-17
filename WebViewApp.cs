@@ -867,6 +867,10 @@ namespace ImageBatchTool
                 }
                 catch { }
             }
+            // 复用 AiRunner 更完整的探测（常见安装路径 + 豆包客户端运行时）
+            try {
+                if (AiRunner.IsAvailable()) { pythonPath = AiRunner.DebugPythonPath; _available = true; return true; }
+            } catch { }
             _available = false; return false;
         }
 
@@ -875,14 +879,76 @@ namespace ImageBatchTool
         // 对Bitmap做人脸美颜，返回新Bitmap（失败返回null）
         public static float Strength = 0.7f;
 
+        // ---- 美颜相机（分项美颜）参数拼装：beauty_pro.py 接受 smooth=60,white=35,... ----
+        static readonly string[] ProKeys = { "smooth", "white", "spot", "dark", "eye", "lip",
+                                             "lipcolor", "rosy", "slim", "eyesize", "nose", "chin",
+                                             "aifix", "aifix_strength" };
+        static readonly double[] ProDefaults = { 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 55 };
+
+        public static string BuildParams(System.Collections.Generic.Dictionary<string, double> par)
+        {
+            string s = "";
+            for (int i = 0; i < ProKeys.Length; i++)
+            {
+                string key = "bps_" + ProKeys[i];
+                double v = par.ContainsKey(key) ? par[key] : ProDefaults[i];
+                if (s.Length > 0) s += ",";
+                s += ProKeys[i] + "=" + v.ToString("0.##");
+            }
+            return s;
+        }
+
+        // 分项美颜：BiSeNet 分区 + FaceMesh 468 关键点液化 + 传统 CV 质感处理
+        public static Bitmap ProcessPro(Bitmap src, string parms)
+        {
+            if (!IsAvailable()) { LastError = "Python not found"; return null; }
+            try
+            {
+                string tmpIn = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beautypro_in_" + Guid.NewGuid().ToString("N") + ".png");
+                string tmpOut = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beautypro_out_" + Guid.NewGuid().ToString("N") + ".png");
+                src.Save(tmpIn, System.Drawing.Imaging.ImageFormat.Png);   // 无损中转，避免 AI 前先掉一次细节
+
+                string scriptDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ai");
+                string script = System.IO.Path.Combine(scriptDir, "beauty_pro.py");
+
+                var psi = new System.Diagnostics.ProcessStartInfo(pythonPath,
+                    "\"" + script + "\" \"" + tmpIn + "\" \"" + tmpOut + "\" " + parms);
+                psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                psi.WorkingDirectory = scriptDir;
+
+                var proc = System.Diagnostics.Process.Start(psi);
+                string stdout = proc.StandardOutput.ReadToEnd();
+                string stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit(180000);
+
+                try { System.IO.File.Delete(tmpIn); } catch { }
+
+                if (System.IO.File.Exists(tmpOut))
+                {
+                    var result = new Bitmap(tmpOut);
+                    try { System.IO.File.Delete(tmpOut); } catch { }
+                    LastError = stdout.Trim();
+                    return result;
+                }
+                LastError = "no output: " + stdout + " " + stderr;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                return null;
+            }
+        }
+
         public static Bitmap Process(Bitmap src)
         {
             if (!IsAvailable()) { LastError = "Python not found"; return null; }
             try
             {
-                string tmpIn = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_in_" + Guid.NewGuid().ToString("N") + ".jpg");
-                string tmpOut = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_out_" + Guid.NewGuid().ToString("N") + ".jpg");
-                src.Save(tmpIn, System.Drawing.Imaging.ImageFormat.Jpeg);
+                string tmpIn = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_in_" + Guid.NewGuid().ToString("N") + ".png");
+                string tmpOut = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beauty_out_" + Guid.NewGuid().ToString("N") + ".png");
+                src.Save(tmpIn, System.Drawing.Imaging.ImageFormat.Png);   // 无损中转，避免 AI 前先掉一次细节
 
                 string scriptDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ai");
                 string script = System.IO.Path.Combine(scriptDir, "beauty.py");
@@ -1247,6 +1313,12 @@ namespace ImageBatchTool
             par["ts_sat"]=115; par["ts_con"]=115; par["ts_bri"]=95; par["ts_vig"]=15;
             par["open_after"]=1;
             par["preview_max"]=1200;
+            par["beauty_on"]=0; par["beauty_strength"]=70;
+            par["beauty_pro_on"]=0;
+            par["bps_smooth"]=0; par["bps_white"]=0; par["bps_spot"]=0; par["bps_dark"]=0;
+            par["bps_eye"]=0; par["bps_lip"]=0; par["bps_lipcolor"]=2; par["bps_rosy"]=0;
+            par["bps_slim"]=0; par["bps_eyesize"]=0; par["bps_nose"]=0; par["bps_chin"]=0;
+            par["bps_aifix"]=0; par["bps_aifix_strength"]=55;
 
             LoadLuts(Path.Combine(Application.StartupPath, "luts"));
 
@@ -1442,7 +1514,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start(Path.Combine(Application.StartupPath, "luts")); } catch {}
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 1.04\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 1.05\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -1472,7 +1544,7 @@ namespace ImageBatchTool
             int my = Interlocked.Increment(ref previewToken);
             ThreadPool.QueueUserWorkItem(_ => {
                 try {
-                    Thread.Sleep(30); // 30ms 合并连续的滑块事件
+                    Thread.Sleep(par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5 ? 260 : 30); // 美颜相机走 Python，拖动时加大合并窗口
                     if (Volatile.Read(ref previewToken) != my) return;
                     SendPreview();
                 } catch {}
@@ -1548,6 +1620,25 @@ namespace ImageBatchTool
                     ApplyLUT(small);       // LUT 在小图上跑，预览快 15 倍
                     ApplyColor(small);
                     ApplyTiltShift(small);
+
+                    // 美颜相机：分项美颜（磨皮/美白/祛斑/黑眼圈/亮眼/口红/红润/瘦脸/大眼/瘦鼻/下巴）
+                    if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5)
+                    {
+                        var pro = BeautyRunner.ProcessPro(small, BeautyRunner.BuildParams(par));
+                        if (pro != null)
+                        {
+                            using (var g3 = Graphics.FromImage(small))
+                            {
+                                g3.DrawImage(pro, 0, 0, w, h);
+                            }
+                            pro.Dispose();
+                            Send("{\"type\":\"status\",\"text\":\"美颜相机: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                        }
+                        else
+                        {
+                            Send("{\"type\":\"status\",\"text\":\"美颜相机失败: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                        }
+                    }
 
                     // AI美颜（GFPGAN）
                     if (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
@@ -2914,6 +3005,16 @@ namespace ImageBatchTool
                             ApplyLUT(bmp);
                             ApplyColor(bmp);
                             ApplyTiltShift(bmp);
+                            // 美颜相机：分项美颜（先做，GFPGAN 细节修复在其后）
+                            if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5)
+                            {
+                                var pro = BeautyRunner.ProcessPro(bmp, BeautyRunner.BuildParams(par));
+                                if (pro != null)
+                                {
+                                    bmp.Dispose(); bmp = pro;
+                                }
+                                else Log("美颜相机失败 " + files[i] + ": " + BeautyRunner.LastError);
+                            }
                             // AI人像增强
                             if (par.ContainsKey("beauty_on") && par["beauty_on"] > 0.5)
                             {

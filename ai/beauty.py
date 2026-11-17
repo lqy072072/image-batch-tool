@@ -86,7 +86,10 @@ def process_image(input_path, output_path, strength=0.7):
     h, w = img.shape[:2]
     faces = detect_faces(img)
     if len(faces) == 0:
-        cv2.imwrite(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        if output_path.lower().endswith(('.png', '.tif', '.tiff', '.bmp')):
+            cv2.imwrite(output_path, img)
+        else:
+            cv2.imwrite(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         return {"ok": True, "faces": 0}
 
     session = get_session(GFPGAN_PATH)
@@ -124,13 +127,32 @@ def process_image(input_path, output_path, strength=0.7):
         o = cv2.cvtColor(o, cv2.COLOR_RGB2BGR)
         o = cv2.resize(o, (cw, ch), interpolation=cv2.INTER_LINEAR)
 
-        # 纯AI混合
+        # 细节保留式合成：只用 AI 输出的低频（修斑点/肤色/噪点），
+        # 原图高频纹理按增益回注，避免 512 输入再放大把细节糊掉
+        src = crop.astype(np.float32)
+        sigma = max(1.0, min(crop.shape[:2]) * 0.004)
+        src_low = cv2.GaussianBlur(src, (0, 0), sigma)
+        src_hi = src - src_low
+        ai_low = cv2.GaussianBlur(o.astype(np.float32), (0, 0), sigma)
+        gain = 1.0 + 0.45 * strength * np.clip(np.abs(src_hi).mean(2, keepdims=True) / 8.0, 0, 1)
+        det = np.clip(ai_low + src_hi * gain, 0, 255)
+
+        # 羽化贴回（原来是硬矩形，边界会露出方块）
+        paste = np.zeros((ch, cw), dtype=np.float32)
+        k = max(4, int(min(ch, cw) * 0.06))
+        paste[k:ch - k, k:cw - k] = 1.0
+        paste = cv2.GaussianBlur(paste, (k * 2 + 1, k * 2 + 1), 0)[:, :, None]
+
         region = result[y1:y2, x1:x2].astype(np.float32)
-        blended = o.astype(np.float32) * strength + region * (1.0 - strength)
-        result[y1:y2, x1:x2] = np.clip(blended, 0, 255).astype(np.uint8)
+        blended = region + (det - region) * strength
+        result[y1:y2, x1:x2] = np.clip(region * (1.0 - paste) + blended * paste,
+                                       0, 255).astype(np.uint8)
         n += 1
 
-    cv2.imwrite(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    if output_path.lower().endswith(('.png', '.tif', '.tiff', '.bmp')):
+        cv2.imwrite(output_path, result)          # 无损中转
+    else:
+        cv2.imwrite(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 95])
     return {"ok": True, "faces": n}
 
 if __name__ == "__main__":

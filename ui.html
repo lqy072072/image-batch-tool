@@ -415,13 +415,30 @@ window.addEventListener('mouseup', function(e) {
     </div>
 
     <div class="right-section">
-      <div class="section-header"><span>人像增强</span><span class="arrow">▼</span></div>
+      <div class="section-header"><span>美颜</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div style="display:flex;gap:6px;margin-bottom:10px">
-          <button id="beautyBtn" onclick="toggleBeauty()" style="flex:1;padding:7px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">AI人像增强</button>
+          <button id="beautyProBtn" onclick="toggleBeautyPro()" style="flex:1;padding:7px;background:#ec4899;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">开启美颜</button>
         </div>
-        <div class="slider-row"><span>强度</span><input type="range" min="0" max="100" value="70" id="s_beauty_strength" oninput="document.getElementById('v_beauty_strength').textContent=this.value;setParam('beauty_strength',this.value)"><span class="val" id="v_beauty_strength">70</span></div>
-        <div style="font-size:11px;color:#888;margin-top:6px">GFPGAN v1.4 人脸智能修复增强</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-size:11px;color:#bbb;white-space:nowrap">口红色号</span>
+          <select id="lipColorSel" onchange="setParam('bps_lipcolor',this.value)" style="flex:1;background:#1a1a1a;color:#ddd;border:1px solid #3c3c3c;border-radius:4px;font-size:11px;padding:3px">
+            <option value="0">正红</option>
+            <option value="1">豆沙</option>
+            <option value="2" selected>珊瑚</option>
+            <option value="3">蜜桃</option>
+            <option value="4">玫红</option>
+            <option value="5">裸橘</option>
+          </select>
+        </div>
+        <div id="beautySliders" style="opacity:0.4;pointer-events:none"></div>
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2a2a">
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button id="beautyBtn" onclick="toggleBeauty()" style="flex:1;padding:6px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer">AI细节增强</button>
+          </div>
+          <div class="slider-row"><span>强度</span><input type="range" min="0" max="100" value="70" id="s_beauty_strength" oninput="document.getElementById('v_beauty_strength').textContent=this.value;setParam('beauty_strength',this.value)"><span class="val" id="v_beauty_strength">70</span></div>
+          <div style="font-size:11px;color:#888;margin-top:4px">可选：GFPGAN v1.4 细节修复（在美颜之后叠加）</div>
+        </div>
       </div>
     </div>
 
@@ -489,7 +506,7 @@ document.addEventListener('input', function(e){
   }
 });
 function setParam(k,v){ post('setparam|'+k+'|'+v); updateGuide();
-  const labelMap = {quality:'画质',out_size:'尺寸',out_fmt:'格式',ts_on:'移轴',filterStrength:'滤镜强度',chroma:'色度',saturation:'饱和度',contrast:'对比度',brightness:'亮度',shadows:'暗部亮调',highlights:'高光压暗',temp:'色温',tint:'色调',vignette:'暗角',sharpness:'锐度',ts_pos:'移轴位置',ts_band:'移轴宽度',ts_blur:'模糊强度',ts_angle:'旋转角度',ts_sat:'移轴饱和度',ts_con:'移轴对比度',ts_bri:'移轴亮度',ts_vig:'移轴暗角'};
+  const labelMap = {quality:'画质',out_size:'尺寸',out_fmt:'格式',ts_on:'移轴',filterStrength:'滤镜强度',chroma:'色度',saturation:'饱和度',contrast:'对比度',brightness:'亮度',shadows:'暗部亮调',highlights:'高光压暗',temp:'色温',tint:'色调',vignette:'暗角',sharpness:'锐度',ts_pos:'移轴位置',ts_band:'移轴宽度',ts_blur:'模糊强度',ts_angle:'旋转角度',ts_sat:'移轴饱和度',ts_con:'移轴对比度',ts_bri:'移轴亮度',ts_vig:'移轴暗角',beauty_pro_on:'美颜开关',bps_smooth:'磨皮',bps_white:'美白',bps_spot:'祛斑',bps_dark:'黑眼圈',bps_eye:'亮眼',bps_lip:'口红',bps_rosy:'红润',bps_slim:'瘦脸',bps_eyesize:'大眼',bps_nose:'瘦鼻',bps_chin:'下巴',bps_lipcolor:'口红色号',beauty_strength:'细节增强'};
   const sb = document.getElementById('statusBox');
   sb.textContent = '⏳ 正在刷新预览... ('+(labelMap[k]||k)+'='+v+')';
   sb.style.color = '#ffcc66';
@@ -528,19 +545,54 @@ function toggleAiOpt() {
   }
 }
 let beautyEnabled = false;
+let beautyProEnabled = false;
+const beautySliders = [
+  ['bps_smooth','磨皮',0,100,0],
+  ['bps_white','美白',0,100,0],
+  ['bps_spot','祛斑',0,100,0],
+  ['bps_dark','黑眼圈',0,100,0],
+  ['bps_eye','亮眼',0,100,0],
+  ['bps_lip','口红',0,100,0],
+  ['bps_rosy','红润',0,100,0],
+  ['bps_slim','瘦脸',0,100,0],
+  ['bps_eyesize','大眼',0,100,0],
+  ['bps_nose','瘦鼻',0,100,0],
+  ['bps_chin','下巴',-100,100,0],
+];
+function toggleBeautyPro() {
+  const btn = document.getElementById('beautyProBtn');
+  const sl = document.getElementById('beautySliders');
+  if (!beautyProEnabled) {
+    setParam('beauty_pro_on', 1);
+    btn.textContent = '关闭美颜';
+    btn.style.background = '#666';
+    sl.style.opacity = '1';
+    sl.style.pointerEvents = 'auto';
+    beautyProEnabled = true;
+    document.getElementById('statusBox').textContent = '⏳ 美颜处理中...';
+    document.getElementById('statusBox').style.color = '#f472b6';
+  } else {
+    setParam('beauty_pro_on', 0);
+    btn.textContent = '开启美颜';
+    btn.style.background = '#ec4899';
+    sl.style.opacity = '0.4';
+    sl.style.pointerEvents = 'none';
+    beautyProEnabled = false;
+  }
+}
 function toggleBeauty() {
   const btn = document.getElementById('beautyBtn');
   if (!beautyEnabled) {
     setParam('beauty_on', 1);
-    btn.textContent = '关闭增强';
+    btn.textContent = '关闭细节增强';
     btn.style.background = '#666';
     beautyEnabled = true;
-    document.getElementById('statusBox').textContent = '⏳ AI人像增强处理中...';
-    document.getElementById('statusBox').style.color = '#f472b6';
+    document.getElementById('statusBox').textContent = '⏳ AI细节增强处理中...';
+    document.getElementById('statusBox').style.color = '#a78bfa';
   } else {
     setParam('beauty_on', 0);
-    btn.textContent = 'AI人像增强';
-    btn.style.background = '#ec4899';
+    btn.textContent = 'AI细节增强';
+    btn.style.background = '#7c3aed';
     beautyEnabled = false;
   }
 }
@@ -665,6 +717,7 @@ const tsSliders = [
   ['ts_vig','焦外暗角',0,100,15],
 ];
 buildSliders('tsSliders', tsSliders);
+buildSliders('beautySliders', beautySliders);
 updateTsState();
 
 // LUT 树
