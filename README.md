@@ -47,11 +47,42 @@
 
 ## 效果预览
 
-| 美颜（原图 / 全套 / 仅肤质 / 仅液化） | 下巴液化修复（原图 / 修复前双下颌 / 修复后） | AI 细节增强（原图 / 70 / 100） |
-|---|---|---|
-| ![美颜对比](docs/screenshots/美颜效果对比.png) | ![下巴修复](docs/screenshots/下巴修复对比.png) | ![AI增强](docs/screenshots/AI增强对比.png) |
+每张都是「原图 / 处理结果」对照，均由程序实际处理输出（超分一项在缺少 Real-ESRGAN 权重时为 Lanczos 回退）。
 
-- [美颜示例_全套.jpg](docs/screenshots/美颜示例_全套.jpg)（全参输出样张）
+**调色 · LUT**
+
+| | |
+|:--:|:--:|
+| ![LUT 套用](assets/previews/fx_lut.jpg)<br>**LUT 套用**（徕卡 Classic，强度 80%） | ![胶片质感](assets/previews/fx_film.jpg)<br>**胶片质感**（颗粒 75 / 漏光 45 / halation 65） |
+| ![8bit 抖动](assets/previews/fx_linear.jpg)<br>**8bit 抖动**（渐变断层 vs 抖动打散） | ![参考图转 LUT](assets/previews/fx_reflut.jpg)<br>**参考图 → 33³ .cube** |
+
+**色彩与画质**
+
+| | |
+|:--:|:--:|
+| ![色彩调整](assets/previews/fx_color.jpg)<br>**色彩调整**（饱和/对比/阴影/高光/色温） | ![清晰度](assets/previews/fx_sharpen.jpg)<br>**清晰度加强** |
+| ![超分](assets/previews/fx_sr.jpg)<br>**全图超分 2×**（左：双线性放大） | ![景深](assets/previews/fx_dof.jpg)<br>**景深虚化**（主体保护，强度 80 / 对焦 50%） |
+| ![移轴](assets/previews/fx_tilt.jpg)<br>**移轴**（合焦带 34% + 模糊 11px） | |
+
+**人像**
+
+| | |
+|:--:|:--:|
+| ![美颜](assets/previews/fx_beauty.jpg)<br>**美颜**（磨皮/美白/祛斑/口红） | ![液化](assets/previews/fx_liquid.jpg)<br>**液化**（下巴双下颌修正） |
+
+**证件照**
+
+| | |
+|:--:|:--:|
+| ![证件照换底](assets/previews/fx_idphoto.jpg)<br>**换底色 + 自动居中**（一寸 295×413） | ![相纸排版](assets/previews/fx_idsheet.jpg)<br>**相纸排版**（六寸 1800×1200 + 裁切线） |
+
+**辅助工具**
+
+| | | |
+|:--:|:--:|:--:|
+| ![自动挑片](assets/previews/fx_pick.jpg)<br>**自动挑片**（清晰度/曝光/闭眼打分） | ![配色提取](assets/previews/fx_palette.jpg)<br>**配色提取**（主色 + 占比） | |
+
+更多 v1.05 实拍对比：[美颜四格](docs/screenshots/美颜效果对比.png) · [下巴修复](docs/screenshots/下巴修复对比.png) · [AI 细节增强](docs/screenshots/AI增强对比.png) · [美颜全套样张](docs/screenshots/美颜示例_全套.jpg)
 
 ## 系统要求
 
