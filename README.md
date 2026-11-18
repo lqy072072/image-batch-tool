@@ -1,16 +1,16 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v1.07-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.07/image-batch-tool_v1.07_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.00-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.00/image-batch-tool_v2.00_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）、美颜与液化。
+批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）、美颜与液化，并内置本地相册管理。
 
 ## 下载安装
 
-直接下载最新安装包（约 604MB，已内置 Python 运行时与 AI 模型）：
+直接下载最新安装包（约 720MB，已内置 Python 运行时与 AI 模型）：
 
-**[👉 下载 image-batch-tool_v1.07_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.07/image-batch-tool_v1.07_setup.exe)**
+**[👉 下载 image-batch-tool_v2.00_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.00/image-batch-tool_v2.00_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -41,6 +41,25 @@
   - **拖放导入 + 快捷键**：文件夹/照片直接拖进窗口；Ctrl+O 加文件、Ctrl+Shift+O 加文件夹、Ctrl+Enter 开始、Del 移除、空格拉帘对比
 - **交互**：前后对比拉帘（拖动分割线）、单张重做、参数预设保存/读取/记忆、列表只渲染可视窗口
 - **深色 Mac 风格 UI**：WebView2 渲染
+
+## 相册（v2.00 新增）
+
+独立「相册」入口（`相册.lnk --album`），与图片编辑分开启动，支持多根目录、全部 / 照片 / 视频 / 实况 / 文件夹 / 设备 / 人物 / 地图 八个视图。
+
+![相册主界面](docs/screenshots/album_v2_main.png)
+
+- **自动刷新**：监听相册目录，新增 / 删除 / 改名图片或视频后约 2 秒自动增量刷新，保留当前分类与滚动位置
+- **启动秒开**：扫描结果与 EXIF / 尺寸 / 地理位置持久化到 `alb_index.dat`，缩略图落盘缓存，第二次打开直接用缓存先展示，后台再核对
+- **大目录优化**：枚举阶段只收集图片 / 视频，跳过回收站、系统目录、node_modules 等；界面分页 + 滚动懒加载
+- **删除同步**：相册内删除后自动校准计数与其他视图，不需要手动刷新
+- **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存
+
+![选项菜单](docs/screenshots/album_v2_menu.png)
+
+![自动更新](docs/screenshots/album_v2_autoupdate.png)
+
+- **删除缓存**：一键清理扫描索引、缩略图与视频封面缓存、修图临时文件，并提示释放空间
+- **EXIF 详情、地图聚类、人物聚类、dHash 去重、应用内回收站、右键菜单（详细信息 / 另存为 / 编辑 / 删除）、批量导入修图**
 
 ## 技术栈
 

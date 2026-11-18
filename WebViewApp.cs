@@ -25,6 +25,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
@@ -96,15 +97,22 @@ namespace ImageBatchTool
     static class Program
     {
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            var splash = new SplashForm();
-            splash.Show();
-            Application.DoEvents();
+            string mode = "album";
+            if (args != null && args.Length > 0)
+            {
+                foreach (var a in args)
+                {
+                    string al = (a ?? "").Trim().ToLower();
+                    if (al == "--edit" || al == "/edit" || al == "edit" || al == "--editor") { mode = "edit"; break; }
+                    if (al == "--album" || al == "/album" || al == "album") { mode = "album"; break; }
+                }
+            }
             var main = new MainForm();
-            main.Shown += (s, e) => { main.Splash = splash; };
+            main.StartupMode = mode;
             Application.Run(main);
         }
     }
@@ -1330,6 +1338,7 @@ namespace ImageBatchTool
     {
         WebView2 web;
         public SplashForm Splash;
+        public string StartupMode = "album";
         readonly List<string> files = new List<string>();
         readonly List<string> lutFiles = new List<string>();
         // 字符串参数（输出命名模板等，double 字典放不下）
@@ -1564,6 +1573,10 @@ namespace ImageBatchTool
                         Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
                         // 页面这时才真正能收消息：补发一次完整状态（LUT 列表、文件列表、输出目录）
                         SendState();
+                        // 启动模式：相册版只打开相册（页面隐藏修图界面），修图版直接进编辑器
+                        LoadAlbRoots();
+                        SendAlbRoots();
+                        Send("{\"type\":\"appmode\",\"mode\":" + JsonStr(StartupMode) + "}");
                         break;
                     case "addfolder":
                         InvokeUi(() => {
@@ -1762,8 +1775,165 @@ namespace ImageBatchTool
                     case "openlutdir":
                         try { System.Diagnostics.Process.Start(Path.Combine(Application.StartupPath, "luts")); } catch {}
                         break;
+                    case "dupsrc":
+                        if (parts.Length > 1 && Directory.Exists(parts[1])) dupSrc = parts[1];
+                        else InvokeUi(() => {
+                            using (var d = new FolderBrowserDialog()) {
+                                d.Description = "选择要去重的照片文件夹（会扫描全部子目录）";
+                                if (d.ShowDialog() == DialogResult.OK) dupSrc = d.SelectedPath;
+                            }
+                        });
+                        dupDst = BinDir();
+                        SendDupState();
+                        break;
+                    case "dupdst":
+                        // 「移入文件夹」现在是选择软件回收站目录
+                        BinChooseDir();
+                        break;
+                    case "dupscan":
+                        StartDupScan();
+                        break;
+                    case "duppause":
+                        dupPaused = !dupPaused;
+                        SendDupState();
+                        Send("{\"type\":\"dup\",\"phase\":\"pause\",\"done\":" + dupDone + ",\"total\":" + dupTotal + "}");
+                        break;
+                    case "dupcancel":
+                        dupCancel = true; dupPaused = false;
+                        break;
+                    case "dupshow":
+                        Send(dupLastGroupsJson);
+                        SendDupState();
+                        break;
+                    case "duppreview":
+                        if (parts.Length > 1) DupPreview(parts[1]);
+                        break;
+                    case "dupmove":
+                        if (parts.Length > 1) DupMove(parts[1].Split('\n'));
+                        break;
+                    case "albopen":
+                        SendAlbRoots();
+                        if (parts.Length > 1 && Directory.Exists(parts[1])) AddAlbRoot(parts[1]);
+                        else if (albRoots.Count > 0) StartAlbumScan();
+                        // 没有路径时不再强弹文件夹选择框：界面已有「+ 添加文件夹 / + 添加磁盘」和空态提示
+                        break;
+                    case "albaddpath":
+                        {
+                            string picked2 = "";
+                            InvokeUi(() => {
+                                using (var d = new FolderBrowserDialog()) {
+                                    d.Description = "选择相册文件夹（可普通文件夹，也可直接选磁盘根目录，会扫描全部子目录）";
+                                    d.ShowNewFolderButton = false;
+                                    if (d.ShowDialog() == DialogResult.OK) picked2 = d.SelectedPath;
+                                }
+                            });
+                            if (!string.IsNullOrEmpty(picked2)) AddAlbRoot(picked2);
+                        }
+                        break;
+                    case "albpath":
+                        if (parts.Length > 1) AddAlbRoot(parts[1]);
+                        break;
+                    case "albrmroot":
+                        if (parts.Length > 1) RemoveAlbRoot(parts[1]);
+                        break;
+                    case "albdrives":
+                        {
+                            var sb = new System.Text.StringBuilder();
+                            sb.Append("{\"type\":\"albdrives\",\"items\":[");
+                            int di = 0;
+                            foreach (var dv in DriveInfo.GetDrives())
+                            {
+                                try
+                                {
+                                    if (!dv.IsReady) continue;
+                                    if (di > 0) sb.Append(",");
+                                    string lb = dv.DriveType == DriveType.Fixed ? "本地磁盘" : (dv.DriveType == DriveType.Removable ? "可移动磁盘" : dv.DriveType.ToString());
+                                    sb.Append("{\"p\":").Append(JsonStr(dv.RootDirectory.FullName))
+                                      .Append(",\"label\":").Append(JsonStr(dv.Name.TrimEnd('\\') + " " + lb))
+                                      .Append(",\"free\":").Append((long)(dv.AvailableFreeSpace / 1024 / 1024)).Append("}");
+                                    di++;
+                                }
+                                catch { }
+                            }
+                            sb.Append("]}");
+                            Send(sb.ToString());
+                        }
+                        break;
+                    case "albtoedit":
+                        {
+                            string rest = msg.Length > action.Length + 1 ? msg.Substring(action.Length + 1) : "";
+                            var ps = new List<string>();
+                            foreach (var s in rest.Split('\n')) { string t = s.Trim(); if (t.Length > 0) ps.Add(t); }
+                            int added = AddPaths(ps);
+                            if (added > 0) { AutoSelectFirst(); SendState(); QueuePreview(); }
+                            Send("{\"type\":\"toast\",\"msg\":" + JsonStr(added > 0 ? ("已导入 " + added + " 张到修图界面") : "没有可导入的图片") + "}");
+                        }
+                        break;
+                    case "albfacescan":
+                        StartFaceScan();
+                        break;
+                    case "albfacesstop":
+                        faceStop = true;
+                        try { if (faceProc != null) faceProc.Kill(); } catch { }
+                        break;
+                    case "albrefresh":
+                        if (albRoots.Count > 0) StartAlbumScan();
+                        break;
+                    case "albclearcache":
+                        ClearAlbCache();
+                        break;
+                    case "albpage":
+                        if (parts.Length > 2)
+                        {
+                            int off0, cnt0;
+                            int.TryParse(parts[1], out off0); int.TryParse(parts[2], out cnt0);
+                            SendAlbPage(off0, cnt0);
+                        }
+                        break;
+                    case "albthumbs":
+                        if (parts.Length > 2)
+                        {
+                            int off1, cnt1;
+                            int.TryParse(parts[1], out off1); int.TryParse(parts[2], out cnt1);
+                            SendAlbThumbs(off1, cnt1);
+                        }
+                        break;
+                    case "albthumb":
+                        if (parts.Length > 1) SendAlbThumbOne(parts[1]);
+                        break;
+                    case "albview":
+                        if (parts.Length > 1) SendAlbView(parts[1]);
+                        break;
+                    case "albdelete":
+                        if (parts.Length > 1) AlbumDelete(parts[1].Split('\n'));
+                        break;
+                    case "albsaveas":
+                        if (parts.Length > 1) AlbumSaveAs(parts[1].Split('\n'));
+                        else AlbumSaveAs(new string[0]);
+                        break;
+                    case "albopenfile":
+                        if (parts.Length > 1) { try { System.Diagnostics.Process.Start(parts[1]); } catch { } }
+                        break;
+                    case "albinlist":
+                        SendBinList();
+                        break;
+                    case "albinrestore":
+                        if (parts.Length > 1) BinRestore(parts[1].Split('\n'));
+                        break;
+                    case "albinpurge":
+                        if (parts.Length > 1) BinPurge(parts[1].Split('\n'));
+                        break;
+                    case "albinempty":
+                        BinEmpty();
+                        break;
+                    case "albinchoose":
+                        BinChooseDir();
+                        break;
+                    case "albinopen":
+                        try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
+                        break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 1.07\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 2.00\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -2012,8 +2182,7 @@ namespace ImageBatchTool
 
         void SendState()
         {
-            var sb = new System.Text.StringBuilder();
-            sb.Append("{\"type\":\"state\",\"files\":[");
+            var sb = new System.Text.StringBuilder();            sb.Append("{\"type\":\"state\",\"files\":[");
             for (int i = 0; i < files.Count; i++) {
                 if (i > 0) sb.Append(",");
                 long sz = 0; try { sz = new FileInfo(files[i]).Length; } catch {}
@@ -2039,6 +2208,2158 @@ namespace ImageBatchTool
             sb.Append("]");
             sb.Append(",\"out\":").Append(JsonStr(outputDir)).Append("}");
             Send(sb.ToString());
+        }
+
+        // ==================== 照片去重 ====================
+        class DupInfo
+        {
+            public string path;
+            public long size;
+            public int w, h;
+            public ulong hash;
+            public string sha;
+            public int parent;
+            public string[] comps;
+            public bool decoded;
+        }
+
+        string dupSrc = "", dupDst = "";
+        volatile bool dupRunning = false, dupPaused = false, dupCancel = false;
+        int dupDone = 0, dupTotal = 0;
+        string dupLastGroupsJson = "{\"type\":\"dupgroups\",\"total\":0,\"items\":[]}";
+
+        bool IsDupImage(string f)
+        {
+            string ext = Path.GetExtension(f == null ? "" : f).ToLower();
+            return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp" || ext == ".tif" || ext == ".tiff" || ext == ".webp"
+                || ext == ".heic" || ext == ".heif";
+        }
+
+        // Live Photo / 实况照片的伴生文件（视频、编辑记录），主名相同即视为同一组
+        string[] DupCompanions(string path)
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(path);
+                string baseName = Path.GetFileNameWithoutExtension(path);
+                if (string.IsNullOrEmpty(dir) || string.IsNullOrEmpty(baseName)) return null;
+                var res = new List<string>();
+                // Windows 文件系统大小写不敏感，用统一小写扩展名查找即可，避免同一文件被登记两次
+                string[] exts = { ".mov", ".mp4", ".aae" };
+                foreach (var e in exts)
+                {
+                    try
+                    {
+                        // 用通配查找（大小写不敏感）并保留磁盘上的真实文件名
+                        foreach (var hit in Directory.GetFiles(dir, baseName + e))
+                        {
+                            if (string.Equals(Path.GetFileNameWithoutExtension(hit), baseName, StringComparison.OrdinalIgnoreCase)
+                                && !res.Contains(hit))
+                                res.Add(hit);
+                        }
+                    }
+                    catch { }
+                }
+                return res.Count > 0 ? res.ToArray() : null;
+            }
+            catch { return null; }
+        }
+
+        // 64 位差值哈希（9×8 灰度相邻比较），抗缩放/轻微调色
+        ulong DupHash(Bitmap bmp)
+        {
+            using (var sm = new Bitmap(9, 8, PixelFormat.Format24bppRgb))
+            {
+                using (var g = Graphics.FromImage(sm))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.DrawImage(bmp, 0, 0, 9, 8);
+                }
+                ulong h = 0; int bit = 0;
+                for (int y = 0; y < 8; y++)
+                    for (int x = 0; x < 8; x++)
+                    {
+                        int l1 = LumAt(sm, x, y), l2 = LumAt(sm, x + 1, y);
+                        if (l1 > l2) h |= (1UL << bit);
+                        bit++;
+                    }
+                return h;
+            }
+        }
+
+        int LumAt(Bitmap b, int x, int y)
+        {
+            Color c = b.GetPixel(x, y);
+            return (int)(0.299 * c.R + 0.587 * c.G + 0.114 * c.B);
+        }
+
+        static int Hamming(ulong a, ulong b)
+        {
+            ulong v = a ^ b; int n = 0;
+            while (v != 0) { v &= v - 1; n++; }
+            return n;
+        }
+
+        Bitmap DupLoad(string path)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var im = Image.FromStream(fs, false, false))
+                return new Bitmap(im);
+        }
+
+        string DupThumb(string path, int maxSide, int q)
+        {
+            try
+            {
+                using (var b = DupLoad(path))
+                {
+                    int w = b.Width, h = b.Height;
+                    double k = Math.Min(1.0, (double)maxSide / Math.Max(w, h));
+                    int nw = Math.Max(1, (int)(w * k)), nh = Math.Max(1, (int)(h * k));
+                    using (var sm = new Bitmap(nw, nh, PixelFormat.Format24bppRgb))
+                    {
+                        using (var g = Graphics.FromImage(sm))
+                        {
+                            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                            g.DrawImage(b, 0, 0, nw, nh);
+                        }
+                        return B64(sm, q);
+                    }
+                }
+            }
+            catch { return null; }
+        }
+
+        void DupSend(string json) { Send(json); }
+
+        void SendDupState()
+        {
+            DupSend("{\"type\":\"dupstate\",\"src\":" + JsonStr(dupSrc) + ",\"dst\":" + JsonStr(dupDst) +
+                    ",\"running\":" + (dupRunning ? "true" : "false") + ",\"paused\":" + (dupPaused ? "true" : "false") + "}");
+        }
+
+        void StartDupScan()
+        {
+            if (dupRunning) { Send("{\"type\":\"toast\",\"msg\":\"扫描进行中\"}"); return; }
+            if (string.IsNullOrEmpty(dupSrc) || !Directory.Exists(dupSrc)) { Send("{\"type\":\"toast\",\"msg\":\"请先选择扫描文件夹\"}"); return; }
+            if (string.IsNullOrEmpty(dupDst)) dupDst = BinDir();
+            dupCancel = false; dupPaused = false; dupRunning = true;
+            var t = new Thread(DupScanThread); t.IsBackground = true; t.Start();
+        }
+
+        void DupScanThread()
+        {
+            try
+            {
+                DupSend("{\"type\":\"dup\",\"phase\":\"enum\",\"done\":0,\"total\":0}");
+                var paths = new List<string>();
+                var stack = new Stack<string>();
+                stack.Push(dupSrc);
+                while (stack.Count > 0)
+                {
+                    if (dupCancel) break;
+                    string d = stack.Pop();
+                    try
+                    {
+                        foreach (var sub in Directory.GetDirectories(d))
+                        {
+                            string name = Path.GetFileName(sub).ToLower();
+                            if (name == "_重复照片" || name == "_duplicates") continue;
+                            stack.Push(sub);
+                        }
+                        foreach (var f in Directory.GetFiles(d))
+                            if (IsDupImage(f)) paths.Add(f);
+                    }
+                    catch { }
+                }
+                dupTotal = paths.Count; dupDone = 0;
+                DupSend("{\"type\":\"dup\",\"phase\":\"scan\",\"done\":0,\"total\":" + dupTotal + "}");
+
+                var list = new List<DupInfo>();
+                foreach (var p in paths)
+                {
+                    if (dupCancel) break;
+                    while (dupPaused && !dupCancel) Thread.Sleep(120);
+                    dupDone++;
+                    try
+                    {
+                        var fi = new FileInfo(p);
+                        if (fi.Length >= 512)
+                        {
+                            var info = new DupInfo();
+                            info.path = p; info.size = fi.Length;
+                            info.comps = DupCompanions(p);
+                            using (var fs = new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                            using (var sh = SHA256.Create())
+                            {
+                                byte[] hb = sh.ComputeHash(fs);
+                                var sb = new System.Text.StringBuilder(hb.Length * 2);
+                                for (int i = 0; i < hb.Length; i++) sb.Append(hb[i].ToString("x2"));
+                                info.sha = sb.ToString();
+                            }
+                            try
+                            {
+                                using (var b = DupLoad(p))
+                                {
+                                    info.w = b.Width; info.h = b.Height;
+                                    info.hash = DupHash(b);
+                                    info.decoded = true;
+                                }
+                            }
+                            catch { info.decoded = false; }   // HEIC/HEIF 无系统解码器时：仅做精确判重
+                            list.Add(info);
+                        }
+                    }
+                    catch { }
+                    if (dupDone % 15 == 0 || dupDone == dupTotal)
+                        DupSend("{\"type\":\"dup\",\"phase\":\"scan\",\"done\":" + dupDone + ",\"total\":" + dupTotal + "}");
+                }
+
+                int n = list.Count;
+                int[] parent = new int[n];
+                for (int i = 0; i < n; i++) { parent[i] = i; list[i].parent = i; }
+                Func<int, int> find = delegate(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+                Action<int, int> union = delegate(int a, int b) { int ra = find(a), rb = find(b); if (ra != rb) parent[rb] = ra; };
+
+                DupSend("{\"type\":\"dup\",\"phase\":\"compare\",\"done\":0,\"total\":" + n + "}");
+
+                // 1) 完全相同的文件：大小 + SHA256
+                var exact = new Dictionary<string, int>();
+                for (int i = 0; i < n; i++)
+                {
+                    string key = list[i].size + ":" + list[i].sha;
+                    if (exact.ContainsKey(key)) union(i, exact[key]);
+                    else exact[key] = i;
+                }
+
+                // 2) 视觉近似：按「宽高比」分桶，再用 4 段 16 位索引找候选，最后校验汉明距离
+                var buckets = new Dictionary<string, List<int>>();
+                for (int i = 0; i < n; i++)
+                {
+                    if (list[i].w <= 0 || list[i].h <= 0) continue;
+                    string key = ((int)Math.Round((double)list[i].w / list[i].h * 100)).ToString();
+                    if (!buckets.ContainsKey(key)) buckets[key] = new List<int>();
+                    buckets[key].Add(i);
+                }
+                foreach (var kv in buckets)
+                {
+                    var idx = kv.Value;
+                    if (idx.Count < 2 || idx.Count > 6000) continue;
+                    for (int a = 0; a < idx.Count; a++)
+                    {
+                        int ia = idx[a];
+                        for (int b = a + 1; b < idx.Count; b++)
+                        {
+                            int ib = idx[b];
+                            if (find(ia) == find(ib)) continue;
+                            var A = list[ia]; var B = list[ib];
+                            int hd = Hamming(A.hash, B.hash);
+                            if (hd > 6) continue;
+                            double ar1 = (double)A.w / A.h, ar2 = (double)B.w / B.h;
+                            if (Math.Abs(ar1 - ar2) > 0.05) continue;
+                            union(ia, ib);
+                        }
+                    }
+                }
+
+                var map = new Dictionary<int, List<int>>();
+                for (int i = 0; i < n; i++)
+                {
+                    int r = find(i);
+                    if (!map.ContainsKey(r)) map[r] = new List<int>();
+                    map[r].Add(i);
+                }
+                var groups = new List<List<int>>();
+                foreach (var kv in map) if (kv.Value.Count >= 2) groups.Add(kv.Value);
+                groups.Sort(delegate(List<int> x, List<int> y) {
+                    long px = (long)list[x[0]].w * list[x[0]].h, py = (long)list[y[0]].w * list[y[0]].h;
+                    return py.CompareTo(px);
+                });
+
+                // 组内按像素数/体积降序，第一张作为默认保留
+                var outGroups = new List<List<int>>();
+                foreach (var g in groups)
+                {
+                    g.Sort(delegate(int a, int b) {
+                        long pa = (long)list[a].w * list[a].h, pb = (long)list[b].w * list[b].h;
+                        if (pa != pb) return pb.CompareTo(pa);
+                        return list[b].size.CompareTo(list[a].size);
+                    });
+                    outGroups.Add(g);
+                }
+
+                var jsb = new System.Text.StringBuilder();
+                jsb.Append("{\"type\":\"dupgroups\",\"total\":").Append(outGroups.Count).Append(",\"files\":").Append(n).Append(",\"items\":[");
+                int sent = 0, thumbs = 0;
+                for (int gi = 0; gi < outGroups.Count; gi++)
+                {
+                    var g = outGroups[gi];
+                    if (gi >= 300) break;
+                    if (gi > 0) jsb.Append(",");
+                    jsb.Append("{\"items\":[");
+                    for (int k = 0; k < g.Count; k++)
+                    {
+                        var it = list[g[k]];
+                        if (k > 0) jsb.Append(",");
+                        string thumb = null;
+                        if (k < 4 && thumbs < 600) { thumb = DupThumb(it.path, 150, 72); if (thumb != null) thumbs++; }
+                        string compsJson = "null";
+                        if (it.comps != null && it.comps.Length > 0)
+                        {
+                            var cjb = new System.Text.StringBuilder("[");
+                            for (int ci = 0; ci < it.comps.Length; ci++)
+                            {
+                                if (ci > 0) cjb.Append(",");
+                                cjb.Append(JsonStr(Path.GetFileName(it.comps[ci])));
+                            }
+                            cjb.Append("]");
+                            compsJson = cjb.ToString();
+                        }
+                        jsb.Append("{\"p\":").Append(JsonStr(it.path))
+                          .Append(",\"n\":").Append(JsonStr(Path.GetFileName(it.path)))
+                          .Append(",\"s\":").Append(it.size)
+                          .Append(",\"w\":").Append(it.w)
+                          .Append(",\"h\":").Append(it.h)
+                          .Append(",\"d\":").Append(it.decoded ? "1" : "0")
+                          .Append(",\"c\":").Append(compsJson)
+                          .Append(",\"t\":").Append(thumb == null ? "null" : JsonStr("data:image/jpeg;base64," + thumb))
+                          .Append("}");
+                    }
+                    jsb.Append("]}");
+                    sent++;
+                }
+                jsb.Append("]}");
+                dupLastGroupsJson = jsb.ToString();
+                Send(dupLastGroupsJson);
+                int nodec = 0; foreach (var it0 in list) if (!it0.decoded) nodec++;
+                DupSend("{\"type\":\"dup\",\"phase\":\"done\",\"done\":" + n + ",\"total\":" + n + ",\"groups\":" + outGroups.Count + ",\"nodecode\":" + nodec + "}");
+            }
+            catch (Exception ex)
+            {
+                DupSend("{\"type\":\"dup\",\"phase\":\"error\",\"msg\":" + JsonStr(ex.Message) + "}");
+            }
+            finally { dupRunning = false; SendDupState(); }
+        }
+
+        void DupPreview(string path)
+        {
+            try
+            {
+                string b64 = DupThumb(path, 1400, 82);
+                if (b64 == null) { Send("{\"type\":\"toast\",\"msg\":\"此格式无法预览（可能是 HEIC/HEIF），仍可正常去重与移出\"}"); return; }
+                int w = 0, h = 0; long sz = 0;
+                try { using (var b = DupLoad(path)) { w = b.Width; h = b.Height; } } catch { }
+                try { sz = new FileInfo(path).Length; } catch { }
+                Send("{\"type\":\"dupbig\",\"p\":" + JsonStr(path) + ",\"n\":" + JsonStr(Path.GetFileName(path)) +
+                     ",\"w\":" + w + ",\"h\":" + h + ",\"s\":" + sz + ",\"data\":" + JsonStr("data:image/jpeg;base64," + b64) + "}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("预览失败: " + ex.Message) + "}"); }
+        }
+
+        void DupMove(string[] paths)
+        {
+            try
+            {
+                if (paths == null || paths.Length == 0) { Send("{\"type\":\"toast\",\"msg\":\"没有勾选要移出的照片\"}"); return; }
+                var rows = BinLoad();
+                int moved = 0, failed = 0, compsMoved = 0;
+                foreach (var p in paths)
+                {
+                    try
+                    {
+                        if (!File.Exists(p)) continue;
+                        string gid = DateTime.Now.Ticks.ToString() + "-" + Guid.NewGuid().ToString("N").Substring(0, 4);
+                        if (BinTrashFile(p, gid, "m", rows) == 0) { failed++; continue; }
+                        moved++;
+                        // 实况照片的 MOV / AAE 同组进回收站
+                        var comps = DupCompanions(p);
+                        if (comps != null)
+                        {
+                            foreach (var cf in comps)
+                            {
+                                if (!File.Exists(cf)) continue;
+                                if (string.Equals(Path.GetFileName(cf), Path.GetFileName(p), StringComparison.OrdinalIgnoreCase)) continue;
+                                compsMoved += BinTrashFile(cf, gid, "c", rows);
+                            }
+                        }
+                    }
+                    catch { failed++; }
+                }
+                BinSave(rows);
+                dupDst = BinDir();
+                Send("{\"type\":\"dupdone\",\"moved\":" + moved + ",\"failed\":" + failed + ",\"comps\":" + compsMoved + ",\"bin\":true,\"dst\":" + JsonStr(BinDir()) + "}");
+                // 移入回收站后不再自动弹窗打开文件夹
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("移动失败: " + ex.Message) + "}"); }
+        }
+
+        // ==================== 相册 ====================
+        [StructLayout(LayoutKind.Sequential)]
+        struct Sz { public int cx, cy; }
+
+        [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellThumbFactory { [PreserveSig] int GetImage(Sz size, int flags, out IntPtr phbm); }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern int SHCreateItemFromParsingName(string path, IntPtr pbc, ref Guid riid, out IShellThumbFactory factory);
+        [DllImport("gdi32.dll")]
+        static extern bool DeleteObject(IntPtr hObject);
+
+        Bitmap ShellThumb(string path, int side)
+        {
+            IShellThumbFactory f = null;
+            IntPtr hb = IntPtr.Zero;
+            try
+            {
+                Guid iid = typeof(IShellThumbFactory).GUID;
+                int hr = SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out f);
+                if (hr != 0 || f == null) return null;
+                hr = f.GetImage(new Sz { cx = side, cy = side }, 0, out hb);
+                if (hr != 0 || hb == IntPtr.Zero) return null;
+                using (var tmp = Bitmap.FromHbitmap(hb))
+                {
+                    var copy = new Bitmap(tmp.Width, tmp.Height, PixelFormat.Format24bppRgb);
+                    using (var g = Graphics.FromImage(copy)) g.DrawImage(tmp, 0, 0, tmp.Width, tmp.Height);
+                    return copy;
+                }
+            }
+            catch { return null; }
+            finally
+            {
+                if (hb != IntPtr.Zero) { try { DeleteObject(hb); } catch { } }
+                if (f != null) { try { Marshal.ReleaseComObject(f); } catch { } }
+            }
+        }
+
+        // ---- EXIF（拍摄时间 + GPS）----
+        static int ExifFindBlock(byte[] buf)
+        {
+            for (int i = 0; i + 6 < buf.Length; i++)
+                if (buf[i] == 0x45 && buf[i + 1] == 0x78 && buf[i + 2] == 0x69 && buf[i + 3] == 0x66 && buf[i + 4] == 0x00 && buf[i + 5] == 0x00)
+                    return i + 6;
+            return -1;
+        }
+
+        static ushort ExifU16(byte[] b, int off, bool le)
+        {
+            return le ? (ushort)(b[off] | (b[off + 1] << 8)) : (ushort)((b[off] << 8) | b[off + 1]);
+        }
+        static uint ExifU32(byte[] b, int off, bool le)
+        {
+            if (le) return (uint)(b[off] | (b[off + 1] << 8) | (b[off + 2] << 16) | (b[off + 3] << 24));
+            return (uint)((b[off] << 24) | (b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]);
+        }
+        static double ExifRat(byte[] b, int off, bool le)
+        {
+            uint n = ExifU32(b, off, le), d = ExifU32(b, off + 4, le);
+            return d == 0 ? 0 : (double)n / d;
+        }
+
+        class ExifMeta
+        {
+            public long taken;
+            public double lat, lon;
+            public string make = "", model = "", lens = "";
+            public double fnum, exposure, focal;
+            public int iso;
+        }
+
+        bool ExifRead(string path, out long taken, out double lat, out double lon)
+        {
+            ExifMeta m;
+            bool ok = ExifDetail(path, out m);
+            taken = m.taken; lat = m.lat; lon = m.lon;
+            return ok;
+        }
+
+        // 解析 JPEG/TIFF（以及 HEIC 里连续存放的 EXIF 块）：时间、GPS、机身镜头与曝光参数
+        bool ExifDetail(string path, out ExifMeta meta)
+        {
+            meta = new ExifMeta();
+            try
+            {
+                byte[] buf = null;
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    int cap = (int)Math.Min(fs.Length, 12 * 1024 * 1024);
+                    buf = new byte[cap];
+                    int got = 0;
+                    while (got < cap) { int r = fs.Read(buf, got, cap - got); if (r <= 0) break; got += r; }
+                }
+                int tiff = ExifFindBlock(buf);
+                if (tiff < 0 || tiff + 8 >= buf.Length) return false;
+                bool le = buf[tiff] == 0x49 && buf[tiff + 1] == 0x49;
+                if (!le && !(buf[tiff] == 0x4D && buf[tiff + 1] == 0x4D)) return false;
+                if (ExifU16(buf, tiff + 2, le) != 42) return false;
+                uint ifd0 = ExifU32(buf, tiff + 4, le);
+                uint exifIfd = 0, gpsIfd = 0;
+                int tbase = tiff;
+                ExifWalk(buf, tbase, ifd0, le, meta, ref exifIfd, ref gpsIfd, true);
+                if (exifIfd != 0) ExifWalk(buf, tbase, exifIfd, le, meta, ref exifIfd, ref gpsIfd, false);
+
+                if (gpsIfd != 0)
+                {
+                    int gp = tbase + (int)gpsIfd;
+                    if (gp + 2 < buf.Length)
+                    {
+                        int cnt = ExifU16(buf, gp, le);
+                        double[] la = null, lo = null; string laRef = "N", loRef = "E";
+                        for (int i = 0; i < cnt; i++)
+                        {
+                            int e = gp + 2 + i * 12;
+                            if (e + 12 > buf.Length) break;
+                            ushort tag = ExifU16(buf, e, le);
+                            ushort typ = ExifU16(buf, e + 2, le);
+                            uint num = ExifU32(buf, e + 4, le);
+                            int voff = tbase + (int)ExifU32(buf, e + 8, le);
+                            if (tag == 1 || tag == 3)
+                            {
+                                string v = num > 4 ? System.Text.Encoding.ASCII.GetString(buf, voff, 1) : ((char)buf[e + 8]).ToString();
+                                if (tag == 1) laRef = v; else loRef = v;
+                            }
+                            else if ((tag == 2 || tag == 4) && typ == 5 && num >= 3)
+                            {
+                                double[] vals = new double[3];
+                                for (int k = 0; k < 3; k++) vals[k] = ExifRat(buf, voff + k * 8, le);
+                                if (tag == 2) la = vals; else lo = vals;
+                            }
+                        }
+                        if (la != null && lo != null)
+                        {
+                            meta.lat = la[0] + la[1] / 60.0 + la[2] / 3600.0;
+                            meta.lon = lo[0] + lo[1] / 60.0 + lo[2] / 3600.0;
+                            if (laRef != null && laRef.Trim().ToUpper() == "S") meta.lat = -meta.lat;
+                            if (loRef != null && loRef.Trim().ToUpper() == "W") meta.lon = -meta.lon;
+                        }
+                    }
+                }
+                return meta.taken > 0 || meta.lat != 0 || meta.lon != 0 || meta.model.Length > 0;
+            }
+            catch { return false; }
+        }
+
+        string ExifAscii(byte[] buf, int e, uint num, int voff, bool le)
+        {
+            try
+            {
+                int len = (int)num;
+                int off = len > 4 ? voff : e + 8;
+                if (off < 0 || off + len > buf.Length || len <= 0) return "";
+                string s = System.Text.Encoding.ASCII.GetString(buf, off, len).Trim('\0', ' ');
+                s = s.Trim();
+                if (s.Length > 64) s = s.Substring(0, 64);
+                return s;
+            }
+            catch { return ""; }
+        }
+
+        void ExifWalk(byte[] buf, int tbase, uint ifdOff, bool le, ExifMeta meta, ref uint exifIfd, ref uint gpsIfd, bool ifd0)
+        {
+            try
+            {
+                int p = tbase + (int)ifdOff;
+                if (p + 2 >= buf.Length) return;
+                int cnt = ExifU16(buf, p, le);
+                for (int i = 0; i < cnt; i++)
+                {
+                    int e = p + 2 + i * 12;
+                    if (e + 12 > buf.Length) break;
+                    ushort tag = ExifU16(buf, e, le);
+                    ushort typ = ExifU16(buf, e + 2, le);
+                    uint num = ExifU32(buf, e + 4, le);
+                    int voff = tbase + (int)ExifU32(buf, e + 8, le);
+                    if (ifd0)
+                    {
+                        if (tag == 0x8769) { exifIfd = ExifU32(buf, e + 8, le); continue; }
+                        if (tag == 0x8825) { gpsIfd = ExifU32(buf, e + 8, le); continue; }
+                        if (tag == 0x010F && typ == 2) { meta.make = ExifAscii(buf, e, num, voff, le); continue; }
+                        if (tag == 0x0110 && typ == 2) { meta.model = ExifAscii(buf, e, num, voff, le); continue; }
+                    }
+                    if (tag == 0x0132 || tag == 0x9003 || tag == 0x9004)
+                    {
+                        if (typ != 2) continue;
+                        string s = ExifAscii(buf, e, num, voff, le);
+                        DateTime dt;
+                        if (DateTime.TryParseExact(s, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+                        {
+                            long t = (long)(dt.ToUniversalTime() - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+                            if (t > meta.taken) meta.taken = t;
+                        }
+                        continue;
+                    }
+                    if (tag == 0xA434 && typ == 2) { meta.lens = ExifAscii(buf, e, num, voff, le); continue; }
+                    if (tag == 0x829D && typ == 5) { meta.fnum = ExifRat(buf, voff, le); continue; }
+                    if (tag == 0x829A && typ == 5) { meta.exposure = ExifRat(buf, voff, le); continue; }
+                    if (tag == 0x920A && typ == 5) { meta.focal = ExifRat(buf, voff, le); continue; }
+                    if (tag == 0x8827 && typ == 3 && num >= 1) { meta.iso = ExifU16(buf, e + 8, le); continue; }
+                    if (tag == 0xA405 && typ == 3 && num >= 1 && meta.focal == 0) { meta.focal = ExifU16(buf, e + 8, le); }
+                }
+            }
+            catch { }
+        }
+
+
+        // ---- MP4/MOV 时长与创建时间 ----
+        bool Mp4Info(string path, out double dur, out long created)
+        {
+            dur = 0; created = 0;
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    long len = fs.Length;
+                    long pos = 0;
+                    while (pos + 8 <= len)
+                    {
+                        fs.Position = pos;
+                        byte[] hdr = new byte[16];
+                        if (fs.Read(hdr, 0, 8) < 8) break;
+                        long size = ((long)hdr[0] << 24) | ((long)hdr[1] << 16) | ((long)hdr[2] << 8) | hdr[3];
+                        string typ = System.Text.Encoding.ASCII.GetString(hdr, 4, 4);
+                        if (size == 1)
+                        {
+                            byte[] ext = new byte[8];
+                            if (fs.Read(ext, 0, 8) < 8) break;
+                            size = 0; for (int i = 0; i < 8; i++) size = (size << 8) | ext[i];
+                            pos += 8; // header 已多读 8 字节
+                        }
+                        if (size <= 0) break;
+                        long bodyStart = pos + (typ == null ? 8 : 8);
+                        if (typ == "moov")
+                        {
+                            long p = bodyStart;
+                            long end = pos + size;
+                            while (p + 8 <= end)
+                            {
+                                fs.Position = p;
+                                byte[] bh = new byte[8];
+                                if (fs.Read(bh, 0, 8) < 8) break;
+                                long bs = ((long)bh[0] << 24) | ((long)bh[1] << 16) | ((long)bh[2] << 8) | bh[3];
+                                string bt = System.Text.Encoding.ASCII.GetString(bh, 4, 4);
+                                if (bs < 8) break;
+                                if (bt == "mvhd")
+                                {
+                                    byte[] mv = new byte[Math.Min(112, bs)];
+                                    fs.Position = p;
+                                    int rmv = 0;
+                                    while (rmv < mv.Length) { int r = fs.Read(mv, rmv, mv.Length - rmv); if (r <= 0) break; rmv += r; }
+                                    int ver = mv.Length > 8 ? mv[8] : 0;
+                                    // mv 从 box 头开始读：size(4) type(4) version(1) flags(3)
+                                    if (ver == 1)
+                                    {
+                                        uint ts = ExifU32(mv, 28, false);
+                                        ulong du = ((ulong)ExifU32(mv, 32, false) << 32) | ExifU32(mv, 36, false);
+                                        if (ts > 0) dur = (double)du / ts;
+                                        ulong ct = ((ulong)ExifU32(mv, 12, false) << 32) | ExifU32(mv, 16, false);
+                                        created = (long)ct - 2082844800L;
+                                    }
+                                    else
+                                    {
+                                        uint ct = ExifU32(mv, 12, false);
+                                        uint ts = ExifU32(mv, 20, false);
+                                        uint du = ExifU32(mv, 24, false);
+                                        if (ts > 0) dur = (double)du / ts;
+                                        created = (long)ct - 2082844800L;
+                                    }
+                                    break;
+                                }
+                                p += bs;
+                            }
+                            break;
+                        }
+                        pos += size;
+                    }
+                }
+                return dur > 0 || created > 0;
+            }
+            catch { return false; }
+        }
+
+        class AlbItem
+        {
+            public string path, name, type, folder, root;
+            public string make, model, lens;
+            public double fnum, exposure, focal;
+            public int iso;
+            public long size, taken;
+            public int w, h;
+            public double dur, lat, lon;
+        }
+
+        List<AlbItem> albItems = new List<AlbItem>();
+        List<string> albRoots = new List<string>();
+        volatile bool albRunning = false;
+
+        string AlbRootsFile()
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "alb_paths.txt");
+            }
+            catch { return Path.Combine(Path.GetTempPath(), "alb_paths.txt"); }
+        }
+
+        void LoadAlbRoots()
+        {
+            try
+            {
+                string f = AlbRootsFile();
+                if (!File.Exists(f)) return;
+                foreach (var line in File.ReadAllLines(f))
+                {
+                    string p = line.Trim();
+                    if (p.Length > 0 && Directory.Exists(p) && !albRoots.Contains(p)) albRoots.Add(p);
+                }
+                SetupAlbWatchers();
+            }
+            catch { }
+        }
+
+        void SaveAlbRoots()
+        {
+            try { File.WriteAllLines(AlbRootsFile(), albRoots.ToArray(), System.Text.Encoding.UTF8); } catch { }
+        }
+
+        // ---- 相册扫描缓存（元数据 / 缩略图），只对新增或变动文件重新解析 ----
+        class AlbCacheEnt
+        {
+            public long size, mtime, taken;
+            public string type;
+            public string realPath;
+            public int w, h;
+            public double lat, lon, dur, fnum, exposure, focal;
+            public string make, model, lens;
+            public int iso;
+        }
+
+        Dictionary<string, AlbCacheEnt> albIndex = new Dictionary<string, AlbCacheEnt>();
+        bool albIndexLoaded = false;
+        volatile bool albScanAuto = false;
+        volatile bool albRescanPending = false;
+
+        static string EncS(string s)
+        {
+            try { return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(s ?? "")); } catch { return ""; }
+        }
+        static string DecS(string s)
+        {
+            try { return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(s ?? "")); } catch { return ""; }
+        }
+        static double Dbl(string s) { double d; double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d); return d; }
+        static long Lng(string s) { long l; long.TryParse(s, out l); return l; }
+        static int Int(string s) { int i; int.TryParse(s, out i); return i; }
+
+        string AlbIndexFile()
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "alb_index.dat");
+            }
+            catch { return Path.Combine(Path.GetTempPath(), "alb_index.dat"); }
+        }
+
+        void LoadAlbIndex()
+        {
+            if (albIndexLoaded) return;
+            albIndexLoaded = true;
+            try
+            {
+                string f = AlbIndexFile();
+                if (!File.Exists(f)) return;
+                foreach (var line in File.ReadAllLines(f))
+                {
+                    if (line.Length == 0) continue;
+                    var p = line.Split('\t');
+                    if (p.Length < 17) continue;
+                    var e = new AlbCacheEnt();
+                    e.size = Lng(p[1]); e.mtime = Lng(p[2]); e.type = DecS(p[3]); e.taken = Lng(p[4]);
+                    e.w = Int(p[5]); e.h = Int(p[6]); e.lat = Dbl(p[7]); e.lon = Dbl(p[8]); e.dur = Dbl(p[9]);
+                    e.make = DecS(p[10]); e.model = DecS(p[11]); e.lens = DecS(p[12]);
+                    e.fnum = Dbl(p[13]); e.exposure = Dbl(p[14]); e.focal = Dbl(p[15]); e.iso = Int(p[16]);
+                    e.realPath = DecS(p[0]);
+                    albIndex[e.realPath.ToLowerInvariant()] = e;
+                }
+            }
+            catch { }
+        }
+
+        void SaveAlbIndex(Dictionary<string, AlbCacheEnt> idx)
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder(idx.Count * 120);
+                foreach (var kv in idx)
+                {
+                    var e = kv.Value;
+                    sb.Append(EncS(e.realPath)).Append('\t')
+                      .Append(e.size).Append('\t').Append(e.mtime).Append('\t').Append(EncS(e.type)).Append('\t')
+                      .Append(e.taken).Append('\t').Append(e.w).Append('\t').Append(e.h).Append('\t')
+                      .Append(e.lat.ToString("0.######", CultureInfo.InvariantCulture)).Append('\t')
+                      .Append(e.lon.ToString("0.######", CultureInfo.InvariantCulture)).Append('\t')
+                      .Append(e.dur.ToString("0.###", CultureInfo.InvariantCulture)).Append('\t')
+                      .Append(EncS(e.make)).Append('\t').Append(EncS(e.model)).Append('\t').Append(EncS(e.lens)).Append('\t')
+                      .Append(e.fnum.ToString("0.##", CultureInfo.InvariantCulture)).Append('\t')
+                      .Append(e.exposure.ToString("0.########", CultureInfo.InvariantCulture)).Append('\t')
+                      .Append(e.focal.ToString("0.#", CultureInfo.InvariantCulture)).Append('\t')
+                      .Append(e.iso).AppendLine();
+                }
+                string f = AlbIndexFile(), tmp = f + ".tmp";
+                File.WriteAllText(tmp, sb.ToString(), System.Text.Encoding.UTF8);
+                if (File.Exists(f)) File.Delete(f);
+                File.Move(tmp, f);
+            }
+            catch { }
+        }
+
+        // 启动时先用上次的索引秒开相册，后台再核对变化
+        void ShowCachedAlbum()
+        {
+            try
+            {
+                LoadAlbIndex();
+                if (albIndex.Count == 0 || albItems.Count > 0) return;
+                var items = new List<AlbItem>();
+                foreach (var kv in albIndex)
+                {
+                    var e = kv.Value;
+                    if (string.IsNullOrEmpty(e.realPath) || !File.Exists(e.realPath)) continue;
+                    var it = new AlbItem();
+                    it.path = e.realPath;
+                    it.name = Path.GetFileName(e.realPath);
+                    it.root = AlbRootOf(e.realPath) ?? "";
+                    string rel = it.root.Length > 0 ? e.realPath.Substring(Math.Min(e.realPath.Length, it.root.Length)).TrimStart('\\') : e.realPath;
+                    it.folder = Path.GetDirectoryName(rel);
+                    if (string.IsNullOrEmpty(it.folder)) it.folder = ".";
+                    it.type = e.type;
+                    it.size = e.size; it.taken = e.taken; it.w = e.w; it.h = e.h;
+                    it.lat = e.lat; it.lon = e.lon; it.dur = e.dur;
+                    it.make = e.make; it.model = e.model; it.lens = e.lens;
+                    it.fnum = e.fnum; it.exposure = e.exposure; it.focal = e.focal; it.iso = e.iso;
+                    items.Add(it);
+                }
+                if (items.Count == 0) return;
+                items.Sort(delegate(AlbItem a, AlbItem b) {
+                    if (a.taken != b.taken) return b.taken.CompareTo(a.taken);
+                    return string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase);
+                });
+                albItems = items;
+                int photos = 0, videos = 0, lives = 0, geotag = 0;
+                var devices = new Dictionary<string, int>();
+                foreach (var it in items)
+                {
+                    if (it.type == "photo") photos++;
+                    else if (it.type == "video") videos++;
+                    else lives++;
+                    if (it.lat != 0 || it.lon != 0) geotag++;
+                    string dev = string.IsNullOrEmpty(it.model) ? "未知设备" : it.model;
+                    if (it.type != "video") { if (devices.ContainsKey(dev)) devices[dev]++; else devices[dev] = 1; }
+                }
+                Send("{\"type\":\"albstats\",\"root\":" + JsonStr(albRoots.Count > 0 ? albRoots[0] : "") +
+                     ",\"roots\":" + JsonStr(string.Join("\n", albRoots.ToArray())) + ",\"total\":" + items.Count +
+                     ",\"photos\":" + photos + ",\"videos\":" + videos + ",\"lives\":" + lives + ",\"geo\":" + geotag +
+                     ",\"devices\":" + devices.Count + ",\"cached\":true}");
+            }
+            catch { }
+        }
+
+        // ---- 缩略图磁盘缓存 ----
+        static string AlbThumbDir()
+        {
+            string d = Path.Combine(Path.GetTempPath(), "ibt_thumbs");
+            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); } catch { }
+            return d;
+        }
+        static string AlbThumbFile(string path)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                string key = (path.ToLowerInvariant() + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks);
+                using (var md5 = MD5.Create())
+                {
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(key);
+                    var h = md5.ComputeHash(bytes);
+                    return Path.Combine(AlbThumbDir(), BitConverter.ToString(h).Replace("-", "").ToLowerInvariant() + ".jpg");
+                }
+            }
+            catch { return null; }
+        }
+
+        // 生成或读取缩略图（带磁盘缓存，第二次打开直接命中）
+        string AlbThumbB64(string path, out int w, out int h)
+        {
+            w = 0; h = 0;
+            string cf = AlbThumbFile(path);
+            if (cf != null && File.Exists(cf))
+            {
+                try
+                {
+                    foreach (var it in albItems)
+                        if (string.Equals(it.path, path, StringComparison.OrdinalIgnoreCase)) { w = it.w; h = it.h; break; }
+                    return Convert.ToBase64String(File.ReadAllBytes(cf));
+                }
+                catch { }
+            }
+            try
+            {
+                Bitmap b = ShellThumb(path, 220);
+                if (b == null)
+                {
+                    string vc = VThumbCache(path);
+                    if (vc != null && File.Exists(vc)) b = LoadNoLock(vc);
+                }
+                if (b == null && !IsAlbVideo(path)) b = DupLoad(path);
+                if (b != null)
+                {
+                    using (b)
+                    {
+                        int max = 200;
+                        int bw = b.Width, bh = b.Height;
+                        double k = Math.Min(1.0, (double)max / Math.Max(1, Math.Max(bw, bh)));
+                        int nw = Math.Max(1, (int)(bw * k)), nh = Math.Max(1, (int)(bh * k));
+                        using (var sm = new Bitmap(nw, nh, PixelFormat.Format24bppRgb))
+                        {
+                            using (var g = Graphics.FromImage(sm)) { g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.DrawImage(b, 0, 0, nw, nh); }
+                            w = nw; h = nh;
+                            byte[] bytes;
+                            using (var ms = new MemoryStream())
+                            {
+                                var ep = new EncoderParameters(1);
+                                ep.Param[0] = new EncoderParameter(Encoder.Quality, 74L);
+                                sm.Save(ms, LUT.JpegCodec, ep);
+                                bytes = ms.ToArray();
+                            }
+                            if (cf != null) { try { File.WriteAllBytes(cf, bytes); } catch { } }
+                            return Convert.ToBase64String(bytes);
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+
+        List<FileSystemWatcher> albWatchers = new List<FileSystemWatcher>();
+        System.Threading.Timer albWatchTimer;
+        void SetupAlbWatchers()
+        {
+            try
+            {
+                foreach (var w in albWatchers) { try { w.EnableRaisingEvents = false; w.Dispose(); } catch { } }
+                albWatchers.Clear();
+                foreach (var root in albRoots)
+                {
+                    try
+                    {
+                        var w = new FileSystemWatcher(root);
+                        w.IncludeSubdirectories = true;
+                        w.NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size;
+                        w.InternalBufferSize = 64 * 1024;
+                        w.Created += AlbWatcherEvent;
+                        w.Deleted += AlbWatcherEvent;
+                        w.Renamed += AlbWatcherEvent;
+                        w.Changed += AlbWatcherEvent;
+                        w.EnableRaisingEvents = true;
+                        albWatchers.Add(w);
+                    }
+                    catch { }
+                }
+                if (albWatchTimer == null)
+                    albWatchTimer = new System.Threading.Timer(delegate { StartAlbumScan(true); }, null, Timeout.Infinite, Timeout.Infinite);
+            }
+            catch { }
+        }
+
+        void AlbWatcherEvent(object sender, FileSystemEventArgs e)
+        {
+            try
+            {
+                string ext = Path.GetExtension(e.FullPath).ToLower();
+                if (IsAlbImage(e.FullPath) || IsAlbVideo(e.FullPath) ||
+                    ext == ".aae" || e.ChangeType == WatcherChangeTypes.Deleted || e.ChangeType == WatcherChangeTypes.Renamed)
+                {
+                    if (albWatchTimer != null) albWatchTimer.Change(1800, Timeout.Infinite);
+                }
+            }
+            catch { }
+        }
+
+
+        void SendAlbRoots()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append("{\"type\":\"albpaths\",\"items\":[");
+            for (int i = 0; i < albRoots.Count; i++)
+            {
+                if (i > 0) sb.Append(",");
+                sb.Append(JsonStr(albRoots[i]));
+            }
+            sb.Append("]}");
+            Send(sb.ToString());
+        }
+
+        void AddAlbRoot(string p)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(p) || !Directory.Exists(p)) { Send("{\"type\":\"toast\",\"msg\":\"路径不存在\"}"); return; }
+                p = Path.GetFullPath(p).TrimEnd('\\');
+                if (p.Length == 2 && p[1] == ':') p += "\\";
+                bool dup = false;
+                foreach (var r in albRoots) if (string.Equals(r.TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) { dup = true; break; }
+                if (!dup) { albRoots.Add(p); SaveAlbRoots(); SetupAlbWatchers(); }
+                SendAlbRoots();
+                StartAlbumScan();
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("添加路径失败: " + ex.Message) + "}"); }
+        }
+
+        void RemoveAlbRoot(string p)
+        {
+            for (int i = albRoots.Count - 1; i >= 0; i--)
+                if (string.Equals(albRoots[i].TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) albRoots.RemoveAt(i);
+            SaveAlbRoots();
+            SetupAlbWatchers();
+            SendAlbRoots();
+            if (albRoots.Count == 0)
+            {
+                albItems = new List<AlbItem>();
+                Send("{\"type\":\"albstats\",\"root\":\"\",\"total\":0,\"photos\":0,\"videos\":0,\"lives\":0,\"geo\":0,\"devices\":0}");
+            }
+            else StartAlbumScan();
+        }
+
+        bool IsAlbImage(string f)
+        {
+            string e = Path.GetExtension(f).ToLower();
+            return e == ".jpg" || e == ".jpeg" || e == ".png" || e == ".bmp" || e == ".tif" || e == ".tiff" || e == ".webp" || e == ".heic" || e == ".heif";
+        }
+        bool IsAlbVideo(string f)
+        {
+            string e = Path.GetExtension(f).ToLower();
+            return e == ".mov" || e == ".mp4" || e == ".m4v" || e == ".avi" || e == ".mkv" || e == ".3gp";
+        }
+
+        void StartAlbumScan() { StartAlbumScan(false); }
+
+        void StartAlbumScan(bool auto)
+        {
+            if (albRoots.Count == 0) { if (!auto) Send("{\"type\":\"toast\",\"msg\":\"请先添加相册路径\"}"); return; }
+            if (albRunning) { albRescanPending = true; return; }
+            if (!auto && albItems.Count == 0) ShowCachedAlbum();
+            albRunning = true;
+            albScanAuto = auto;
+            var t = new Thread(AlbScanThread); t.IsBackground = true; t.Start();
+        }
+
+        string AlbRootOf(string path)
+        {
+            string best = null;
+            foreach (var r in albRoots)
+            {
+                string rr = r.TrimEnd('\\');
+                bool match = string.Equals(path, rr, StringComparison.OrdinalIgnoreCase) ||
+                             path.StartsWith(rr + "\\", StringComparison.OrdinalIgnoreCase);
+                if (!match) continue;
+                if (best == null || best.TrimEnd('\\').Length < rr.Length) best = r;
+            }
+            return best == null ? "" : best;
+        }
+
+        void AlbScanThread()
+        {
+            try
+            {
+                Send("{\"type\":\"albscan\",\"phase\":\"enum\",\"done\":0,\"total\":0}");
+                var all = new List<string>();
+                var skipDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+                    "$RECYCLE.BIN", "System Volume Information", "$WinREAgent", "node_modules", ".git",
+                    "Windows", "Program Files", "Program Files (x86)", "ProgramData"
+                };
+                foreach (var root in albRoots)
+                {
+                    var stack = new Stack<string>();
+                    stack.Push(root);
+                    while (stack.Count > 0)
+                    {
+                        string d = stack.Pop();
+                        try
+                        {
+                            foreach (var sub in Directory.GetDirectories(d))
+                            {
+                                string nm = Path.GetFileName(sub);
+                                if (skipDirs.Contains(nm)) continue;
+                                stack.Push(sub);
+                            }
+                            // 枚举阶段就按扩展名过滤，避免把整盘几万个无关文件都塞进内存
+                            foreach (var f in Directory.GetFiles(d))
+                                if (IsAlbImage(f) || IsAlbVideo(f)) all.Add(f);
+                        }
+                        catch { }
+                    }
+                }
+                var vmap = new Dictionary<string, string>();
+                var imap = new Dictionary<string, string>();
+                foreach (var f in all)
+                {
+                    string key = Path.GetDirectoryName(f).ToLower() + "\u0001" + Path.GetFileNameWithoutExtension(f).ToLower();
+                    if (IsAlbVideo(f) && !vmap.ContainsKey(key)) vmap[key] = f;
+                    if (IsAlbImage(f) && !imap.ContainsKey(key)) imap[key] = f;
+                }
+
+                LoadAlbIndex();
+                var newIndex = new Dictionary<string, AlbCacheEnt>();
+                var items = new List<AlbItem>();
+                bool changed = false;
+                int done = 0, total = all.Count;
+                foreach (var f in all)
+                {
+                    done++;
+                    if (done % 20 == 0 || done == total)
+                        Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":" + done + ",\"total\":" + total + "}");
+                    bool isImg = IsAlbImage(f), isVid = IsAlbVideo(f);
+                    if (!isImg && !isVid) continue;
+                    string key = Path.GetDirectoryName(f).ToLower() + "\u0001" + Path.GetFileNameWithoutExtension(f).ToLower();
+                    string liveVid = isImg && vmap.ContainsKey(key) ? vmap[key] : null;
+                    if (isVid && !isImg && imap.ContainsKey(key)) continue; // 已归属为实况照片，不重复列出
+
+                    var it = new AlbItem();
+                    it.path = f;
+                    it.name = Path.GetFileName(f);
+                    it.root = AlbRootOf(f) ?? "";
+                    string rel = it.root.Length > 0 ? f.Substring(Math.Min(f.Length, it.root.Length)).TrimStart('\\') : f;
+                    it.folder = Path.GetDirectoryName(rel);
+                    if (string.IsNullOrEmpty(it.folder)) it.folder = ".";
+                    it.type = isImg ? (liveVid != null ? "live" : "photo") : "video";
+
+                    long fsize = 0, mtimeTicks = 0;
+                    try { var fi = new FileInfo(f); fsize = fi.Length; mtimeTicks = fi.LastWriteTimeUtc.Ticks; } catch { }
+                    it.size = fsize;
+
+                    string lk = f.ToLowerInvariant();
+                    AlbCacheEnt ce = albIndex.ContainsKey(lk) ? albIndex[lk] : null;
+                    bool hit = ce != null && ce.size == fsize && ce.mtime == mtimeTicks && mtimeTicks != 0;
+
+                    if (hit)
+                    {
+                        // 命中缓存：不再读 EXIF、不再解码图片
+                        it.taken = ce.taken; it.w = ce.w; it.h = ce.h;
+                        it.lat = ce.lat; it.lon = ce.lon; it.dur = ce.dur;
+                        it.make = ce.make; it.model = ce.model; it.lens = ce.lens;
+                        it.fnum = ce.fnum; it.exposure = ce.exposure; it.focal = ce.focal; it.iso = ce.iso;
+                    }
+                    else
+                    {
+                        changed = true;
+                        it.taken = mtimeTicks > 0 ? (long)((mtimeTicks - 621355968000000000L) / 10000000L) : 0;
+                        if (isImg)
+                        {
+                            ExifMeta meta;
+                            if (ExifDetail(f, out meta))
+                            {
+                                if (meta.taken > 0) it.taken = meta.taken;
+                                it.lat = meta.lat; it.lon = meta.lon;
+                                it.make = meta.make; it.model = meta.model; it.lens = meta.lens;
+                                it.fnum = meta.fnum; it.exposure = meta.exposure; it.focal = meta.focal; it.iso = meta.iso;
+                            }
+                            try { using (var b = DupLoad(f)) { it.w = b.Width; it.h = b.Height; } } catch { }
+                            if (it.w == 0)
+                            {
+                                try { using (var b = ShellThumb(f, 256)) { if (b != null) { it.w = b.Width; it.h = b.Height; } } } catch { }
+                            }
+                        }
+                        else
+                        {
+                            double du = 0; long ct = 0;
+                            if (Mp4Info(f, out du, out ct)) { it.dur = du; if (ct > 0) it.taken = ct; }
+                        }
+                        ce = new AlbCacheEnt();
+                        ce.realPath = f; ce.size = fsize; ce.mtime = mtimeTicks; ce.type = it.type;
+                        ce.taken = it.taken; ce.w = it.w; ce.h = it.h; ce.lat = it.lat; ce.lon = it.lon; ce.dur = it.dur;
+                        ce.make = it.make; ce.model = it.model; ce.lens = it.lens;
+                        ce.fnum = it.fnum; ce.exposure = it.exposure; ce.focal = it.focal; ce.iso = it.iso;
+                    }
+                    ce.realPath = f;
+                    newIndex[lk] = ce;
+                    items.Add(it);
+                }
+
+                bool changed2 = changed || items.Count != albItems.Count;
+                items.Sort(delegate(AlbItem a, AlbItem b) {
+                    if (a.taken != b.taken) return b.taken.CompareTo(a.taken);
+                    return string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase);
+                });
+                bool autoUpdate = albScanAuto || albItems.Count > 0;
+                albItems = items;
+                albIndex = newIndex;
+                SaveAlbIndex(newIndex);
+
+                int photos = 0, videos = 0, lives = 0, geotag = 0;
+                var devices = new Dictionary<string, int>();
+                foreach (var it in items)
+                {
+                    if (it.type == "photo") photos++;
+                    else if (it.type == "video") videos++;
+                    else lives++;
+                    if (it.lat != 0 || it.lon != 0) geotag++;
+                    string dev = string.IsNullOrEmpty(it.model) ? "未知设备" : it.model;
+                    if (it.type != "video")
+                    {
+                        if (devices.ContainsKey(dev)) devices[dev]++; else devices[dev] = 1;
+                    }
+                }
+                // 自动刷新时若内容没有变化，不打扰界面
+                if (autoUpdate && !changed2)
+                {
+                    // 仅更新统计数字，保持界面不重建
+                    Send("{\"type\":\"albcount\",\"total\":" + items.Count + "}");
+                }
+                else
+                {
+                    Send("{\"type\":\"albstats\",\"root\":" + JsonStr(albRoots.Count > 0 ? albRoots[0] : "") +
+                         ",\"roots\":" + JsonStr(string.Join("\n", albRoots.ToArray())) + ",\"total\":" + items.Count +
+                         ",\"photos\":" + photos + ",\"videos\":" + videos + ",\"lives\":" + lives + ",\"geo\":" + geotag +
+                         ",\"devices\":" + devices.Count + (autoUpdate ? ",\"auto\":true" : "") + "}");
+                }
+                if (changed2)
+                {
+                    try
+                    {
+                        var vidList = new List<string>();
+                        foreach (var it in items) if (it.type == "video") vidList.Add(it.path);
+                        if (vidList.Count > 0)
+                        {
+                            var vt = new Thread(() => WarmVideoThumbs(vidList));
+                            vt.IsBackground = true; vt.Start();
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("相册扫描失败: " + ex.Message) + "}"); }
+            finally
+            {
+                albRunning = false;
+                albScanAuto = false;
+                if (albRescanPending)
+                {
+                    albRescanPending = false;
+                    StartAlbumScan(true);
+                }
+            }
+        }
+
+        void SendAlbPage(int off, int cnt)
+        {
+            try
+            {
+                if (cnt <= 0) cnt = 100;
+                var sb = new System.Text.StringBuilder();
+                int end = Math.Min(albItems.Count, off + cnt);
+                sb.Append("{\"type\":\"albpage\",\"offset\":").Append(off).Append(",\"total\":").Append(albItems.Count).Append(",\"items\":[");
+                for (int i = off; i < end; i++)
+                {
+                    var it = albItems[i];
+                    if (i > off) sb.Append(",");
+                    sb.Append("{\"p\":").Append(JsonStr(it.path))
+                      .Append(",\"n\":").Append(JsonStr(it.name))
+                      .Append(",\"t\":").Append(JsonStr(it.type))
+                      .Append(",\"s\":").Append(it.size)
+                      .Append(",\"w\":").Append(it.w)
+                      .Append(",\"h\":").Append(it.h)
+                      .Append(",\"dt\":").Append(it.taken)
+                      .Append(",\"d\":").Append((long)it.dur)
+                      .Append(",\"la\":").Append(it.lat.ToString("0.######", CultureInfo.InvariantCulture))
+                      .Append(",\"lo\":").Append(it.lon.ToString("0.######", CultureInfo.InvariantCulture))
+                      .Append(",\"f\":").Append(JsonStr(it.folder))
+                      .Append(",\"rt\":").Append(JsonStr(it.root))
+                      .Append(",\"mk\":").Append(JsonStr(it.make ?? ""))
+                      .Append(",\"md\":").Append(JsonStr(it.model ?? ""))
+                      .Append(",\"ln\":").Append(JsonStr(it.lens ?? ""))
+                      .Append(",\"ap\":").Append(it.fnum.ToString("0.##", CultureInfo.InvariantCulture))
+                      .Append(",\"ex\":").Append(it.exposure.ToString("0.########", CultureInfo.InvariantCulture))
+                      .Append(",\"is\":").Append(it.iso)
+                      .Append(",\"fl\":").Append(it.focal.ToString("0.#", CultureInfo.InvariantCulture))
+                      .Append("}");
+                }
+                sb.Append("]}");
+                Send(sb.ToString());
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("分页失败: " + ex.Message) + "}"); }
+        }
+
+        // ---- 视频封面（相册缩略图）----
+        bool vThumbWarming = false;
+
+        static string VThumbDir()
+        {
+            string d = Path.Combine(Path.GetTempPath(), "ibt_vthumbs");
+            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); } catch { }
+            return d;
+        }
+
+        static string VThumbCache(string path)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                string key = path.ToLowerInvariant() + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks;
+                ulong h = 1469598103934665603UL;
+                foreach (char c in key) { h ^= (ulong)c; h *= 1099511628211UL; }
+                return Path.Combine(VThumbDir(), h.ToString("x16") + ".jpg");
+            }
+            catch { return null; }
+        }
+
+        static Bitmap LoadNoLock(string f)
+        {
+            try
+            {
+                byte[] buf = File.ReadAllBytes(f);
+                using (var ms = new MemoryStream(buf))
+                using (var img = Image.FromStream(ms))
+                    return new Bitmap(img);
+            }
+            catch { return null; }
+        }
+
+        static string PyExePath()
+        {
+            string emb = Path.Combine(Application.StartupPath, "python", "python.exe");
+            if (File.Exists(emb)) return emb;
+            return "python";
+        }
+
+        // 后台批量抽取视频首帧，逐个回填到相册网格
+        void WarmVideoThumbs(List<string> vids)
+        {
+            if (vThumbWarming || vids == null || vids.Count == 0) return;
+            vThumbWarming = true;
+            try
+            {
+                string script = Path.Combine(Application.StartupPath, "vthumb.py");
+                if (!File.Exists(script)) return;
+                var todo = new List<string>();
+                foreach (var v in vids)
+                {
+                    string c = VThumbCache(v);
+                    if (c != null && !File.Exists(c)) todo.Add(v);
+                }
+                if (todo.Count == 0) return;
+                if (todo.Count > 600) todo = todo.GetRange(0, 600);
+                string py = PyExePath();
+                const int CH = 20;
+                for (int i = 0; i < todo.Count; i += CH)
+                {
+                    var chunk = todo.GetRange(i, Math.Min(CH, todo.Count - i));
+                    var jobs = new List<string>();
+                    foreach (var v in chunk)
+                    {
+                        string c = VThumbCache(v);
+                        if (c != null) jobs.Add("[" + JsonStr(v) + "," + JsonStr(c) + "]");
+                    }
+                    if (jobs.Count == 0) continue;
+                    string jf = Path.Combine(Path.GetTempPath(), "ibt_vthumb_jobs.json");
+                    File.WriteAllText(jf, "[" + string.Join(",", jobs.ToArray()) + "]", new System.Text.UTF8Encoding(false));
+                    var psi = new System.Diagnostics.ProcessStartInfo(py, "\"" + script + "\" \"" + jf + "\"");
+                    psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                    psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
+                    try
+                    {
+                        var p = System.Diagnostics.Process.Start(psi);
+                        if (p != null) { p.WaitForExit(90000); try { p.Dispose(); } catch { } }
+                    }
+                    catch { }
+                    foreach (var v in chunk)
+                    {
+                        string c = VThumbCache(v);
+                        if (c != null && File.Exists(c)) SendAlbThumbOne(v);
+                    }
+                }
+            }
+            catch { }
+            finally { vThumbWarming = false; }
+        }
+
+        void SendAlbThumbs(int off, int cnt)
+        {
+            try
+            {
+                if (cnt <= 0) cnt = 100;
+                if (cnt > 120) cnt = 120;
+                var sb = new System.Text.StringBuilder();
+                int end = Math.Min(albItems.Count, off + cnt);
+                sb.Append("{\"type\":\"albthumbs\",\"offset\":").Append(off).Append(",\"items\":[");
+                for (int i = off; i < end; i++)
+                {
+                    var it = albItems[i];
+                    if (i > off) sb.Append(",");
+                    string t = null;
+                    try
+                    {
+                        int tw = 0, th = 0;
+                        t = AlbThumbB64(it.path, out tw, out th);
+                    }
+                    catch { }
+                    sb.Append("{\"p\":").Append(JsonStr(it.path)).Append(",\"t\":").Append(t == null ? "null" : JsonStr("data:image/jpeg;base64," + t)).Append("}");
+                }
+                sb.Append("]}");
+                Send(sb.ToString());
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("缩略图失败: " + ex.Message) + "}"); }
+        }
+
+        void SendAlbThumbOne(string path)
+        {
+            string t = null; int w = 0, h = 0;
+            try
+            {
+                t = AlbThumbB64(path, out w, out h);
+            }
+            catch { }
+            Send("{\"type\":\"albthumb\",\"p\":" + JsonStr(path) + ",\"w\":" + w + ",\"h\":" + h +
+                 ",\"t\":" + (t == null ? "null" : JsonStr("data:image/jpeg;base64," + t)) + "}");
+        }
+
+        void SendAlbView(string path)
+        {
+            try
+            {
+                AlbItem hit = null;
+                foreach (var it in albItems) if (string.Equals(it.path, path, StringComparison.OrdinalIgnoreCase)) { hit = it; break; }
+                string typ = hit != null ? hit.type : (IsAlbVideo(path) ? "video" : "photo");
+                int w = 0, h = 0; long sz = 0; long dt = 0; double du = 0, la = 0, lo = 0;
+                if (hit != null) { sz = hit.size; dt = hit.taken; du = hit.dur; la = hit.lat; lo = hit.lon; }
+                string b64 = null;
+                try
+                {
+                    using (var b = ShellThumb(path, 1600))
+                    {
+                        if (b != null)
+                        {
+                            int max = 1400;
+                            int bw = b.Width, bh = b.Height;
+                            double k = Math.Min(1.0, (double)max / Math.Max(1, Math.Max(bw, bh)));
+                            int nw = Math.Max(1, (int)(bw * k)), nh = Math.Max(1, (int)(bh * k));
+                            using (var sm = new Bitmap(nw, nh, PixelFormat.Format24bppRgb))
+                            {
+                                using (var g = Graphics.FromImage(sm)) { g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.DrawImage(b, 0, 0, nw, nh); }
+                                b64 = B64(sm, 84);
+                                w = nw; h = nh;
+                            }
+                        }
+                    }
+                    if (b64 == null && typ != "video")
+                    {
+                        using (var b = LoadOriented(path))
+                        {
+                            int max = 1600; int bw = b.Width, bh = b.Height;
+                            double k = Math.Min(1.0, (double)max / Math.Max(1, Math.Max(bw, bh)));
+                            int nw = Math.Max(1, (int)(bw * k)), nh = Math.Max(1, (int)(bh * k));
+                            using (var sm = new Bitmap(nw, nh, PixelFormat.Format24bppRgb))
+                            {
+                                using (var g = Graphics.FromImage(sm)) { g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.DrawImage(b, 0, 0, nw, nh); }
+                                b64 = B64(sm, 85);
+                                w = nw; h = nh;
+                            }
+                        }
+                    }
+                }
+                catch { }
+                string comps = "";
+                if (typ == "live")
+                {
+                    var cs = DupCompanions(path);
+                    if (cs != null) { for (int i = 0; i < cs.Length; i++) { if (i > 0) comps += ", "; comps += Path.GetFileName(cs[i]); } }
+                }
+                string mk = hit != null ? (hit.make ?? "") : "";
+                string md = hit != null ? (hit.model ?? "") : "";
+                string ln = hit != null ? (hit.lens ?? "") : "";
+                double ap = hit != null ? hit.fnum : 0;
+                double ex = hit != null ? hit.exposure : 0;
+                double fl = hit != null ? hit.focal : 0;
+                int isv = hit != null ? hit.iso : 0;
+                if (hit == null && typ != "video")
+                {
+                    ExifMeta meta;
+                    if (ExifDetail(path, out meta))
+                    {
+                        mk = meta.make; md = meta.model; ln = meta.lens;
+                        ap = meta.fnum; ex = meta.exposure; fl = meta.focal; isv = meta.iso;
+                        if (la == 0 && lo == 0) { la = meta.lat; lo = meta.lon; }
+                    }
+                }
+                string addr = (la != 0 || lo != 0) ? GeoCached(la, lo) : "";
+                Send("{\"type\":\"albview\",\"p\":" + JsonStr(path) + ",\"n\":" + JsonStr(Path.GetFileName(path)) +
+                     ",\"t\":" + JsonStr(typ) + ",\"s\":" + sz + ",\"w\":" + w + ",\"h\":" + h +
+                     ",\"dt\":" + dt + ",\"d\":" + (long)du +
+                     ",\"la\":" + la.ToString("0.######", CultureInfo.InvariantCulture) +
+                     ",\"lo\":" + lo.ToString("0.######", CultureInfo.InvariantCulture) +
+                     ",\"c\":" + JsonStr(comps) +
+                     ",\"mk\":" + JsonStr(mk) + ",\"md\":" + JsonStr(md) + ",\"ln\":" + JsonStr(ln) +
+                     ",\"ap\":" + ap.ToString("0.##", CultureInfo.InvariantCulture) +
+                     ",\"ex\":" + ex.ToString("0.########", CultureInfo.InvariantCulture) +
+                     ",\"is\":" + isv + ",\"fl\":" + fl.ToString("0.#", CultureInfo.InvariantCulture) +
+                     ",\"addr\":" + JsonStr(addr) +
+                     ",\"data\":" + (b64 == null ? "null" : JsonStr("data:image/jpeg;base64," + b64)) + "}");
+                if (la != 0 || lo != 0) GeoLookupAsync(path, la, lo);
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("预览失败: " + ex.Message) + "}"); }
+        }
+
+        // ---- 逆地理编码：先查在线（Nominatim），失败/离线时用本地城市索引兜底 ----
+        readonly Dictionary<string, string> geoCache = new Dictionary<string, string>();
+        readonly HashSet<string> geoBusy = new HashSet<string>();
+        readonly HashSet<string> geoOnlineDone = new HashSet<string>();
+
+        class GeoTown { public string prov, city; public double lat, lon; }
+        List<GeoTown> geoTowns = null;
+
+        void LoadGeoTowns()
+        {
+            if (geoTowns != null) return;
+            geoTowns = new List<GeoTown>();
+            try
+            {
+                string f = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "assets\\geo\\cn_cities.txt");
+                if (!File.Exists(f)) return;
+                foreach (var line in File.ReadAllLines(f, System.Text.Encoding.UTF8))
+                {
+                    string[] p = line.Split('\t');
+                    if (p.Length < 4) continue;
+                    var t = new GeoTown();
+                    t.prov = p[0]; t.city = p[1];
+                    t.lat = double.Parse(p[2], CultureInfo.InvariantCulture);
+                    t.lon = double.Parse(p[3], CultureInfo.InvariantCulture);
+                    geoTowns.Add(t);
+                }
+            }
+            catch { }
+        }
+
+        string GeoOffline(double lat, double lon)
+        {
+            if (lat == 0 && lon == 0) return "";
+            LoadGeoTowns();
+            if (geoTowns == null || geoTowns.Count == 0) return "";
+            double best = 1e9; GeoTown hit = null;
+            double cosLat = Math.Cos(lat * Math.PI / 180.0);
+            foreach (var t in geoTowns)
+            {
+                double dx = (t.lon - lon) * cosLat, dy = t.lat - lat;
+                double d = dx * dx + dy * dy;
+                if (d < best) { best = d; hit = t; }
+            }
+            if (hit == null) return "";
+            // 约 1.4 度≈150km，超出则认为不在城市群范围
+            if (Math.Sqrt(best) > 1.4) return "";
+            if (string.Equals(hit.prov, hit.city, StringComparison.Ordinal)) return hit.city;
+            if (hit.prov.EndsWith("市", StringComparison.Ordinal) && hit.city.EndsWith("区", StringComparison.Ordinal)) return hit.prov;
+            return hit.prov + " " + hit.city;
+        }
+
+        string GeoKey(double lat, double lon) { return lat.ToString("0.0000", CultureInfo.InvariantCulture) + "," + lon.ToString("0.0000", CultureInfo.InvariantCulture); }
+
+        string GeoCached(double lat, double lon)
+        {
+            lock (geoCache)
+            {
+                string v;
+                if (geoCache.TryGetValue(GeoKey(lat, lon), out v) && v != null && v.Length > 0) return v;
+            }
+            return GeoOffline(lat, lon);
+        }
+
+        void GeoLookupAsync(string path, double lat, double lon)
+        {
+            string k = GeoKey(lat, lon);
+            lock (geoCache) { if (geoCache.ContainsKey(k)) return; }
+            lock (geoOnlineDone) { if (geoOnlineDone.Contains(k)) return; }
+            lock (geoBusy) { if (geoBusy.Contains(k)) return; geoBusy.Add(k); }
+            var th = new Thread(() =>
+            {
+                string addr = "";
+                try
+                {
+                    string url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=zh-CN&lat=" +
+                                 lat.ToString("0.######", CultureInfo.InvariantCulture) + "&lon=" + lon.ToString("0.######", CultureInfo.InvariantCulture);
+                    var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+                    req.UserAgent = "ImageBatchTool/1.0 (local photo album)";
+                    req.Timeout = 6000; req.ReadWriteTimeout = 6000;
+                    using (var resp = req.GetResponse())
+                    using (var sr = new System.IO.StreamReader(resp.GetResponseStream(), System.Text.Encoding.UTF8))
+                    {
+                        string json = sr.ReadToEnd();
+                        var m = System.Text.RegularExpressions.Regex.Match(json, "\"display_name\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+                        if (m.Success) addr = m.Groups[1].Value.Replace("\\\"", "\"");
+                    }
+                }
+                catch { addr = ""; }
+                if (addr.Length == 0) addr = GeoOffline(lat, lon);
+                lock (geoBusy) { geoBusy.Remove(k); }
+                lock (geoOnlineDone) { geoOnlineDone.Add(k); }
+                lock (geoCache) { geoCache[k] = addr; }
+                Send("{\"type\":\"albaddr\",\"p\":" + JsonStr(path) + ",\"addr\":" + JsonStr(addr) + "}");
+            });
+            th.IsBackground = true; th.Start();
+        }
+
+        // ---- 人脸分组（调用 python + OpenCV 检测与聚类）----
+        volatile bool faceRunning = false;
+        volatile bool faceStop = false;
+        System.Diagnostics.Process faceProc = null;
+
+        void StartFaceScan()
+        {
+            if (faceRunning) { Send("{\"type\":\"toast\",\"msg\":\"人脸分析正在进行\"}"); return; }
+            if (albItems.Count == 0) { Send("{\"type\":\"toast\",\"msg\":\"相册还没有照片\"}"); return; }
+            faceRunning = true; faceStop = false;
+            var th = new Thread(FaceScanThread); th.IsBackground = true; th.Start();
+        }
+
+        void FaceScanThread()
+        {
+            System.Diagnostics.Process proc = null;
+            try
+            {
+                var list = new List<string>();
+                foreach (var it in albItems) if (it.type != "video") list.Add(it.path);
+                string dir = Path.GetDirectoryName(Application.ExecutablePath);
+                string py = Path.Combine(dir, "python\\python.exe");
+                if (!File.Exists(py)) py = "python";
+                string script = Path.Combine(dir, "ai\\face_group.py");
+                if (!File.Exists(script)) { Send("{\"type\":\"toast\",\"msg\":\"缺少 ai\\\\face_group.py\"}"); return; }
+                string listFile = Path.Combine(Path.GetTempPath(), "ibt_faces_" + DateTime.Now.Ticks + ".txt");
+                File.WriteAllLines(listFile, list.ToArray(), System.Text.Encoding.UTF8);
+                Send("{\"type\":\"albfaces\",\"phase\":\"enum\",\"done\":0,\"total\":" + list.Count + "}");
+
+                var psi = new System.Diagnostics.ProcessStartInfo();
+                psi.FileName = py;
+                psi.Arguments = "\"" + script + "\" \"" + listFile + "\"";
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+                psi.StandardErrorEncoding = System.Text.Encoding.UTF8;
+                proc = System.Diagnostics.Process.Start(psi);
+                faceProc = proc;
+
+                var thumbs = new Dictionary<int, string>();
+                var faces = new Dictionary<int, List<string>>();
+                int facesTotal = 0;
+                string line;
+                var so = proc.StandardOutput;
+                while ((line = so.ReadLine()) != null)
+                {
+                    if (faceStop) break;
+                    string[] f = line.Split('\t');
+                    if (f.Length < 2) continue;
+                    if (f[0] == "P" && f.Length >= 3)
+                    {
+                        Send("{\"type\":\"albfaces\",\"phase\":\"run\",\"done\":" + f[1] + ",\"total\":" + f[2] + "}");
+                    }
+                    else if (f[0] == "G" && f.Length >= 3)
+                    {
+                        thumbs[int.Parse(f[1])] = f[2];
+                    }
+                    else if (f[0] == "F" && f.Length >= 7)
+                    {
+                        int gid = int.Parse(f[1]);
+                        if (!faces.ContainsKey(gid)) faces[gid] = new List<string>();
+                        faces[gid].Add("{\"p\":" + JsonStr(f[2]) + ",\"x\":" + f[3] + ",\"y\":" + f[4] +
+                                       ",\"w\":" + f[5] + ",\"h\":" + f[6] + "}");
+                        facesTotal++;
+                    }
+                    else if (f[0] == "E")
+                    {
+                        Send("{\"type\":\"toast\",\"msg\":" + JsonStr("人脸分析: " + line) + "}");
+                    }
+                }
+                try { proc.WaitForExit(5000); } catch { }
+
+                if (faceStop)
+                {
+                    Send("{\"type\":\"albfaces\",\"phase\":\"stop\"}");
+                    return;
+                }
+
+                var order = new List<int>();
+                foreach (var kv in faces) order.Add(kv.Key);
+                order.Sort(delegate(int a, int b) { return faces[b].Count.CompareTo(faces[a].Count); });
+                var sb = new System.Text.StringBuilder();
+                sb.Append("{\"type\":\"albfaces\",\"phase\":\"done\",\"photos\":").Append(list.Count)
+                  .Append(",\"faces\":").Append(facesTotal).Append(",\"groups\":[");
+                int shown = 0;
+                foreach (var gid in order)
+                {
+                    if (shown >= 80) break;
+                    if (shown > 0) sb.Append(",");
+                    var fl = faces[gid];
+                    sb.Append("{\"id\":").Append(gid).Append(",\"thumb\":")
+                      .Append(thumbs.ContainsKey(gid) ? JsonStr("data:image/jpeg;base64," + thumbs[gid]) : "null")
+                      .Append(",\"faces\":[").Append(string.Join(",", fl.ToArray())).Append("]}");
+                    shown++;
+                }
+                sb.Append("]}");
+                Send(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                Send("{\"type\":\"albfaces\",\"phase\":\"error\",\"msg\":" + JsonStr(ex.Message) + "}");
+            }
+            finally
+            {
+                try { if (proc != null && !proc.HasExited) proc.Kill(); } catch { }
+                faceProc = null;
+                faceRunning = false;
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct ShFileOp { public IntPtr hwnd; public uint wFunc; public string pFrom; public string pTo; public ushort fFlags; public bool fAnyOperationsAborted; public IntPtr hNameMappings; public string lpszProgressTitle; }
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern int SHFileOperation(ref ShFileOp op);
+
+        // ==================== 应用内回收站 ====================
+        class BinRow { public string gid, kind, orig, stored; public long ticks; }
+
+        string CfgDir()
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+            try { if (!Directory.Exists(dir)) Directory.CreateDirectory(dir); } catch { }
+            return dir;
+        }
+
+        string binDirCached = null;
+        string BinDir()
+        {
+            if (binDirCached != null) return binDirCached;
+            string cfg = CfgDir();
+            try
+            {
+                string f = Path.Combine(cfg, "bin_dir.txt");
+                if (File.Exists(f))
+                {
+                    string s = File.ReadAllText(f).Trim();
+                    if (s.Length > 0 && Directory.Exists(s)) binDirCached = s;
+                }
+            }
+            catch { }
+            if (binDirCached == null)
+            {
+                string pics = "";
+                try { pics = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures); } catch { }
+                binDirCached = Path.Combine(pics.Length > 0 ? pics : cfg, "图片批处理工具回收站");
+            }
+            try { if (!Directory.Exists(binDirCached)) Directory.CreateDirectory(binDirCached); } catch { }
+            return binDirCached;
+        }
+
+        string BinFiles() { return Path.Combine(BinDir(), "files"); }
+        string BinIndex() { return Path.Combine(BinDir(), "index.txt"); }
+
+        List<BinRow> BinLoad()
+        {
+            var list = new List<BinRow>();
+            try
+            {
+                string idx = BinIndex();
+                if (!File.Exists(idx)) return list;
+                foreach (var line in File.ReadAllLines(idx))
+                {
+                    if (string.IsNullOrEmpty(line)) continue;
+                    var a = line.Split('\t');
+                    if (a.Length < 5) continue;
+                    var r = new BinRow();
+                    r.gid = a[0];
+                    long t; long.TryParse(a[1], out t); r.ticks = t;
+                    r.kind = a[2];
+                    r.orig = a[3].Replace("%09", "\t");
+                    r.stored = a[4];
+                    if (File.Exists(Path.Combine(BinFiles(), r.stored))) list.Add(r);
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        void BinSave(List<BinRow> rows)
+        {
+            try
+            {
+                Directory.CreateDirectory(BinDir());
+                var sb = new System.Text.StringBuilder();
+                foreach (var r in rows)
+                    sb.Append(r.gid).Append('\t').Append(r.ticks).Append('\t').Append(r.kind).Append('\t')
+                      .Append(r.orig.Replace("\t", "%09")).Append('\t').Append(r.stored).Append("\r\n");
+                File.WriteAllText(BinIndex(), sb.ToString());
+            }
+            catch { }
+        }
+
+        string BinStore(string src, string gid)
+        {
+            string files = BinFiles();
+            Directory.CreateDirectory(files);
+            string name = Path.GetFileName(src);
+            string stored = gid + "_" + name;
+            string abs = Path.Combine(files, stored);
+            int n = 1;
+            while (File.Exists(abs))
+            {
+                stored = gid + "_" + Path.GetFileNameWithoutExtension(name) + "_" + n + Path.GetExtension(name);
+                abs = Path.Combine(files, stored); n++;
+            }
+            try { File.Move(src, abs); }
+            catch
+            {
+                File.Copy(src, abs, true);
+                File.Delete(src);
+            }
+            return stored;
+        }
+
+        int BinTrashFile(string path, string gid, string kind, List<BinRow> rows)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return 0;
+            try
+            {
+                string stored = BinStore(path, gid);
+                var r = new BinRow();
+                r.gid = gid; r.ticks = DateTime.Now.Ticks; r.kind = kind; r.orig = path; r.stored = stored;
+                rows.Add(r);
+                return 1;
+            }
+            catch { return 0; }
+        }
+
+        bool UnderAlbRoot(string p)
+        {
+            if (string.IsNullOrEmpty(p)) return false;
+            foreach (var root in albRoots)
+            {
+                try
+                {
+                    string r = root.TrimEnd('\\', '/');
+                    if (p.StartsWith(r + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                        p.StartsWith(r + "/", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(Path.GetDirectoryName(p), r, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                catch { }
+            }
+            return false;
+        }
+
+        void SendBinList()
+        {
+            try
+            {
+                var rows = BinLoad();
+                rows.Sort(delegate (BinRow a, BinRow b) { return b.ticks.CompareTo(a.ticks); });
+                var sb = new System.Text.StringBuilder();
+                long total = 0; int cnt = 0;
+                foreach (var r in rows)
+                {
+                    if (!string.Equals(r.kind, "m", StringComparison.OrdinalIgnoreCase)) continue;
+                    string abs = Path.Combine(BinFiles(), r.stored);
+                    long size = 0;
+                    try { size = new FileInfo(abs).Length; } catch { }
+                    total += size;
+                    if (sb.Length > 0) sb.Append(",");
+                    sb.Append("{\"id\":").Append(JsonStr(r.gid))
+                      .Append(",\"name\":").Append(JsonStr(Path.GetFileName(r.orig)))
+                      .Append(",\"orig\":").Append(JsonStr(r.orig))
+                      .Append(",\"sp\":").Append(JsonStr(abs))
+                      .Append(",\"time\":").Append(JsonStr(new DateTime(r.ticks).ToString("yyyy-MM-dd HH:mm")))
+                      .Append(",\"size\":").Append(size).Append("}");
+                    cnt++;
+                }
+                Send("{\"type\":\"albin\",\"dir\":" + JsonStr(BinDir()) + ",\"total\":" + total + ",\"items\":[" + sb.ToString() + "]}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("读取回收站失败: " + ex.Message) + "}"); }
+        }
+
+        void BinRestore(string[] gids)
+        {
+            try
+            {
+                var wanted = new Dictionary<string, bool>();
+                foreach (var g in gids) if (!string.IsNullOrEmpty(g)) wanted[g.Trim()] = true;
+                if (wanted.Count == 0) return;
+                var rows = BinLoad();
+                var keep = new List<BinRow>();
+                int restored = 0; bool needScan = false;
+                foreach (var r in rows)
+                {
+                    if (!wanted.ContainsKey(r.gid)) { keep.Add(r); continue; }
+                    try
+                    {
+                        string abs = Path.Combine(BinFiles(), r.stored);
+                        if (!File.Exists(abs)) continue;
+                        string dir = Path.GetDirectoryName(r.orig);
+                        if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                        string dest = r.orig;
+                        if (File.Exists(dest))
+                        {
+                            string be = Path.GetFileNameWithoutExtension(r.orig), ex = Path.GetExtension(r.orig);
+                            int n = 1;
+                            do { dest = Path.Combine(dir, be + " (还原" + n + ")" + ex); n++; } while (File.Exists(dest));
+                        }
+                        try { File.Move(abs, dest); }
+                        catch { File.Copy(abs, dest, true); File.Delete(abs); }
+                        restored++;
+                        if (UnderAlbRoot(dest)) needScan = true;
+                    }
+                    catch { keep.Add(r); continue; }
+                    if (string.Equals(r.kind, "m", StringComparison.OrdinalIgnoreCase) && UnderAlbRoot(r.orig)) needScan = true;
+                }
+                BinSave(keep);
+                var sb = new System.Text.StringBuilder();
+                foreach (var g in wanted.Keys) { if (sb.Length > 0) sb.Append(","); sb.Append(JsonStr(g)); }
+                Send("{\"type\":\"albinrestored\",\"count\":" + restored + ",\"ids\":[" + sb.ToString() + "]}");
+                if (needScan && !albRunning) StartAlbumScan();
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("还原失败: " + ex.Message) + "}"); }
+        }
+
+        void BinPurge(string[] gids)
+        {
+            try
+            {
+                var wanted = new Dictionary<string, bool>();
+                foreach (var g in gids) if (!string.IsNullOrEmpty(g)) wanted[g.Trim()] = true;
+                if (wanted.Count == 0) return;
+                var rows = BinLoad();
+                var keep = new List<BinRow>();
+                int purged = 0;
+                foreach (var r in rows)
+                {
+                    if (!wanted.ContainsKey(r.gid)) { keep.Add(r); continue; }
+                    try { File.Delete(Path.Combine(BinFiles(), r.stored)); } catch { }
+                    if (string.Equals(r.kind, "m", StringComparison.OrdinalIgnoreCase)) purged++;
+                }
+                BinSave(keep);
+                var sb = new System.Text.StringBuilder();
+                foreach (var g in wanted.Keys) { if (sb.Length > 0) sb.Append(","); sb.Append(JsonStr(g)); }
+                Send("{\"type\":\"albinpurged\",\"count\":" + purged + ",\"ids\":[" + sb.ToString() + "]}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("删除失败: " + ex.Message) + "}"); }
+        }
+
+        void BinEmpty()
+        {
+            try
+            {
+                var rows = BinLoad();
+                int purged = 0;
+                foreach (var r in rows)
+                {
+                    try { File.Delete(Path.Combine(BinFiles(), r.stored)); } catch { }
+                    if (string.Equals(r.kind, "m", StringComparison.OrdinalIgnoreCase)) purged++;
+                }
+                BinSave(new List<BinRow>());
+                Send("{\"type\":\"albinpurged\",\"count\":" + purged + ",\"ids\":[],\"all\":true}");
+                SendBinList();
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("清空失败: " + ex.Message) + "}"); }
+        }
+
+        void BinChooseDir()
+        {
+            string nd = null;
+            InvokeUi(() =>
+            {
+                using (var d = new FolderBrowserDialog())
+                {
+                    d.Description = "选择回收站存放文件夹（删除的照片会移动到这里）";
+                    if (d.ShowDialog() == DialogResult.OK) nd = d.SelectedPath;
+                }
+            });
+            if (string.IsNullOrEmpty(nd)) return;
+            try
+            {
+                string oldDir = BinDir();
+                if (string.Equals(oldDir.TrimEnd('\\'), nd.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+                Directory.CreateDirectory(nd);
+                // 已有回收站内容整体迁移到新目录，避免丢项
+                var rows = BinLoad();
+                int movedFiles = 0;
+                string newFiles = Path.Combine(nd, "files");
+                Directory.CreateDirectory(newFiles);
+                foreach (var r in rows)
+                {
+                    try
+                    {
+                        string src = Path.Combine(BinFiles(), r.stored);
+                        string dst = Path.Combine(newFiles, r.stored);
+                        if (File.Exists(dst)) dst = Path.Combine(newFiles, r.gid + "_" + Guid.NewGuid().ToString("N").Substring(0, 6) + Path.GetExtension(r.stored));
+                        try { File.Move(src, dst); } catch { File.Copy(src, dst, true); File.Delete(src); }
+                        r.stored = Path.GetFileName(dst);
+                        movedFiles++;
+                    }
+                    catch { }
+                }
+                binDirCached = nd;
+                try { File.WriteAllText(Path.Combine(CfgDir(), "bin_dir.txt"), nd); } catch { }
+                BinSave(rows);
+                Send("{\"type\":\"toast\",\"msg\":" + JsonStr("回收站目录已切换，迁移 " + movedFiles + " 个文件") + "}");
+                SendBinList();
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("切换目录失败: " + ex.Message) + "}"); }
+        }
+
+        void AlbumDelete(string[] paths)
+        {
+            try
+            {
+                var rows = BinLoad();
+                int removed = 0, moved = 0, allFiles = 0;
+                var gone = new System.Text.StringBuilder();
+                foreach (var p in paths)
+                {
+                    if (string.IsNullOrEmpty(p) || !File.Exists(p)) continue;
+                    string gid = DateTime.Now.Ticks.ToString() + "-" + Guid.NewGuid().ToString("N").Substring(0, 4);
+                    int n = BinTrashFile(p, gid, "m", rows);
+                    if (n > 0)
+                    {
+                        moved++; allFiles++;
+                        // 实况照片的 MOV / AAE 跟随主图一起进回收站，还原时一并回去
+                        var cs = DupCompanions(p);
+                        if (cs != null) foreach (var c in cs) if (File.Exists(c)) allFiles += BinTrashFile(c, gid, "c", rows);
+                        bool hit = false;
+                        for (int i = albItems.Count - 1; i >= 0; i--)
+                            if (string.Equals(albItems[i].path, p, StringComparison.OrdinalIgnoreCase)) { albItems.RemoveAt(i); hit = true; }
+                        if (hit) { removed++; if (gone.Length > 0) gone.Append(","); gone.Append(JsonStr(p)); }
+                    }
+                }
+                if (moved == 0) { Send("{\"type\":\"toast\",\"msg\":\"没有可删除的文件\"}"); return; }
+                BinSave(rows);
+                Send("{\"type\":\"albdeleted\",\"count\":" + removed + ",\"files\":" + allFiles + ",\"bin\":true,\"paths\":[" + gone.ToString() + "]}");
+                // 删除后自动做一次增量刷新，保证计数/分页与其他视图同步
+                try { var t = new Thread(() => { System.Threading.Thread.Sleep(350); StartAlbumScan(true); }); t.IsBackground = true; t.Start(); } catch { }
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("删除失败: " + ex.Message) + "}"); }
+        }
+
+        // 相册「删除缓存」：清掉扫描索引、缩略图与各类临时文件，释放磁盘与内存占用
+        void ClearAlbCache()
+        {
+            long bytes = 0; int files = 0;
+            Action<string> delFile = null;
+            Action<string> delDir = null;
+            delFile = delegate(string f)
+            {
+                try { if (!File.Exists(f)) return; bytes += new FileInfo(f).Length; File.Delete(f); files++; } catch { }
+            };
+            delDir = delegate(string d)
+            {
+                try
+                {
+                    if (!Directory.Exists(d)) return;
+                    foreach (var f in Directory.GetFiles(d)) delFile(f);
+                    foreach (var sub in Directory.GetDirectories(d)) delDir(sub);
+                    try { Directory.Delete(d, true); } catch { }
+                }
+                catch { }
+            };
+            try
+            {
+                // 1) 扫描索引
+                string idx = AlbIndexFile();
+                delFile(idx);
+                delFile(idx + ".tmp");
+                // 2) 缩略图 / 视频封面缓存
+                delDir(Path.Combine(Path.GetTempPath(), "ibt_thumbs"));
+                delDir(Path.Combine(Path.GetTempPath(), "ibt_vthumbs"));
+                // 3) 修图/选片过程产生的临时文件（保留最近 2 分钟内的，避免误删正在使用的）
+                string[] prefixes = { "ai_in_", "ai_out_", "pipe_in_", "pipe_out_", "beauty_in_", "beauty_out_", "beautypro_in_", "beautypro_out_", "idprev_", "pick_" };
+                try
+                {
+                    var cutoff = DateTime.Now.AddMinutes(-2);
+                    foreach (var f in Directory.GetFiles(Path.GetTempPath()))
+                    {
+                        string n = Path.GetFileName(f);
+                        bool match = false;
+                        foreach (var pfx in prefixes) if (n.StartsWith(pfx, StringComparison.OrdinalIgnoreCase)) { match = true; break; }
+                        if (!match) continue;
+                        try { if (File.GetLastWriteTime(f) < cutoff) delFile(f); } catch { }
+                    }
+                }
+                catch { }
+                // 内存中的索引也一并释放，下次扫描按需重建
+                albIndex.Clear();
+                albIndexLoaded = false;
+                string size = bytes >= 1073741824L ? (bytes / 1073741824.0).ToString("0.00") + " GB"
+                            : bytes >= 1048576L ? (bytes / 1048576.0).ToString("0.0") + " MB"
+                            : (bytes / 1024.0).ToString("0") + " KB";
+                Send("{\"type\":\"toast\",\"msg\":" + JsonStr("已删除 " + files + " 个缓存文件，释放 " + size) + "}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("清理缓存失败: " + ex.Message) + "}"); }
+        }
+
+        // 相册右键「另存为」：选一个目标文件夹，把选中照片复制过去（实况伴生文件一起）
+        void AlbumSaveAs(string[] paths)
+        {
+            try
+            {
+                var list = new List<string>();
+                if (paths != null) foreach (var p in paths)
+                    if (!string.IsNullOrEmpty(p) && File.Exists(p)) list.Add(p.Trim());
+                if (list.Count == 0) { Send("{\"type\":\"toast\",\"msg\":\"没有可另存的文件\"}"); return; }
+                string dest = null;
+                InvokeUi(() =>
+                {
+                    using (var d = new FolderBrowserDialog())
+                    {
+                        d.Description = list.Count > 1 ? ("选择另存到哪个文件夹（共 " + list.Count + " 张）") : "选择另存到哪个文件夹";
+                        d.ShowNewFolderButton = true;
+                        if (d.ShowDialog() == DialogResult.OK) dest = d.SelectedPath;
+                    }
+                });
+                if (string.IsNullOrEmpty(dest)) return;
+                int ok = 0, extra = 0, fail = 0;
+                foreach (var p in list)
+                {
+                    try
+                    {
+                        string name = Path.GetFileName(p);
+                        string target = Path.Combine(dest, name);
+                        if (File.Exists(target)) target = AlbumUniquePath(dest, name);
+                        File.Copy(p, target, false);
+                        ok++;
+                        var cs = DupCompanions(p);
+                        if (cs != null) foreach (var c in cs)
+                        {
+                            if (!File.Exists(c)) continue;
+                            string cn = Path.GetFileName(c);
+                            string ct = Path.Combine(dest, cn);
+                            if (File.Exists(ct)) ct = AlbumUniquePath(dest, cn);
+                            File.Copy(c, ct, false); extra++;
+                        }
+                    }
+                    catch { fail++; }
+                }
+                Send("{\"type\":\"albsaved\",\"count\":" + ok + ",\"extra\":" + extra + ",\"fail\":" + fail + ",\"dir\":" + JsonStr(dest) + "}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("另存失败: " + ex.Message) + "}"); }
+        }
+
+        string AlbumUniquePath(string dir, string name)
+        {
+            string b = Path.GetFileNameWithoutExtension(name), e = Path.GetExtension(name);
+            for (int i = 2; i < 2000; i++)
+            {
+                string t = Path.Combine(dir, b + " (" + i + ")" + e);
+                if (!File.Exists(t)) return t;
+            }
+            return Path.Combine(dir, b + "_" + Guid.NewGuid().ToString("N").Substring(0, 6) + e);
         }
 
         void SendPreview()

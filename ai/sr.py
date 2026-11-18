@@ -18,7 +18,7 @@ _model_path = None
 
 def find_model():
     cands = []
-    for pat in ("*realesrgan*.onnx", "*esrgan*.onnx", "*RealESRGAN*.onnx", "sr_*.onnx", "*x2*.onnx"):
+    for pat in ("*realesrgan*.onnx", "*esrgan*.onnx", "*RealESRGAN*.onnx", "*swin2sr*.onnx", "sr_*.onnx", "*x2*.onnx"):
         cands += glob.glob(os.path.join(MODEL_DIR, pat))
     cands = [c for c in cands if os.path.getsize(c) > 1024 * 1024]
     return cands[0] if cands else None

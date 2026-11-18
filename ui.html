@@ -25,7 +25,7 @@ body { display:flex; flex-direction:column; }
 .main { flex:1; display:flex; min-height:0; }
 
 /* 左栏 */
-.left { width:290px; flex-shrink:0; background:#2b2b2b; display:flex; flex-direction:column; border-right:1px solid #1a1a1a; }
+.left { width:290px; flex-shrink:0; background:#2b2b2b; display:flex; flex-direction:column; border-right:1px solid #1a1a1a; overflow-y:auto; overflow-x:hidden; }
 .left-section { padding:10px 12px; border-bottom:1px solid #1a1a1a; }
 .left-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; color:#bbb; font-size:12px; font-weight:600; }
 .left-header .count { color:#888; font-size:11px; }
@@ -61,11 +61,11 @@ body { display:flex; flex-direction:column; }
 ::-webkit-scrollbar-thumb:hover { background:#777; }
 ::-webkit-scrollbar-corner { background:#2b2b2b; }
 
-.lut-section { flex:1; display:flex; flex-direction:column; min-height:0; }
+.lut-section { flex:0 0 auto; display:flex; flex-direction:column; min-height:0; }
 .lut-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px 6px; color:#bbb; font-size:12px; font-weight:600; }
 .lut-header .group-actions { display:flex; gap:6px; }
 .lut-header .group-actions button { background:transparent; color:#888; border:1px solid #555; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:10px; }
-.lut-tree { flex:1; overflow-y:auto; padding:0 8px; }
+.lut-tree { flex:1 1 auto; overflow-y:auto; padding:0 8px; max-height:36vh; min-height:110px; }
 .lut-group-title { color:#aaa; padding:6px 4px; cursor:pointer; font-size:11px; display:flex; align-items:center; gap:4px; font-weight:600; }
 .lut-group-title .arrow { font-size:9px; transition:transform .15s; }
 .lut-group.collapsed .arrow { transform:rotate(-90deg); }
@@ -223,7 +223,6 @@ body.skin-light * { scrollbar-color: #c7c7cc #f5f5f7; }
 body.skin-light ::-webkit-scrollbar-track { background:#f5f5f7; }
 body.skin-light ::-webkit-scrollbar-thumb { background:#c7c7cc; border:2px solid #f5f5f7; }
 body.skin-light ::-webkit-scrollbar-thumb:hover { background:#aeaeb2; }
-body.skin-light #loadingScreen { background:#f5f5f7; color:#1d1d1f; color-scheme: light; }
 
 /* 浅色皮肤下原生下拉框/输入框背景强制白底黑字，避免出现黑底 */
 body.skin-light { color-scheme: light; }
@@ -295,6 +294,216 @@ body.skin-light .fx-thumb span { color:#fff; }
 body.skin-light .fx-card { background:#fff; border-color:#dcdce2; }
 body.skin-light .fx-card .t { color:#222; }
 body.skin-light .fx-card .d { color:#666; }
+
+/* ===== 照片去重 ===== */
+.dup-path { font-size:10px; color:#888; margin:0 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dup-bar { height:5px; background:#1f1f1f; border-radius:3px; overflow:hidden; margin:8px 0 4px; }
+.dup-bar > div { height:100%; width:0; background:#0969da; transition:width .15s; }
+.dup-stat { font-size:10px; color:#999; min-height:13px; }
+.dup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.62); z-index:900; display:none; align-items:center; justify-content:center; }
+.dup-panel { width:min(1180px,94vw); height:min(88vh,900px); background:#232323; border:1px solid #3a3a3a; border-radius:10px; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.6); overflow:hidden; }
+.dup-head { padding:12px 16px; border-bottom:1px solid #333; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.dup-head .t { font-size:14px; color:#eee; font-weight:600; }
+.dup-head .s { font-size:11px; color:#888; margin-left:10px; font-weight:400; }
+.dup-head .x { cursor:pointer; color:#999; font-size:16px; padding:2px 8px; border-radius:4px; }
+.dup-head .x:hover { background:#3a3a3a; color:#fff; }
+.dup-tools { padding:8px 16px; display:flex; gap:8px; border-bottom:1px solid #2e2e2e; align-items:center; flex-shrink:0; flex-wrap:wrap; }
+.dup-tools .mini-btn { white-space:nowrap; flex-shrink:0; }
+.dup-list { flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+.dup-group { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:8px; padding:10px; }
+.dup-group-h { font-size:11px; color:#9a9a9a; display:flex; justify-content:space-between; margin-bottom:8px; }
+.dup-cells { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; }
+.dup-cell { width:152px; flex-shrink:0; background:#242424; border-radius:6px; padding:6px; border:1px solid #3a3a3a; }
+.dup-cell.keep { border-color:#2f7d4f; }
+.dup-cell.out { border-color:#a33; }
+.dup-cell img, .dup-cell .ph { width:100%; height:104px; object-fit:cover; border-radius:4px; display:block; background:#1a1a1a; cursor:zoom-in; }
+.dup-cell .ph { display:flex; align-items:center; justify-content:center; color:#555; font-size:10px; cursor:pointer; }
+.dup-cell .nm { font-size:10px; color:#ddd; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dup-cell .mt { font-size:9px; color:#888; margin-top:2px; }
+.dup-cell label { display:flex; align-items:center; gap:4px; font-size:10px; color:#bbb; margin-top:4px; cursor:pointer; }
+.dup-empty { color:#777; font-size:12px; text-align:center; padding:40px; }
+.dup-light { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; display:none; align-items:center; justify-content:center; }
+.dup-light img { max-width:86vw; max-height:80vh; object-fit:contain; box-shadow:0 10px 40px rgba(0,0,0,.7); }
+.dup-light-info { position:absolute; left:24px; top:16px; color:#ddd; font-size:12px; line-height:1.65; }
+.dup-light-nav { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); display:flex; gap:10px; align-items:center; }
+.dup-light-nav button { background:#333; color:#ddd; border:1px solid #555; border-radius:5px; padding:6px 14px; cursor:pointer; font-size:12px; }
+.dup-light-nav button:hover { background:#444; }
+body.skin-light .dup-panel { background:#f7f7fa; border-color:#d8d8de; }
+body.skin-light .dup-head { border-color:#ddd; }
+body.skin-light .dup-head .t { color:#111; }
+body.skin-light .dup-group { background:#fff; border-color:#dcdce2; }
+body.skin-light .dup-cell { background:#f2f2f5; border-color:#dcdce2; }
+body.skin-light .dup-cell .nm { color:#222; }
+/* ===== 相册 ===== */
+.alb-overlay { position:fixed; inset:0; background:#2b2b2b; z-index:600; display:none; flex-direction:column; }
+body.mode-album .main { display:none; }
+body.mode-album #titlebar { display:none; }
+.alb-titlebar { border-bottom:1px solid #1a1a1a !important; }
+.alb-head { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid #333; background:#2b2b2b; flex-shrink:0; flex-wrap:wrap; position:relative; z-index:20; }
+.alb-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+.alb-tab { font-size:12px; color:#bbb; padding:4px 12px; border-radius:14px; cursor:pointer; border:1px solid transparent; user-select:none; }
+.alb-tab:hover { background:#333; }
+.alb-tab.on { background:#3a3d42; color:#fff; border-color:#4c5057; }
+.alb-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+.alb-opt-wrap { position:relative; }
+.alb-opt-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:140px; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; z-index:800; box-shadow:0 12px 28px rgba(0,0,0,.5); }
+.alb-opt-menu.on { display:block; animation:optIn .16s ease-out both; }
+@keyframes optIn { from { opacity:0; transform:translateY(-6px) scale(.97); } to { opacity:1; transform:none; } }
+.alb-opt-item { padding:8px 11px; font-size:12px; color:#ddd; border-radius:6px; cursor:pointer; white-space:nowrap; }
+.alb-opt-item:hover { background:#3d3e44; color:#fff; }
+body.skin-light .alb-opt-menu { background:#ffffff; border-color:#d1d1d6; box-shadow:0 12px 28px rgba(0,0,0,.16); }
+body.skin-light .alb-opt-item { color:#1d1d1f; }
+body.skin-light .alb-opt-item:hover { background:#ececef; }
+/* 相册右键菜单 */
+.alb-ctx { display:none; position:fixed; z-index:1200; min-width:168px; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; box-shadow:0 14px 34px rgba(0,0,0,.55); }
+.alb-ctx.on { display:block; animation:optIn .13s ease-out both; }
+.alb-ctx-item { padding:8px 11px; font-size:12px; color:#ddd; border-radius:6px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+.alb-ctx-item:hover { background:#3d3e44; color:#fff; }
+.alb-ctx-item.danger { color:#ff8a8a; }
+.alb-ctx-item.danger:hover { background:#4a2b2b; color:#ffb3b3; }
+.alb-ctx-item.dis { color:#6b6d72; cursor:default; pointer-events:none; }
+.alb-ctx-item.dis:hover { background:transparent; }
+body.skin-light .alb-ctx { background:#ffffff; border-color:#d1d1d6; box-shadow:0 14px 34px rgba(0,0,0,.18); }
+body.skin-light .alb-ctx-item { color:#1d1d1f; }
+body.skin-light .alb-ctx-item:hover { background:#ececef; }
+body.skin-light .alb-ctx-item.danger { color:#c0392b; }
+body.skin-light .alb-ctx-item.danger:hover { background:#fdeceb; }
+body.skin-light .alb-ctx-item.dis { color:#b4b6ba; }
+/* 滑动选择时的容器样式 */
+.alb-grid.dragging, .bin-grid.dragging, .dup-list.dragging { cursor:crosshair; }
+.alb-right .x { cursor:pointer; color:#999; font-size:17px; padding:2px 8px; border-radius:4px; }
+.alb-right .x:hover { background:#3a3a3a; color:#fff; }
+.alb-body { flex:1; position:relative; overflow:hidden; display:flex; }
+.alb-grid { flex:1; overflow-y:auto; padding:10px 14px 60px; display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start; }
+.alb-folder-h { flex:0 0 100%; font-size:12px; color:#9aa0a6; margin:14px 0 2px; padding-bottom:4px; border-bottom:1px solid #303030; display:flex; justify-content:space-between; }
+.alb-cell { position:relative; width:var(--alb-cw,150px); height:var(--alb-cw,150px); flex:0 0 auto; background:#232325; border-radius:8px; overflow:hidden; cursor:pointer; border:1px solid #2f3033; }
+.alb-cell:hover { border-color:#4a4d52; }
+.alb-cell img { width:100%; height:100%; object-fit:cover; display:block; background:#191919; }
+.alb-cell .ph { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#666; font-size:22px; background:#191919; }
+.alb-cell .badge { position:absolute; left:6px; top:6px; font-size:10px; line-height:1; padding:3px 6px; border-radius:4px; background:rgba(0,0,0,.62); color:#eee; }
+.alb-cell .badge.video { background:rgba(190,50,50,.82); }
+.alb-cell .badge.live { background:rgba(210,150,30,.85); }
+.alb-cell .dur { position:absolute; right:6px; bottom:6px; font-size:10px; color:#eee; background:rgba(0,0,0,.6); padding:2px 6px; border-radius:4px; }
+.alb-cell .meta { position:absolute; left:0; right:0; bottom:0; padding:14px 6px 4px; font-size:9px; color:#bbb; background:linear-gradient(transparent,rgba(0,0,0,.72)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.alb-cell .chk { position:absolute; right:6px; top:6px; width:16px; height:16px; display:none; }
+.alb-cell.sel .chk { display:block; }
+.alb-cell.checked { box-shadow:0 0 0 2px #2f7dd1 inset; }
+.alb-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#777; font-size:13px; }
+.alb-map { flex:1; display:none; }
+.alb-foot { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px; height:26px; line-height:26px; padding:0 16px; font-size:11px; color:#8a8a8a; border-top:1px solid #2e2e2e; background:#202022; }
+.alb-foot #albSub { color:#9aa0a6; flex-shrink:0; }
+.alb-foot #albFootInfo { color:#8a8a8a; max-width:70%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; }
+.alb-mark { display:flex; align-items:center; justify-content:center; }
+.alb-mark .mk-wrap { position:relative; width:100%; height:100%; }
+.alb-mark img { width:100%; height:100%; object-fit:cover; border-radius:6px; border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.5); display:block; }
+.alb-mark .alb-mark-n { position:absolute; right:-5px; top:-5px; background:#0969da; color:#fff; font-style:normal; font-size:10px; line-height:1.2; padding:1px 5px; border-radius:9px; border:1px solid rgba(255,255,255,.7); box-shadow:0 1px 4px rgba(0,0,0,.4); }
+.alb-mark .dot { width:12px; height:12px; border-radius:50%; background:#3f8fd0; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+.alb-view { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:950; display:none; flex-direction:column; }
+.alb-view .alb-titlebar { background:#2b2b2b; }
+.alb-view-body { flex:1; display:flex; min-height:0; }
+.alb-view-main { flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.alb-view-main img { max-width:100%; max-height:100%; object-fit:contain; }
+.alb-view-video { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; }
+.alb-view-video video { max-width:76vw; max-height:82vh; background:#000; border-radius:6px; }
+.alb-vhint { color:#aaa; font-size:11px; }
+.alb-view-side { width:270px; flex-shrink:0; background:#202022; border-left:1px solid #333; padding:18px 16px; display:flex; flex-direction:column; gap:10px; }
+.alb-vname { font-size:14px; color:#eee; word-break:break-all; }
+.alb-vinfo { font-size:11px; color:#9a9a9a; line-height:1.8; white-space:pre-wrap; }
+.alb-vacts { margin-top:auto; display:flex; flex-direction:column; gap:8px; }
+.alb-vacts button { background:#333; color:#ddd; border:1px solid #555; border-radius:6px; padding:8px 10px; cursor:pointer; font-size:12px; }
+.alb-vacts button:hover { background:#3f3f3f; }
+body.skin-light .alb-overlay { background:#f3f3f6; }
+body.skin-light .alb-titlebar { border-bottom-color:#d1d1d6 !important; }
+body.skin-light .mini-btn { background:#f2f2f5; color:#1d1d1f; border-color:#d1d1d6; }
+body.skin-light .mini-btn:hover { background:#e8e8ee; border-color:#b9b9c0; }
+body.skin-light .alb-foot { color:#6e6e73; }
+body.skin-light .alb-foot #albSub { color:#6e6e73; }
+body.skin-light .alb-foot #albFootInfo { color:#6e6e73; }
+body.skin-light .alb-folder-h { color:#6e6e73; border-color:#e2e2e6; }
+body.skin-light .alb-path-empty { color:#8e8e93; }
+body.skin-light .alb-head { background:#fff; border-color:#ddd; }
+body.skin-light .alb-tab { color:#555; }
+body.skin-light .alb-tab.on { background:#e8eaf0; color:#111; border-color:#c9ced8; }
+body.skin-light .alb-cell { background:#fff; border-color:#ddd; }
+body.skin-light .alb-foot { background:#fafafb; border-color:#ddd; color:#777; }
+body.skin-light .alb-view-side { background:#fff; border-color:#ddd; }
+body.skin-light .alb-vname { color:#111; }
+body.skin-light .alb-vinfo { color:#666; }
+/* ===== 应用内回收站 ===== */
+.bin-overlay { position:fixed; inset:0; background:rgba(10,10,12,.88); z-index:820; display:none; flex-direction:column; }
+.bin-panel { flex:1; margin:34px; background:#1e1f21; border:1px solid #35373b; border-radius:10px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 18px 50px rgba(0,0,0,.55); }
+.bin-head { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #303236; background:#26282b; flex-wrap:wrap; flex-shrink:0; }
+.bin-title { font-size:15px; font-weight:600; color:#eee; white-space:nowrap; }
+.bin-title .s { font-size:11px; color:#8d9196; font-weight:400; margin-left:8px; }
+.bin-dir { font-size:11px; color:#8d9196; max-width:44%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bin-sp { flex:1; }
+.bin-btn { background:#33363a; color:#ddd; border:1px solid #464a50; border-radius:6px; padding:5px 12px; font-size:12px; cursor:pointer; white-space:nowrap; }
+.bin-btn:hover { background:#3f434a; }
+.bin-btn.danger { background:#8c2f2f; border-color:#a33; color:#fff; }
+.bin-btn.danger:hover { background:#a53a3a; }
+.bin-grid { flex:1; overflow-y:auto; padding:12px 16px 60px; display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; align-content:start; }
+.bin-cell { background:#232528; border:1px solid #33363a; border-radius:8px; overflow:hidden; position:relative; }
+.bin-cell.on { border-color:#3f86d4; box-shadow:0 0 0 1px #3f86d4 inset; }
+.bin-thumb { height:120px; background:#151515 center/cover no-repeat; display:flex; align-items:center; justify-content:center; color:#5a5a5a; font-size:22px; }
+.bin-info { padding:8px 9px 9px; display:flex; flex-direction:column; gap:3px; }
+.bin-name { font-size:12px; color:#e2e2e2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bin-sub { font-size:10px; color:#8d9196; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bin-chk { position:absolute; right:8px; top:8px; width:16px; height:16px; }
+.bin-empty { grid-column:1/-1; padding:70px 0; text-align:center; color:#7a7e83; font-size:13px; }
+.bin-foot { height:34px; display:flex; align-items:center; gap:14px; padding:0 16px; border-top:1px solid #303236; background:#232528; font-size:11px; color:#9aa0a6; flex-shrink:0; }
+body.skin-light .bin-panel { background:#fbfbfd; border-color:#ddd; }
+body.skin-light .bin-head { background:#fff; border-color:#e2e2e6; }
+body.skin-light .bin-title { color:#111; }
+body.skin-light .bin-dir { color:#777; }
+body.skin-light .bin-btn { background:#eff0f3; color:#333; border-color:#d5d7dd; }
+body.skin-light .bin-cell { background:#fff; border-color:#ddd; }
+body.skin-light .bin-name { color:#222; }
+body.skin-light .bin-sub { color:#777; }
+body.skin-light .bin-foot { background:#f6f6f8; border-color:#e2e2e6; color:#666; }
+/* 路径栏 */
+.alb-paths { display:flex; align-items:center; gap:8px; padding:8px 16px; background:#252525; border-bottom:1px solid #1f1f1f; flex-shrink:0; flex-wrap:wrap; }
+/* 添加路径按钮 + 缩略图缩放 */
+.alb-path-btns { display:flex; gap:8px; flex-shrink:0; }
+.alb-zoom { padding:3px 8px; font-size:12px; line-height:1.35; }
+body.skin-light .alb-paths { background:#f2f2f5; border-color:#e2e2e6; }
+/* iOS 风格过渡与删除动效 */
+@keyframes iosIn { from{opacity:0; transform:scale(.965)} to{opacity:1; transform:scale(1)} }
+@keyframes iosOut { from{opacity:1; transform:scale(1)} to{opacity:0; transform:scale(.965)} }
+.ios-in { animation: iosIn .30s cubic-bezier(.2,.9,.25,1) both; }
+.ios-out { animation: iosOut .22s cubic-bezier(.45,0,.7,.5) both; }
+@keyframes cellIn { from{opacity:0; transform:scale(.94)} to{opacity:1; transform:scale(1)} }
+@keyframes cellOut { from{opacity:1; transform:scale(1)} to{opacity:0; transform:scale(.86)} }
+.alb-grid.switch .alb-cell { animation: cellIn .26s ease-out both; }
+.alb-grid.dragging { user-select:none; }
+.alb-grid.dragging .alb-cell { cursor:crosshair; }
+.alb-cell.removing, .bin-cell.removing { animation: cellOut .24s ease-in forwards; pointer-events:none; }
+.alb-view.ios-in, .bin-overlay.ios-in, .dup-overlay.ios-in, .alb-overlay.ios-in { transform-origin:center; }
+body.skin-fade, body.skin-fade * { transition: background-color .28s ease, color .28s ease, border-color .28s ease !important; }
+.alb-chips { display:flex; gap:6px; flex-wrap:wrap; flex:1; min-width:0; }
+.alb-chip { display:flex; align-items:center; gap:6px; font-size:11px; color:#cfcfcf; background:#2e3034; border:1px solid #3f4248; border-radius:12px; padding:3px 6px 3px 10px; max-width:360px; }
+.alb-chip span.t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.alb-chip .rm { cursor:pointer; color:#999; font-size:13px; line-height:1; padding:0 3px; border-radius:6px; }
+.alb-chip .rm:hover { background:#b33; color:#fff; }
+.alb-path-empty { font-size:11px; color:#777; }
+/* 人物分组 */
+.alb-person { flex:1; overflow-y:auto; padding:14px 16px 70px; display:none; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:14px; align-content:start; }
+.alb-pcard { background:#232325; border:1px solid #2f3033; border-radius:10px; overflow:hidden; cursor:pointer; text-align:center; }
+.alb-pcard:hover { border-color:#4a4d52; }
+.alb-pcard img { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#191919; }
+.alb-pcard .nm { font-size:12px; color:#ddd; padding:6px 4px; }
+.alb-pcard .ct { font-size:10px; color:#8a8a8a; padding-bottom:6px; }
+/* 详情 EXIF */
+.alb-vexif { font-size:11px; color:#9a9a9a; line-height:1.7; border-top:1px solid #333; padding-top:8px; max-height:44vh; overflow-y:auto; }
+.alb-vexif .row { display:flex; gap:8px; }
+.alb-vexif .k { color:#777; width:58px; flex-shrink:0; }
+.alb-vexif .v { color:#d0d0d0; word-break:break-all; }
+body.skin-light .alb-paths { background:#fff; border-color:#ddd; }
+body.skin-light .alb-chip { background:#f1f2f5; border-color:#d8dae0; color:#333; }
+body.skin-light .alb-person { background:#f3f3f6; }
+body.skin-light .alb-pcard { background:#fff; border-color:#ddd; }
+body.skin-light .alb-pcard .nm { color:#222; }
+body.skin-light .alb-vexif { border-color:#ddd; }
+body.skin-light .alb-vexif .v { color:#222; }
 </style>
 <script>
 // 启动时先读皮肤偏好（URL 参数由 C# 注入），避免闪烁
@@ -308,22 +517,6 @@ body.skin-light .fx-card .d { color:#666; }
 </script>
 </head>
 <body>
-  <div id="loadingScreen">
-    <div class="ls-spinner"></div>
-    <div class="ls-title">图片批处理工具 正在加载…</div>
-    <div class="ls-sub">初始化图像处理引擎</div>
-  </div>
-  <style>
-  @keyframes spin{to{transform:rotate(360deg)}}
-  #loadingScreen{position:fixed;inset:0;background:#2b2b2b;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,"PingFang SC","Microsoft YaHei UI",sans-serif;}
-  #loadingScreen .ls-spinner{width:42px;height:42px;border:3px solid #444;border-top-color:#0969da;border-radius:50%;animation:spin .9s linear infinite;}
-  #loadingScreen .ls-title{margin-top:18px;color:#aaa;font-size:13px;letter-spacing:1px;}
-  #loadingScreen .ls-sub{margin-top:6px;color:#666;font-size:11px;}
-  html.skin-light-html #loadingScreen{background:#f5f5f7;}
-  html.skin-light-html #loadingScreen .ls-spinner{border-color:#d1d1d6;border-top-color:#0969da;}
-  html.skin-light-html #loadingScreen .ls-title{color:#1d1d1f;}
-  html.skin-light-html #loadingScreen .ls-sub{color:#8e8e93;}
-  </style>
 
 <div class="titlebar" id="titlebar">
   <div class="light red" onclick="post('winclose')" title="关闭"></div>
@@ -331,16 +524,20 @@ body.skin-light .fx-card .d { color:#666; }
   <div class="light green" onclick="post('winmax')" title="最大化"></div>
   <div style="margin-left:20px"></div>
   <div class="title-spacer"></div>
-  <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+  <div class="top-right"><span onclick="openAlbum()">▤ 相册</span><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
 </div>
 <script>
 let _tbDown = null, _tbDragged = false, _tbLastUp = 0;
 function tbIsHit(t) {
-  return t === document.getElementById('titlebar') ||
-         t.classList.contains('title-spacer') ||
-         t.textContent === '图片批处理';
+  if (!t || !t.closest) return false;
+  const bar = t.closest('.titlebar');
+  if (!bar) return false;
+  if (t === bar) return true;
+  if (t.classList && (t.classList.contains('title-spacer') || t.classList.contains('tb-blank'))) return true;
+  if (t.textContent === '图片批处理') return true;
+  return false;
 }
-document.getElementById('titlebar').addEventListener('mousedown', function(e) {
+document.addEventListener('mousedown', function(e) {
   if (!tbIsHit(e.target)) return;
   e.preventDefault();
   _tbDown = { x: e.clientX, y: e.clientY };
@@ -370,16 +567,30 @@ window.addEventListener('mouseup', function(e) {
 </script>
 
 <div class="main">
-  <div class="left">
-    <div class="left-section" id="fileSection" style="height:220px;flex-shrink:0;display:flex;flex-direction:column">
-      <div class="left-header"><span>文件</span><span class="count" id="fileCount">0 项</span></div>
-      <div class="btn-row">
-        <div class="btn" onclick="post('addfolder')">加文件夹</div>
-        <div class="btn" onclick="post('addfiles')">加照片</div>
-        <div class="btn" onclick="post('remove')">移除</div>
-        <div class="btn" onclick="post('clear')">清空</div>
+  <div class="left" id="leftCol">
+    <div class="left-section" id="fileSection" style="padding:0;flex-shrink:0">
+      <div class="section-header"><span>文件 <span id="fileCount" style="font-weight:400;color:#888;font-size:11px">0 项</span></span><span class="arrow">▼</span></div>
+      <div class="section-body" style="padding:8px 12px 10px">
+        <div class="btn-row" style="margin-top:0">
+          <div class="btn" onclick="post('addfolder')">加文件夹</div>
+          <div class="btn" onclick="post('addfiles')">加照片</div>
+          <div class="btn" onclick="post('remove')">移除</div>
+          <div class="btn" onclick="post('clear')">清空</div>
+        </div>
+        <div class="file-list" id="fileList" style="max-height:190px;min-height:44px"><span style="color:#555">还没有添加照片</span></div>
       </div>
-      <div class="file-list" id="fileList" style="flex:1;overflow-y:auto;min-height:40px"><span style="color:#555">还没有添加照片</span></div>
+    </div>
+
+    <div class="lut-section" id="lutSection" style="flex:0 0 auto">
+      <div class="section-header"><span>滤镜</span><span class="arrow">▼</span></div>
+      <div class="section-body" style="padding:0 0 8px">
+        <input id="lutSearch" type="text" placeholder="搜索滤镜…" style="margin:0 12px 6px;padding:5px 8px;font-size:11px;border-radius:5px;border:1px solid #555;background:#3c3c3c;color:#ddd;outline:none;width:calc(100% - 24px)"/>
+        <div class="row-line" style="padding:0 12px 6px;gap:8px">
+          <button class="mini-btn" style="flex:1" onclick="post('importlut')">导入自定义 LUT</button>
+          <button class="mini-btn" style="flex:1" onclick="post('openlutdir')">打开 LUT 文件夹</button>
+        </div>
+        <div class="lut-tree" id="lutTree"></div>
+      </div>
     </div>
 
     <div class="left-section" style="padding:0;flex-shrink:0">
@@ -449,21 +660,6 @@ window.addEventListener('mouseup', function(e) {
           <div class="fx-thumb" onclick="showFx('reflut')" title="参考图 → 33³ LUT"><img src="assets/previews/fx_reflut.jpg" alt="参考图LUT"><span>参考图→LUT</span></div>
         </div>
       </div>
-    </div>
-
-    <div class="vsplitter" id="vSplitter"></div>
-
-    <div class="lut-section">
-      <div class="lut-header">
-        <span>滤镜</span>
-      </div>
-      <input id="lutSearch" type="text" placeholder="搜索滤镜…" style="margin:0 12px 6px;padding:5px 8px;font-size:11px;border-radius:5px;border:1px solid #555;background:#3c3c3c;color:#ddd;outline:none"/>
-      <div class="lut-tree" id="lutTree"></div>
-    </div>
-
-    <div class="left-footer">
-      <div class="btn" onclick="post('importlut')">导入 LUT</div>
-      <div class="btn" onclick="post('openlutdir')">打开 LUT 文件夹</div>
     </div>
   </div>
 
@@ -691,6 +887,155 @@ window.addEventListener('mouseup', function(e) {
   <div class="progress"><div class="progress-bar" id="pbar"></div></div>
   <span class="status-pct" id="status">0%</span>
 </div>
+
+<div class="dup-overlay" id="dupOverlay">
+  <div class="dup-panel">
+    <div class="dup-head">
+      <div><span class="t">照片去重</span><span class="s" id="dupHeadSub"></span></div>
+      <span class="x" onclick="closeDupPanel()">✕</span>
+    </div>
+    <div class="dup-tools">
+      <button class="mini-btn" onclick="post('dupsrc')">扫描文件夹</button>
+      <button class="mini-btn" onclick="post('dupscan')">开始扫描</button>
+      <button class="mini-btn" id="dupPauseBtn" onclick="post('duppause')">暂停</button>
+      <button class="mini-btn" onclick="post('dupdst')">回收站目录</button>
+      <span style="font-size:11px;color:#9a9a9a" id="dupDstPath">移入：软件回收站</span>
+      <div class="dup-bar" style="flex:0 0 120px;margin:0"><div id="dupBarFill"></div></div>
+      <span style="font-size:11px;color:#9a9a9a;min-width:52px" id="dupStat">未扫描</span>
+      <span style="flex:1"></span>
+      <button class="mini-btn" onclick="dupSelectAll(true)">全选多余</button>
+      <button class="mini-btn" onclick="dupSelectAll(false)">全不选</button>
+      <span style="font-size:11px;color:#9a9a9a" id="dupSelInfo">已选 0 张</span>
+      <button class="mini-btn" style="background:#b33;color:#fff;border-color:#c44" onclick="dupMoveSelected()">移入回收站</button>
+    </div>
+    <div class="dup-list" id="dupList"><div class="dup-empty">还没有扫描结果，点上方「扫描文件夹」选择目录并开始扫描。</div></div>
+  </div>
+</div>
+<div class="dup-light" id="dupLight">
+  <div class="dup-light-info" id="dupLightInfo"></div>
+  <img id="dupLightImg" src="" alt="">
+  <div class="dup-light-nav">
+    <button onclick="dupLightStep(-1)">‹ 上一张</button>
+    <button onclick="dupLightStep(1)">下一张 ›</button>
+    <button onclick="closeDupLight()">关闭</button>
+  </div>
+</div>
+
+<div class="bin-overlay" id="binOverlay">
+  <div class="bin-panel">
+    <div class="bin-head">
+      <div class="bin-title">回收站<span class="s" id="binSub">0 项</span></div>
+      <div class="bin-dir" id="binDirText" title=""></div>
+      <span class="bin-sp"></span>
+      <button class="bin-btn" onclick="binRestoreSel()">还原选中</button>
+      <button class="bin-btn danger" onclick="binPurgeSel()">彻底删除</button>
+      <button class="bin-btn" onclick="binEmptyAll()">清空回收站</button>
+      <button class="bin-btn" onclick="post('albinchoose')">更换目录</button>
+      <button class="bin-btn" onclick="post('albinopen')">打开文件夹</button>
+      <button class="bin-btn" onclick="binClose()">✕</button>
+    </div>
+    <div class="bin-grid" id="binGrid"><div class="bin-empty">正在读取…</div></div>
+    <div class="bin-foot">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="binAll" onchange="binToggleAll(this.checked)"> 全选</label>
+      <span id="binSelInfo">已选 0 项</span>
+      <span id="binHint">删除的照片会移到这里；在回收站里「彻底删除」才会真正删除文件</span>
+    </div>
+  </div>
+</div>
+<div class="alb-overlay" id="albOverlay">
+  <div class="titlebar alb-titlebar" id="albTitlebar">
+    <div class="light red" onclick="closeAlbum()" title="关闭"></div>
+    <div class="light yellow" onclick="post('winmin')" title="最小化"></div>
+    <div class="light green" onclick="post('winmax')" title="最大化"></div>
+    <div style="margin-left:20px"></div>
+    <div class="title-spacer"></div>
+    <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+  </div>
+  <div class="alb-head">
+    <div class="alb-tabs" id="albTabs">
+      <span class="alb-tab on" data-tab="all">全部</span>
+      <span class="alb-tab" data-tab="photo">照片</span>
+      <span class="alb-tab" data-tab="video">视频</span>
+      <span class="alb-tab" data-tab="live">实况</span>
+      <span class="alb-tab" data-tab="folder">文件夹</span>
+      <span class="alb-tab" data-tab="device">设备</span>
+      <span class="alb-tab" data-tab="person">人物</span>
+      <span class="alb-tab" data-tab="map">地图</span>
+    </div>
+    <div class="alb-right">
+      <button class="mini-btn alb-zoom" onclick="albZoom(-1)" title="缩小缩略图（Ctrl+滚轮也可缩放）">−</button>
+      <button class="mini-btn alb-zoom" onclick="albZoom(1)" title="放大缩略图（Ctrl+滚轮也可缩放）">＋</button>
+      <div class="alb-opt-wrap">
+        <button class="mini-btn" id="albOptBtn" onclick="albToggleOpt(event)" title="更多功能">选项 ▾</button>
+        <div class="alb-opt-menu" id="albOptMenu">
+          <div class="alb-opt-item" onclick="albOptDo('editor')">图片编辑</div>
+          <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
+          <div class="alb-opt-item" onclick="albOptDo('dedup')">去重</div>
+          <div class="alb-opt-item" id="albFaceBtn" onclick="albOptDo('face')">人物分析</div>
+          <div class="alb-opt-item" onclick="albOptDo('rescan')">重新扫描</div>
+          <div class="alb-opt-item" onclick="albOptDo('cacheclear')">删除缓存</div>
+        </div>
+      </div>
+      <button class="mini-btn" id="albSelBtn" onclick="albToggleSel()">选择</button>
+      <button class="mini-btn" id="albSelAllBtn" style="display:none" onclick="albSelAllToggle()">全选</button>
+      <button class="mini-btn" id="albEditBtn" style="display:none" onclick="albToEdit()">编辑选中</button>
+      <button class="mini-btn" id="albDelSelBtn" style="display:none;background:#b33;color:#fff;border-color:#c44" onclick="albDeleteSelected()">删除选中</button>
+    </div>
+  </div>
+  <div class="alb-paths">
+    <div class="alb-chips" id="albChips"></div>
+    <div class="alb-path-btns">
+      <button class="mini-btn" onclick="post('albaddpath')" title="可选择普通文件夹，也可直接选某个磁盘根目录（如 D:\）">＋ 添加文件夹</button>
+    </div>
+  </div>
+  <div class="alb-body">
+    <div class="alb-grid" id="albGrid"></div>
+    <div class="alb-person" id="albPerson"></div>
+    <div class="alb-map" id="albMap"></div>
+    <div class="alb-empty" id="albEmpty">还没有相册路径，点右上「＋ 添加文件夹」选择文件夹（也可以直接选磁盘根目录）</div>
+  </div>
+  <div class="alb-foot"><span id="albSub"></span><span id="albFootInfo" title=""></span></div>
+</div>
+<div class="alb-ctx" id="albCtx">
+  <div class="alb-ctx-item" data-a="info">详细信息</div>
+  <div class="alb-ctx-item" data-a="save">另存为…</div>
+  <div class="alb-ctx-item" data-a="edit">编辑</div>
+  <div class="alb-ctx-item danger" data-a="del">删除</div>
+</div>
+
+<div class="alb-view" id="albView">
+  <div class="titlebar alb-titlebar" id="albViewTitlebar">
+    <div class="light red" onclick="closeAlbView()" title="关闭"></div>
+    <div class="light yellow" onclick="post('winmin')" title="最小化"></div>
+    <div class="light green" onclick="post('winmax')" title="最大化"></div>
+    <div style="margin-left:20px"></div>
+    <div class="title-spacer"></div>
+    <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span></div>
+  </div>
+  <div class="alb-view-body">
+    <div class="alb-view-main">
+      <img id="albViewImg" src="" alt="">
+      <div class="alb-view-video" id="albViewVideoBox" style="display:none">
+        <video id="albViewVideo" controls playsinline></video>
+        <div class="alb-vhint" id="albVHint"></div>
+      </div>
+    </div>
+    <div class="alb-view-side">
+      <div class="alb-vname" id="albVName"></div>
+      <div class="alb-vinfo" id="albVInfo"></div>
+      <div class="alb-vexif" id="albVExif"></div>
+      <div class="alb-vacts">
+        <button onclick="albViewStep(-1)">‹ 上一张</button>
+        <button onclick="albViewStep(1)">下一张 ›</button>
+        <button onclick="albEditCurrent()">编辑</button>
+        <button onclick="albOpenWith()">用系统程序打开</button>
+        <button style="background:#b33;color:#fff;border-color:#c44" onclick="albDeleteCurrent()">删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
+
 
 <script>
 function post(m){ if(window.chrome&&chrome.webview) chrome.webview.postMessage(m); }
@@ -1150,33 +1495,7 @@ function openLutMenu(e, group, name){
   };
 }
 
-// 垂直分隔条拖动
-(function(){
-  const splitter = document.getElementById('vSplitter');
-  const fileSection = document.getElementById('fileSection');
-  const left = document.querySelector('.left');
-  let startY = 0, startH = 0, dragging = false;
-  splitter.addEventListener('mousedown', e => {
-    dragging = true;
-    startY = e.clientY;
-    startH = fileSection.offsetHeight;
-    splitter.classList.add('dragging');
-    e.preventDefault();
-    e.stopPropagation();
-  });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const dy = e.clientY - startY;
-    let newH = startH + dy;
-    const maxH = left.clientHeight - 180;
-    if (newH < 60) newH = 60;
-    if (newH > maxH) newH = maxH;
-    fileSection.style.height = newH + 'px';
-  });
-  document.addEventListener('mouseup', e => {
-    if (dragging) { dragging = false; splitter.classList.remove('dragging'); }
-  });
-})();
+// 左栏整栏滚动，已取消旧的上下分隔条（面板高度自动）
 
 // 缩放与旋转
 let _zoom = 0; // 0 = 适应
@@ -1270,6 +1589,8 @@ function toggleSkin() {
   document.getElementById('statusBox').style.background = dark ? '#1f1f1f' : '#fff';
   document.getElementById('statusBox').style.borderColor = dark ? '#333' : '#ccc';
   if (window._lastHist) drawHist(window._lastHist); else drawHist(null);
+  document.body.classList.add('skin-fade');
+  setTimeout(function(){ document.body.classList.remove('skin-fade'); }, 340);
 }
 // 启动时应用已保存的皮肤
 (function(){
@@ -1554,8 +1875,6 @@ if (window.chrome && chrome.webview) {
   });
   chrome.webview.addEventListener('message', e => {
     const m = e.data;
-    const ls = document.getElementById('loadingScreen');
-    if (ls) { ls.style.opacity = '0'; ls.style.transition = 'opacity 0.3s'; setTimeout(()=>ls.remove(), 300); }
     if (m.type === 'setparam') {
       const sl = document.getElementById('s_'+m.key);
       const vl = document.getElementById('v_'+m.key);
@@ -1575,6 +1894,226 @@ if (window.chrome && chrome.webview) {
         window._outDir = m.out;
         document.getElementById('btnOut').textContent = '输出: ' + (m.out.length>20?m.out.slice(0,20)+'…':m.out);
       }
+    } else if (m.type === 'dupstate') {
+      window._dupSrc = m.src || ''; window._dupDst = m.dst || '';
+      const sp = document.getElementById('dupSrcPath');
+      const dp = document.getElementById('dupDstPath');
+      if (sp) sp.textContent = '扫描：' + (m.src ? m.src : '未选择文件夹');
+      if (dp) dp.textContent = '移入：' + (m.dst ? '回收站 ' + m.dst : '软件回收站');
+      if (sp) sp.title = m.src || ''; if (dp) dp.title = m.dst || '';
+      window._dupRunning = !!m.running; window._dupPaused = !!m.paused;
+      const pb = document.getElementById('dupPauseBtn');
+      if (pb) pb.textContent = m.paused ? '继续' : '暂停';
+    } else if (m.type === 'dup') {
+      const bar = document.getElementById('dupBarFill');
+      const st = document.getElementById('dupStat');
+      if (m.phase === 'pause') {
+        if (st) st.textContent = '已暂停 ' + m.done + ' / ' + m.total;
+      } else if (m.phase === 'done') {
+        if (bar) bar.style.width = '100%';
+        if (st) st.textContent = '扫描完成：' + (m.groups||0) + ' 组重复，共处理 ' + m.total + ' 张';
+      } else if (m.phase === 'error') {
+        if (st) st.textContent = '扫描出错：' + (m.msg||'');
+      } else {
+        const pct = m.total ? Math.round(m.done/m.total*100) : 0;
+        if (bar) bar.style.width = pct + '%';
+        if (st) st.textContent = (m.phase==='enum' ? '正在枚举文件…' : (m.phase==='compare' ? '正在比对相似度…' : '扫描中 ' + m.done + ' / ' + m.total));
+      }
+    } else if (m.type === 'dupgroups') {
+      window._dupGroups = m.items || [];
+      window._dupSel = {};
+      const list = document.getElementById('dupList');
+      if (list) list.innerHTML = '';
+      for (let gi=0; gi<window._dupGroups.length; gi++) {
+        const g = window._dupGroups[gi].items || [];
+        for (let k=1; k<g.length; k++) window._dupSel[g[k].p] = true;
+      }
+      const sub = document.getElementById('dupHeadSub');
+      if (sub) sub.textContent = (m.total||0) + ' 组 · 已分析 ' + (m.files||0) + ' 张';
+      if ((m.total||0) > 0 && (!list || !list.children.length)) renderDupGroups();
+      else if ((m.total||0) > 0 && document.getElementById('dupOverlay').style.display === 'flex') renderDupGroups();
+      else if ((m.total||0) === 0) {
+        if (list) list.innerHTML = '<div class="dup-empty">没有发现重复照片</div>';
+        dupUpdateSelInfo();
+      }
+      dupUpdateSelInfo();
+    } else if (m.type === 'dupbig') {
+      const li = document.getElementById('dupLightImg');
+      const info = document.getElementById('dupLightInfo');
+      if (li) li.src = m.data;
+      if (info) info.innerHTML = '<b>' + escHtml(m.n) + '</b><br>' + m.w + ' × ' + m.h + '　' + fmtSize(m.s) + '<br><span style="color:#888">' + escHtml(m.p) + '</span>';
+    } else if (m.type === 'dupdone') {
+      const st = document.getElementById('dupStat');
+      if (st) st.textContent = '已移入回收站 ' + (m.moved||0) + ' 张' + (m.comps ? '（含 ' + m.comps + ' 个伴生文件）' : '') + (m.failed ? '，失败 ' + m.failed : '') + '，可在相册「回收站」还原';
+      const moved = window._dupMoveList || [];
+      for (let i=0;i<moved.length;i++) delete window._dupSel[moved[i]];
+      window._dupGroups = (window._dupGroups||[]).filter(function(g){
+        const kept = (g.items||[]).filter(function(it){ return !moved.includes(it.p); });
+        g.items = kept;
+        return kept.length >= 2;
+      });
+      window._dupMoveList = [];
+      renderDupGroups();
+      if (m.dst && window._dupSrc) window._dupSrc = window._dupSrc;
+    } else if (m.type === 'albscan') {
+      const sub = document.getElementById('albSub');
+      if (sub) {
+        if (m.phase === 'enum') sub.textContent = '正在枚举文件…';
+        else { sub.textContent = '扫描中 ' + m.done + ' / ' + m.total; }
+      }
+    } else if (m.type === 'albpaths') {
+      window._alb.roots = m.items || [];
+      if (!window._alb.roots.length) window._alb.root = '';
+      else if (!window._alb.root || window._alb.roots.indexOf(window._alb.root) < 0) window._alb.root = window._alb.roots[0];
+      if (!window._alb.roots.length) {
+        window._alb.sel = false; window._alb.selSet = {};
+        const sb = document.getElementById('albSelBtn'); if (sb) sb.textContent = '选择';
+        albUpdateSelBtn();
+      }
+      albRenderPaths();
+    } else if (m.type === 'albaddr') {
+      albSetAddr(m.p, m.addr);
+    } else if (m.type === 'appmode') {
+      setAppMode(m.mode);
+      if (window._appMode === 'album') openAlbum();
+    } else if (m.type === 'albauto') {
+      setAppMode('album');
+      openAlbum();
+    } else if (m.type === 'albfaces') {
+      if (m.phase === 'run' || m.phase === 'enum') {
+        const sub = document.getElementById('albSub');
+        if (sub) sub.textContent = '人物分析 ' + (m.done || 0) + ' / ' + (m.total || 0);
+      } else if (m.phase === 'done') {
+        window._alb.faceBusy = false;
+        window._alb.faces = { groups: m.groups || [], photos: m.photos || 0, faces: m.faces || 0 };
+        const b = document.getElementById('albFaceBtn');
+        if (b) { b.textContent = '重新分析'; b.style.color = ''; }
+        const sub = document.getElementById('albSub');
+        if (sub) sub.textContent = (m.groups || []).length + ' 个人物 · ' + (m.faces || 0) + ' 张脸';
+        if (window._alb.tab === 'person') albRender();
+      } else if (m.phase === 'stop' || m.phase === 'error') {
+        window._alb.faceBusy = false;
+        const b = document.getElementById('albFaceBtn');
+        if (b) { b.textContent = '人物分析'; b.style.color = ''; }
+        toastMsg(m.phase === 'stop' ? '已停止人物分析' : ('人物分析失败：' + (m.msg || '')));
+      }
+    } else if (m.type === 'albstats') {
+      const A = window._alb;
+      const keepAuto = !!m.auto;
+      const keepTab = A.tab, keepScroll = (document.getElementById('albGrid')||{}).scrollTop || 0;
+      const keepSel = Object.assign({}, A.selSet || {});
+      const keepViewer = A.viewerPath;
+      window._alb.root = m.root || '';
+      if (m.roots) window._alb.roots = String(m.roots).split('\n').filter(function(s){ return s.length; });
+      window._alb.total = m.total || 0;
+      window._alb.items = [];
+      window._alb.byPath = {};
+      window._alb.thumbs = {};
+      window._alb.thumbQueue = [];
+      window._alb.thumbBusy = false;
+      window._alb.selSet = {};
+      window._alb.viewerPath = null;
+      window._alb.loading = true;
+      window._alb.faces = null;
+      window._alb.person = -1;
+      window._alb.device = '';
+      if (m.devices) window._alb.devices = m.devices;
+      albRenderPaths();
+      const sub2 = document.getElementById('albSub');
+      if (sub2) sub2.textContent = m.total + ' 项 · 照片 ' + m.photos + ' · 视频 ' + m.videos + ' · 实况 ' + m.lives + ' · 设备 ' + (m.devices || 0) + (keepAuto ? ' · 已自动更新' : '');
+      if (!keepAuto) {
+        window._albOverlayShow = true;
+        const ov = document.getElementById('albOverlay');
+        if (ov) ov.style.display = 'flex';
+        window._alb.tab = 'all';
+        document.querySelectorAll('.alb-tab').forEach(function(t){ t.classList.toggle('on', t.dataset.tab === 'all'); });
+      } else {
+        A.tab = keepTab;
+        A.selSet = keepSel;
+        A.viewerPath = keepViewer;
+        A.pendingScroll = keepScroll;
+        document.querySelectorAll('.alb-tab').forEach(function(t){ t.classList.toggle('on', t.dataset.tab === keepTab); });
+      }
+      albRender();
+      post('albpage|0|200');
+    } else if (m.type === 'albcount') {
+      window._alb.total = m.total || window._alb.total;
+      const sub3 = document.getElementById('albSub');
+      if (sub3) sub3.textContent = (m.total||0) + ' 项 · 已自动更新';
+    } else if (m.type === 'albpage') {
+      const items = m.items || [];
+      for (let i=0;i<items.length;i++) {
+        if (window._alb.byPath[items[i].p]) continue;
+        window._alb.items.push(items[i]); window._alb.byPath[items[i].p] = items[i];
+      }
+      window._alb.total = m.total || window._alb.total;
+      window._alb.loading = window._alb.items.length < window._alb.total;
+      window._alb.pageLoading = false;
+      albRender();
+      if (m.offset === 0 && window._alb.pendingScroll) {
+        const g0 = document.getElementById('albGrid');
+        if (g0) g0.scrollTop = window._alb.pendingScroll;
+        setTimeout(function(){
+          const g1 = document.getElementById('albGrid');
+          if (g1 && window._alb.pendingScroll) g1.scrollTop = window._alb.pendingScroll;
+        }, 60);
+        window._alb.pendingScroll = 0;
+      }
+      // 首次只加载前 600 项，其余滚动到底部时按需加载，避免超大目录一次性建 DOM
+      if (window._alb.items.length < window._alb.total && window._alb.items.length < 600) {
+        window._alb.pageLoading = true;
+        post('albpage|' + window._alb.items.length + '|200');
+      }
+    } else if (m.type === 'albthumb') {
+      window._alb.thumbs[m.p] = m.t;
+      albFillThumb(m.p, m.t);
+      document.querySelectorAll('.bin-thumb').forEach(function(el){
+        if(el.getAttribute('data-sp') === m.p){ el.style.backgroundImage='url('+m.t+')'; el.textContent=''; }
+      });
+      window._alb.thumbBusy = false;
+      albPumpThumbs();
+    } else if (m.type === 'albview') {
+      albShowViewer(m);
+    } else if (m.type === 'albdeleted') {
+      const files = (m.paths && m.paths.length) ? m.paths : (window._albDelList || []);
+      window._albDelList = [];
+      albAfterDelete(files);
+      toastMsg('已移到回收站：' + (m.count||0) + ' 项' + (m.files && m.files > (m.count||0) ? '（含 ' + (m.files - m.count) + ' 个实况伴生文件）' : '') + '，可在「回收站」还原');
+    } else if (m.type === 'albsaved') {
+      const n = m.count||0, ex = m.extra||0, fail = m.fail||0;
+      if (n) toastMsg('已另存 ' + n + ' 张' + (ex ? '（含 ' + ex + ' 个实况伴生文件）' : '') + ' 到 ' + (m.dir||''));
+      else if (fail) toastMsg('另存失败 ' + fail + ' 张');
+    } else if (m.type === 'albin') {
+      const B = window._bin;
+      B.items = m.items || []; B.dir = m.dir || '';
+      const keep = B.sel; B.sel = {};
+      (m.items||[]).forEach(function(it){ if(keep[it.id]) B.sel[it.id]=1; });
+      binRender();
+    } else if (m.type === 'albinrestored') {
+      const B = window._bin, ids = m.ids || [];
+      document.querySelectorAll('.bin-cell[data-id]').forEach(function(c){
+        if(ids.indexOf(c.getAttribute('data-id'))>=0) c.classList.add('removing');
+      });
+      setTimeout(function(){
+        B.items = B.items.filter(function(it){ return ids.indexOf(it.id) < 0; });
+        ids.forEach(function(id){ delete B.sel[id]; });
+        binRender();
+      }, 240);
+      toastMsg('已还原 ' + (m.count||0) + ' 项到原文件夹');
+    } else if (m.type === 'albinpurged') {
+      const B = window._bin, ids = m.ids || [];
+      document.querySelectorAll('.bin-cell[data-id]').forEach(function(c){
+        if(m.all || ids.indexOf(c.getAttribute('data-id'))>=0) c.classList.add('removing');
+      });
+      setTimeout(function(){
+        if (m.all) { B.items = []; B.sel = {}; }
+        else {
+          B.items = B.items.filter(function(it){ return ids.indexOf(it.id) < 0; });
+          ids.forEach(function(id){ delete B.sel[id]; });
+        }
+        binRender();
+      }, 240);
+      toastMsg('已彻底删除 ' + (m.count||0) + ' 项');
     } else if (m.type === 'clearpreview') {
       const prev = document.getElementById('preview');
       const guide = document.getElementById('tsGuide');
@@ -1813,5 +2352,1032 @@ if (window.chrome && chrome.webview) {
   });
 })();
 </script>
-</body></html>
+<script>
+// ==================== 照片去重 UI ====================
+function fmtSize(n){ if(!n) return "0 B"; const u=["B","KB","MB","GB"]; let i=0,v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i===0? v : v.toFixed(1))+" "+u[i]; }
+function escHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+let _dupLightG=null,_dupLightK=0;
+function dupUpdateSelInfo(){
+  const n=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];}).length;
+  const el=document.getElementById("dupSelInfo"); if(el) el.textContent="已选 "+n+" 张";
+}
+function renderDupGroups(){
+  const list=document.getElementById("dupList"); if(!list) return;
+  const gs=window._dupGroups||[];
+  if(!gs.length){ if(list.children.length===0||list.dataset.built) list.innerHTML='<div class="dup-empty">没有发现重复照片</div>'; dupUpdateSelInfo(); return; }
+  let html="";
+  for(let gi=0;gi<gs.length;gi++){
+    const g=gs[gi].items||[];
+    html+='<div class="dup-group"><div class="dup-group-h"><span>第 '+(gi+1)+' 组 · '+g.length+' 张</span><span>组内按分辨率排序，第 1 张默认保留</span></div><div class="dup-cells">';
+    for(let k=0;k<g.length;k++){
+      const it=g[k]; const ck=!!window._dupSel[it.p];
+      html+='<div class="dup-cell '+(k===0?"keep":"")+(ck?" out":"")+'">'
+        + (it.t?'<img src="'+it.t+'" onclick="dupOpenLight('+gi+','+k+')" title="点击放大对比">':'<div class="ph" onclick="dupOpenLight('+gi+','+k+')">点击加载预览</div>')
+        + '<div class="nm" title="'+escHtml(it.n)+'">'+escHtml(it.n)+'</div>'
+        + '<div class="mt">'+(it.w?it.w+"×"+it.h:"—")+' · '+fmtSize(it.s)+'</div>'
+        + ((it.c&&it.c.length)?'<div class="mt" style="color:#7fb0ff" title="'+escHtml(it.c.join(", "))+'">实况：'+escHtml(it.c.join(", "))+'</div>':'')
+        + (it.d===0?'<div class="mt" style="color:#c9a227">无解码器 · 仅精确判重</div>':'')
+        + '<label><input type="checkbox" data-p="'+escHtml(it.p)+'" '+(ck?"checked":"")+' onchange="dupToggle(this)"> 移入回收站'+(k===0?'（保留项）':'')+'</label>'
+        + '</div>';
+    }
+    html+="</div></div>";
+  }
+  list.innerHTML=html; list.dataset.built="1"; dupUpdateSelInfo();
+}
+function dupToggle(cb){
+  const p=cb.getAttribute("data-p");
+  window._dupSel[p]=cb.checked;
+  cb.parentNode.parentNode.classList.toggle("out",cb.checked);
+  dupUpdateSelInfo();
+}
+function dupSelectAll(v){
+  const gs=window._dupGroups||[];
+  window._dupSel={};
+  for(let gi=0;gi<gs.length;gi++){ const g=gs[gi].items||[]; for(let k=0;k<g.length;k++) if(v&&k>0) window._dupSel[g[k].p]=true; }
+  renderDupGroups();
+}
+function showDupPanel(){
+  iosShow(document.getElementById("dupOverlay"), "flex");
+  if(!window._dupGroups||!window._dupGroups.length) post("dupshow");
+  renderDupGroups();
+}
+function closeDupPanel(){ iosHide(document.getElementById("dupOverlay")); }
+function dupMoveSelected(){
+  const sel=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];});
+  if(!sel.length){ alert("还没有勾选要移出的照片。"); return; }
+  const dst=window._dupDst||"软件回收站";
+  if(!confirm("将把 "+sel.length+" 张照片移入回收站：\n"+dst+"\n\n不会直接删除文件，可在相册「回收站」里还原或彻底删除。")) return;
+  window._dupMoveList=sel.slice();
+  post("dupmove|"+sel.join("\n"));
+}
+function dupOpenLight(gi,k){
+  _dupLightG=gi; _dupLightK=k;
+  document.getElementById("dupLight").style.display="flex";
+  dupLoadLight();
+}
+function dupLoadLight(){
+  const g=(window._dupGroups||[])[_dupLightG]; if(!g) return;
+  const g2=g.items||[]; const it=g2[_dupLightK]; if(!it) return;
+  post("duppreview|"+it.p);
+  const info=document.getElementById("dupLightInfo");
+  if(info) info.textContent="第 "+(_dupLightG+1)+" 组 · "+( _dupLightK+1)+" / "+g2.length+"　"+it.w+"×"+it.h+" · "+fmtSize(it.s);
+}
+function dupLightStep(d){
+  const g=(window._dupGroups||[])[_dupLightG]; if(!g) return;
+  const n=(g.items||[]).length;
+  _dupLightK=(_dupLightK+d+n)%n;
+  document.getElementById("dupLightImg").src="";
+  dupLoadLight();
+}
+function closeDupLight(){ document.getElementById("dupLight").style.display="none"; document.getElementById("dupLightImg").src=""; }
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){
+    const l=document.getElementById("dupLight");
+    if(l&&l.style.display==="flex"){ closeDupLight(); return; }
+    const o=document.getElementById("dupOverlay");
+    if(o&&o.style.display==="flex") closeDupPanel();
+  }
+});
+// 左栏整栏滚轮（指针在滤镜树内且该树还能同向滚动时保留树内滚动）
+(function(){
+  const lc=document.getElementById("leftCol"); if(!lc) return;
+  lc.addEventListener("wheel",function(e){
+    const t=document.getElementById("lutTree");
+    if(t&&t.contains(e.target)){
+      const can=(e.deltaY>0&&t.scrollTop+t.clientHeight<t.scrollHeight-1)||(e.deltaY<0&&t.scrollTop>0);
+      if(can) return;
+    }
+    lc.scrollTop+=e.deltaY;
+    e.preventDefault();
+  },{passive:false});
+})();
+// ==================== 相册 UI ====================
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},thumbQueue:[],thumbBusy:false,tab:'all',sel:false,selSet:{},viewerPath:null,loading:true,total:0,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:''};
+
+function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
+function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function albFmtTime(ts){ if(!ts) return ''; const d=new Date(ts*1000); const p=function(n){return n<10?'0'+n:''+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function albFmtDur(s){ s=Math.round(s||0); const m=Math.floor(s/60); return m>0? m+':'+(s%60<10?'0':'')+(s%60) : '0:'+(s<10?'0':'')+s; }
+function albTypeName(t){ return t==='video'?'视频':(t==='live'?'实况照片':'照片'); }
+function albFileUrl(p){ const parts=p.replace(/\\/g,'/').split('/'); return 'file:///'+parts.map(function(s,i){ return i===0? s : encodeURIComponent(s); }).join('/'); }
+
+function setAppMode(mode){
+  window._appMode = (mode === 'edit') ? 'edit' : 'album';
+  document.body.classList.toggle('mode-album', window._appMode === 'album');
+}
+function enterEditorFromAlbum(){
+  setAppMode('edit');
+  const ov=document.getElementById('albOverlay');
+  if(ov) iosHide(ov, function(){ closeAlbView(); });
+}
+function openAlbum(){
+  const ov=document.getElementById('albOverlay');
+  if(!ov) return;
+  iosShow(ov, 'flex');
+  albApplyZoom();
+  if(!(window._alb.items||[]).length) post('albopen');
+  else { albRender(); if(window._alb.map) setTimeout(function(){ window._alb.map.invalidateSize(); },100); }
+}
+function closeAlbum(){
+  if(window._appMode === 'album'){ post('winclose'); return; }
+  const ov=document.getElementById('albOverlay');
+  if(!ov){ closeAlbView(); return; }
+  iosHide(ov, function(){ closeAlbView(); });
+}
+function albToggleOpt(e){
+  if(e) e.stopPropagation();
+  const m=document.getElementById('albOptMenu');
+  if(!m) return;
+  const on=m.classList.contains('on');
+  m.classList.toggle('on', !on);
+}
+function albCloseOpt(){
+  const m=document.getElementById('albOptMenu');
+  if(m) m.classList.remove('on');
+}
+function albOptDo(kind){
+  albCloseOpt();
+  if(kind==='editor') enterEditorFromAlbum();
+  else if(kind==='bin') binOpen();
+  else if(kind==='dedup') albDedup();
+  else if(kind==='face') albFaceScan();
+  else if(kind==='rescan') post('albrefresh');
+  else if(kind==='cacheclear'){
+    post('albclearcache');
+    const A=window._alb;
+    if(A){ A.thumbs={}; }
+  }
+}
+document.addEventListener('click', function(e){
+  const m=document.getElementById('albOptMenu');
+  if(!m || !m.classList.contains('on')) return;
+  if(m.contains(e.target)) return;
+  const b=document.getElementById('albOptBtn');
+  if(b && b.contains(e.target)) return;
+  m.classList.remove('on');
+});
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') albCloseOpt(); });
+// iOS 风格显隐（fade + 轻微缩放）
+function iosShow(el, disp){
+  if(!el) return;
+  el.style.display = disp || 'flex';
+  el.classList.remove('ios-out');
+  el.classList.add('ios-in');
+  setTimeout(function(){ el.classList.remove('ios-in'); }, 330);
+}
+function iosHide(el, cb){
+  if(!el){ if(cb) cb(); return; }
+  el.classList.remove('ios-in');
+  if(el.style.display==='none'){ if(cb) cb(); return; }
+  el.classList.add('ios-out');
+  setTimeout(function(){ el.style.display='none'; el.classList.remove('ios-out'); if(cb) cb(); }, 230);
+}
+// 缩略图尺寸缩放（− / ＋ 与 Ctrl+滚轮）
+var ALB_CW_STEPS = [90, 110, 130, 150, 180, 200, 220];
+function albCwIdx(){
+  try {
+    var v = parseInt(localStorage.getItem('alb_cw') || '150', 10);
+    var i = ALB_CW_STEPS.indexOf(v);
+    return i < 0 ? 3 : i;
+  } catch(e){ return 3; }
+}
+function albApplyZoom(){
+  var g = document.getElementById('albGrid');
+  if(!g) return;
+  g.style.setProperty('--alb-cw', ALB_CW_STEPS[albCwIdx()] + 'px');
+}
+function albZoom(d){
+  var i = albCwIdx() + d;
+  i = Math.max(0, Math.min(ALB_CW_STEPS.length - 1, i));
+  try { localStorage.setItem('alb_cw', String(ALB_CW_STEPS[i])); } catch(e){}
+  albApplyZoom();
+}
+document.addEventListener('wheel', function(e){
+  if(!e.ctrlKey) return;
+  var t = e.target;
+  if(!t || !t.closest || !t.closest('#albGrid')) return;
+  e.preventDefault();
+  albZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+if(document.getElementById('albGrid')) albApplyZoom();
+
+function albRenderPaths(){
+  const A=window._alb, box=document.getElementById('albChips');
+  if(!box) return;
+  const rs=A.roots||[];
+  if(!rs.length){ box.innerHTML='<span class="alb-path-empty">未添加相册路径（点右侧「＋ 添加文件夹」选文件夹，也可直接选磁盘根目录）</span>'; return; }
+  let html='';
+  rs.forEach(function(r,ri){
+    html+='<div class="alb-chip" title="'+escAttr(r)+'"><span class="t">'+escHtml(r)+'</span>'+
+      '<span class="rm" data-i="'+ri+'" onclick="albRmRootIdx(this)">✕</span></div>';
+  });
+  box.innerHTML=html;
+}
+function albRmRootIdx(el){
+  const i=parseInt(el.getAttribute('data-i'),10);
+  const r=(window._alb.roots||[])[i];
+  if(r!=null) albRmRoot(r);
+}
+function albRmRoot(p){
+  if(!confirm('从相册中移除这个路径？\n只移除索引，不会删除磁盘上的文件。')) return;
+  post('albrmroot|'+p);
+}
+
+function albFaceScan(){
+  const A=window._alb;
+  if(A.faceBusy){ post('albfacesstop'); toastMsg('正在停止人物分析…'); return; }
+  if(!(A.items||[]).length){ toastMsg('相册里还没有照片'); return; }
+  A.faceBusy=true; A.faces=null;
+  const b=document.getElementById('albFaceBtn'); if(b){ b.textContent='停止分析'; b.style.color='#ffd479'; }
+  const sub=document.getElementById('albSub'); if(sub) sub.textContent='正在分析人脸…';
+  post('albfacescan');
+  albSetTab('person');
+}
+function albToEdit(){
+  const paths=Object.keys(window._alb.selSet||{});
+  if(!paths.length){ toastMsg('先勾选要编辑的照片'); return; }
+  albEditPaths(paths);
+}
+function albEditCurrent(){
+  const p=window._alb.viewerPath; if(!p) return;
+  post('albtoedit|'+p);
+  setAppMode('edit');
+  closeAlbView(); closeAlbum();
+}
+
+function albSetTab(tab){
+  const A=window._alb;
+  A.tab=tab;
+  A.animSwitch=true;
+  if(tab==='map') A.fitted=false;
+  if(tab!=='person') A.person=-1;
+  if(tab!=='device') A.device='';
+  document.querySelectorAll('.alb-tab').forEach(function(x){ x.classList.toggle('on', x.dataset.tab===tab); });
+  albRender();
+}
+document.addEventListener('click',function(e){
+  const t=e.target.closest? e.target.closest('.alb-tab'):null;
+  if(t && t.dataset.tab) albSetTab(t.dataset.tab);
+});
+
+function albFiltered(){
+  const A=window._alb, tab=A.tab, all=A.items||[];
+  if(tab==='photo'||tab==='video'||tab==='live') return all.filter(function(i){ return i.t===tab; });
+  if(tab==='device'){
+    const photos=all.filter(function(i){ return i.t!=='video'; });
+    return A.device ? photos.filter(function(i){ return (i.md||'未知设备')===A.device; }) : photos;
+  }
+  if(tab==='person' && A.person>=0 && A.faces){
+    const g=(A.faces.groups||[]).filter(function(x){ return x.id===A.person; })[0];
+    if(g){ const set={}; (g.faces||[]).forEach(function(f){ set[f.p]=1; }); return all.filter(function(i){ return set[i.p]; }); }
+    return [];
+  }
+  return all;
+}
+function albSetDevice(d){ window._alb.device=d||''; window._alb.tab='device'; albRender(); }
+function albSetDeviceEl(el){ albSetDevice(el.getAttribute('data-k')||''); }
+function albPickPerson(gid){ window._alb.person=gid; albRender(); }
+function albBackPeople(){ window._alb.person=-1; albRender(); }
+
+function albRenderPeople(){
+  const A=window._alb, pbox=document.getElementById('albPerson');
+  if(!pbox) return;
+  const grid=document.getElementById('albGrid'); if(grid) grid.style.display='none';
+  pbox.style.display='grid';
+  if(!A.faces){
+    pbox.innerHTML='';
+    const e=document.getElementById('albEmpty');
+    if(e){ e.style.display='flex'; e.textContent='还没有人物分组，点右上「人物分析」开始扫描'; }
+    return;
+  }
+  const e=document.getElementById('albEmpty'); if(e) e.style.display='none';
+  let html='';
+  (A.faces.groups||[]).forEach(function(g){
+    const photos={}; (g.faces||[]).forEach(function(f){ photos[f.p]=1; });
+    html+='<div class="alb-pcard" onclick="albPickPerson('+g.id+')">'+
+      (g.thumb?'<img src="'+g.thumb+'" alt="">':'<div class="ph" style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;color:#666">·</div>')+
+      '<div class="nm">人物 '+(g.id+1)+'</div><div class="ct">'+Object.keys(photos).length+' 张 · '+(g.faces||[]).length+' 张脸</div></div>';
+  });
+  pbox.innerHTML=html||'<div style="color:#777;font-size:12px;grid-column:1/-1">没有检测到人脸</div>';
+}
+
+function albCellHtml(i){
+  const th=window._alb.thumbs[i.p];
+  let img;
+  if(th) img='<img src="'+th+'" alt="" loading="lazy">';
+  else img= i.t==='video' ? '<div class="ph">▶</div>' : '<div class="ph">·</div>';
+  const checked=window._alb.selSet[i.p]?' checked':'';
+  const selCls=window._alb.sel?' sel':'';
+  const badge=i.t==='video'?'<span class="badge video">视频</span>':(i.t==='live'?'<span class="badge live">实况</span>':'<span class="badge">照片</span>');
+  const dur=i.t==='video'?'<span class="dur">'+albFmtDur(i.d)+'</span>':'';
+  const meta=i.dt?'<div class="meta">'+albFmtTime(i.dt)+'</div>':'';
+  return '<div class="alb-cell'+selCls+(window._alb.selSet[i.p]?' checked':'')+'" data-p="'+escAttr(i.p)+'" onclick="albCellClick(event,this)">'+
+    img+badge+dur+meta+
+    '<input type="checkbox" class="chk"'+checked+' onclick="event.stopPropagation();albCellChk(this)"></div>';
+}
+
+function albRender(){
+  const grid=document.getElementById('albGrid'); if(!grid) return;
+  const mapEl=document.getElementById('albMap'), empty=document.getElementById('albEmpty');
+  const personEl=document.getElementById('albPerson');
+  const tab=window._alb.tab;
+  if(personEl) personEl.style.display='none';
+  if(tab==='map'){
+    grid.style.display='none'; mapEl.style.display='block'; if(empty) empty.style.display='none';
+    albBuildMap(); return;
+  }
+  if(tab==='person' && window._alb.person<0){
+    grid.style.display='none'; mapEl.style.display='none';
+    albRenderPeople(); return;
+  }
+  mapEl.style.display='none'; grid.style.display='flex';
+  const list=albFiltered();
+  if(!list.length){
+    grid.innerHTML='';
+    if(empty){ empty.style.display='flex'; empty.textContent=window._alb.loading?'正在扫描相册…':(window._alb.roots && window._alb.roots.length ? '这个分类里还没有内容' : '还没有相册路径，点右上「＋ 添加文件夹」选择文件夹'); }
+    const foot0=document.getElementById('albFootInfo');
+    if(foot0){
+      const rt=(window._alb.roots||[]).join('  |  ');
+      foot0.textContent=(rt?rt+'　·　':'')+'当前 0 / 共 '+((window._alb.items||[]).length)+' 项';
+      foot0.title=foot0.textContent;
+    }
+    albSyncSelAllBtn();
+    return;
+  }
+  if(empty) empty.style.display='none';
+  let html='';
+  if(tab==='person' && window._alb.person>=0){
+    html+='<div class="alb-folder-h"><span onclick="albBackPeople()" style="cursor:pointer;color:#7fb3e8">‹ 返回人物列表</span><span>人物 '+(window._alb.person+1)+' · '+list.length+' 张</span></div>';
+    list.forEach(function(i){ html+=albCellHtml(i); });
+  } else if(tab==='folder'){
+    const groups={};
+    list.forEach(function(i){ const k=(i.rt?i.rt+' ▸ ':'')+(i.f==='.'?(i.rt||''):i.f); if(!groups[k]) groups[k]=[]; groups[k].push(i); });
+    Object.keys(groups).sort().forEach(function(k){
+      html+='<div class="alb-folder-h"><span>'+escHtml(k)+'</span><span>'+groups[k].length+' 项</span></div>';
+      groups[k].forEach(function(i){ html+=albCellHtml(i); });
+    });
+  } else if(tab==='device'){
+    if(window._alb.device){
+      html+='<div class="alb-folder-h"><span onclick="albSetDevice(\'\')" style="cursor:pointer;color:#7fb3e8">‹ 返回全部设备</span><span>'+escHtml(window._alb.device)+' · '+list.length+' 张</span></div>';
+    }
+    const groups={};
+    list.forEach(function(i){ const k=i.md||'未知设备'; if(!groups[k]) groups[k]=[]; groups[k].push(i); });
+    Object.keys(groups).sort(function(a,b){ return groups[b].length-groups[a].length; }).forEach(function(k){
+      html+='<div class="alb-folder-h"><span data-k="'+escAttr(k)+'" onclick="albSetDeviceEl(this)" style="cursor:pointer;color:#7fb3e8">'+escHtml(k)+'</span><span>'+groups[k].length+' 项</span></div>';
+      groups[k].forEach(function(i){ html+=albCellHtml(i); });
+    });
+  } else {
+    list.forEach(function(i){ html+=albCellHtml(i); });
+  }
+  grid.innerHTML=html;
+  if(window._alb.animSwitch){
+    window._alb.animSwitch=false;
+    grid.classList.add('switch');
+    const cs=grid.querySelectorAll('.alb-cell');
+    for(let ci=0; ci<cs.length && ci<20; ci++) cs[ci].style.animationDelay=(ci*16)+'ms';
+    setTimeout(function(){
+      grid.classList.remove('switch');
+      for(let ci2=0; ci2<cs.length; ci2++) cs[ci2].style.animationDelay='';
+    }, 340);
+  }
+  for(let k=0;k<list.length;k++) if(!window._alb.thumbs[list[k].p]) window._alb.thumbQueue.push(list[k].p);
+  albPumpThumbs();
+  const foot=document.getElementById('albFootInfo');
+  if(foot){ foot.textContent=(window._alb.roots||[]).join('  |  ')+'　·　当前 '+list.length+' / 共 '+(window._alb.items||[]).length+' 项'; foot.title=foot.textContent; }
+  albSyncSelAllBtn();
+}
+
+function albPumpThumbs(){
+  const A=window._alb;
+  if(A.thumbBusy) return;
+  while(A.thumbQueue.length){
+    const p=A.thumbQueue.shift();
+    if(A.thumbs[p]) continue;
+    A.thumbBusy=true;
+    post('albthumb|'+p);
+    setTimeout(function(){ if(window._alb.thumbBusy){ window._alb.thumbBusy=false; albPumpThumbs(); } },5000);
+    return;
+  }
+}
+// 大目录滚动加载：接近底部时再向后端要下一页
+(function(){
+  function bind(){
+    const g=document.getElementById('albGrid');
+    if(!g || g._albScrollBound) return;
+    g._albScrollBound=true;
+    g.addEventListener('scroll', function(){
+      const A=window._alb; if(!A) return;
+      if(A.items.length>=A.total || A.pageLoading) return;
+      if(g.scrollTop + g.clientHeight > g.scrollHeight - 500){
+        A.pageLoading=true;
+        post('albpage|'+A.items.length+'|200');
+      }
+    }, {passive:true});
+  }
+  bind();
+  if(document.readyState!=='complete') window.addEventListener('DOMContentLoaded', bind);
+})();
+function albFillThumb(path,data){
+  const cells=document.querySelectorAll('.alb-cell');
+  for(let i=0;i<cells.length;i++){
+    if(cells[i].getAttribute('data-p')!==path) continue;
+    if(!data) return;
+    const first=cells[i].firstElementChild;
+    if(first && first.tagName==='IMG'){ first.src=data; }
+    else {
+      const im=document.createElement('img'); im.src=data; im.alt='';
+      cells[i].insertBefore(im, cells[i].firstChild);
+      if(first) first.remove();
+    }
+    if(window._alb.tab==='map' && window._alb.map) albDrawMarkers(true,true);
+    return;
+  }
+}
+
+let _albDragging=false, _albDragMoved=false, _albSuppress=false, _albLast={x:0,y:0}, _albStart={x:0,y:0}, _albAutoTimer=null;
+
+function albCellClick(e,el){
+  if(_albSuppress){ _albSuppress=false; return; }
+  const p=el.getAttribute('data-p');
+  if(window._alb.sel){ albTogglePath(p); return; }
+  albOpenPath(p);
+}
+function albCellChk(input){
+  const cell=input.parentNode, p=cell.getAttribute('data-p');
+  albTogglePath(p,input.checked);
+}
+function albPaintCell(p,on){
+  const cells=document.querySelectorAll('.alb-cell');
+  for(let i=0;i<cells.length;i++){
+    if(cells[i].getAttribute('data-p')!==p) continue;
+    cells[i].classList.toggle('checked',!!on);
+    const c=cells[i].querySelector('.chk'); if(c) c.checked=!!on;
+  }
+}
+function albTogglePath(p,force){
+  const A=window._alb;
+  if(force===undefined) force=!A.selSet[p];
+  const cur=!!A.selSet[p];
+  if(cur===!!force){ albUpdateSelBtn(); return; }
+  if(force) A.selSet[p]=true; else delete A.selSet[p];
+  albPaintCell(p,force);
+  albUpdateSelBtn();
+}
+function albVisibleList(){ try{ return albFiltered()||[]; }catch(e){ return window._alb.items||[]; } }
+function albSelectAll(on){
+  const A=window._alb, list=albVisibleList();
+  if(on) list.forEach(function(i){ A.selSet[i.p]=true; });
+  else A.selSet={};
+  document.querySelectorAll('.alb-cell').forEach(function(c){
+    const p=c.getAttribute('data-p'), s=!!A.selSet[p];
+    c.classList.toggle('checked',s);
+    const ck=c.querySelector('.chk'); if(ck) ck.checked=s;
+  });
+  albUpdateSelBtn();
+}
+function albSelAllToggle(){
+  const A=window._alb, list=albVisibleList();
+  const all=list.length>0 && list.every(function(i){ return !!A.selSet[i.p]; });
+  albSelectAll(!all);
+}
+function albSyncSelAllBtn(){
+  const A=window._alb, b=document.getElementById('albSelAllBtn');
+  if(!b) return;
+  const list=albVisibleList();
+  if(!A.sel || !list.length){ b.style.display='none'; return; }
+  b.style.display='inline-block';
+  const all=list.every(function(i){ return !!A.selSet[i.p]; });
+  b.textContent=all?'取消全选':'全选';
+}
+function albToggleSel(){
+  window._alb.sel=!window._alb.sel;
+  window._alb.selSet={};
+  window._alb.dragMode=null;
+  document.getElementById('albSelBtn').textContent=window._alb.sel?'取消选择':'选择';
+  albUpdateSelBtn();
+  albRender();
+}
+function albUpdateSelBtn(){
+  const n=Object.keys(window._alb.selSet).length;
+  const b=document.getElementById('albDelSelBtn');
+  if(b){ b.style.display=(window._alb.sel && n>0)?'inline-block':'none'; b.textContent='删除选中 ('+n+')'; }
+  const e=document.getElementById('albEditBtn');
+  if(e){ e.style.display=(window._alb.sel && n>0)?'inline-block':'none'; e.textContent='编辑 ('+n+')'; }
+  albSyncSelAllBtn();
+}
+document.addEventListener('change',function(e){ if(e.target && e.target.classList && e.target.classList.contains('chk')) albUpdateSelBtn(); });
+
+// 滑动选择（iOS 相册式：按住一格拖动，经过的格子连续选中/取消）
+document.addEventListener('mousedown', function(e){
+  const A=window._alb;
+  if(!A || !A.sel || e.button!==0) return;
+  const cell=e.target.closest && e.target.closest('.alb-cell');
+  if(!cell) return;
+  if(e.target.classList && e.target.classList.contains('chk')) return;
+  e.preventDefault();
+  const p=cell.getAttribute('data-p');
+  A.dragMode=!A.selSet[p];
+  _albDragging=true; _albDragMoved=false;
+  _albStart={x:e.clientX,y:e.clientY}; _albLast={x:e.clientX,y:e.clientY};
+  const g=document.getElementById('albGrid'); if(g) g.classList.add('dragging');
+  albTogglePath(p,A.dragMode);
+  albStartAutoScroll();
+});
+document.addEventListener('mousemove', function(e){
+  if(!_albDragging) return;
+  const A=window._alb;
+  if(!A || !A.sel){ _albDragging=false; albStopAutoScroll(); return; }
+  _albLast={x:e.clientX,y:e.clientY};
+  if(Math.abs(e.clientX-_albStart.x)>4 || Math.abs(e.clientY-_albStart.y)>4) _albDragMoved=true;
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  const cell=el&&el.closest?el.closest('.alb-cell'):null;
+  if(cell) albTogglePath(cell.getAttribute('data-p'),A.dragMode);
+});
+document.addEventListener('mouseup', function(){
+  if(!_albDragging) return;
+  _albDragging=false;
+  _albSuppress=true;   // 拖动/单击已在 mousedown 里处理，吞掉随之而来的 click
+  setTimeout(function(){ _albSuppress=false; },250);
+  if(window._alb) window._alb.dragMode=null;
+  const g=document.getElementById('albGrid'); if(g) g.classList.remove('dragging');
+  albStopAutoScroll();
+});
+function albStartAutoScroll(){
+  albStopAutoScroll();
+  _albAutoTimer=setInterval(function(){
+    if(!_albDragging){ albStopAutoScroll(); return; }
+    const g=document.getElementById('albGrid'); if(!g) return;
+    const r=g.getBoundingClientRect();
+    let dy=0;
+    if(_albLast.y<r.top+46) dy=-16;
+    else if(_albLast.y>r.bottom-46) dy=16;
+    if(!dy) return;
+    g.scrollTop+=dy;
+    const el=document.elementFromPoint(_albLast.x,_albLast.y);
+    const cell=el&&el.closest?el.closest('.alb-cell'):null;
+    if(cell){ albTogglePath(cell.getAttribute('data-p'),window._alb.dragMode); return; }
+    const cells=g.querySelectorAll('.alb-cell');
+    for(let i=0;i<cells.length;i++){
+      const cr=cells[i].getBoundingClientRect();
+      if(_albLast.y>=cr.top && _albLast.y<=cr.bottom && _albLast.x>=cr.left && _albLast.x<=cr.right){
+        albTogglePath(cells[i].getAttribute('data-p'),window._alb.dragMode); break;
+      }
+    }
+  }, 60);
+}
+function albStopAutoScroll(){ if(_albAutoTimer){ clearInterval(_albAutoTimer); _albAutoTimer=null; } }
+
+// ==================== 相册右键菜单（详细信息 / 另存为 / 编辑 / 删除） ====================
+window._albCtx={open:false,path:null,paths:[],multi:false};
+function albCtxClose(){
+  const m=document.getElementById('albCtx');
+  if(m) m.classList.remove('on');
+  window._albCtx.open=false;
+}
+function albEditPaths(paths){
+  if(!paths || !paths.length) return;
+  setAppMode('edit');
+  post('albtoedit|'+paths.join('\n'));
+  setTimeout(closeAlbum,150);
+}
+function albDeletePaths(paths){
+  const A=window._alb, n=paths.length;
+  if(!n) return;
+  const it=A.byPath[paths[0]]||{};
+  const title=n>1?('确定删除选中的 '+n+' 项？'):('确定删除「'+(it.n||paths[0])+'」？');
+  const note=(n===1 && it.t==='live')?'\n（实况照片的 MOV/AAE 会一起移入回收站）':'';
+  if(!confirm(title+note+'\n文件会移入软件回收站，可在相册「回收站」还原。')) return;
+  window._albDelList=paths.slice();
+  post('albdelete|'+paths.join('\n'));
+}
+function albCtxOpen(e,cell){
+  const A=window._alb;
+  const p=cell.getAttribute('data-p'); if(!p) return;
+  const sel=Object.keys(A.selSet||{});
+  let paths=[p], multi=false;
+  if(A.sel && sel.length>1 && sel.indexOf(p)>=0){ paths=sel.slice(); multi=true; }
+  window._albCtx={open:true,path:p,paths:paths,multi:multi};
+  const m=document.getElementById('albCtx');
+  if(!m) return;
+  m.querySelector('[data-a="info"]').classList.toggle('dis',multi);
+  const cnt=m.querySelector('[data-a="save"]'); if(cnt) cnt.textContent=multi?('另存为 '+paths.length+' 张…'):'另存为…';
+  const ed=m.querySelector('[data-a="edit"]'); if(ed) ed.textContent=multi?('编辑 '+paths.length+' 张'):'编辑';
+  const dl=m.querySelector('[data-a="del"]'); if(dl) dl.textContent=multi?('删除 '+paths.length+' 项'):'删除';
+  m.classList.add('on');
+  const w=m.offsetWidth, h=m.offsetHeight;
+  let x=e.clientX, y=e.clientY;
+  if(x+w>window.innerWidth-8) x=window.innerWidth-w-8;
+  if(y+h>window.innerHeight-8) y=window.innerHeight-h-8;
+  m.style.left=Math.max(8,x)+'px';
+  m.style.top=Math.max(8,y)+'px';
+}
+function albCtxDo(a){
+  const C=window._albCtx, paths=(C.paths||[]).slice();
+  albCtxClose();
+  if(!C.path) return;
+  if(a==='info'){ if(C.multi) return; albOpenPath(C.path); return; }
+  if(a==='save'){ if(!paths.length) return; post('albsaveas|'+paths.join('\n')); return; }
+  if(a==='edit'){ albEditPaths(paths); return; }
+  if(a==='del'){ albDeletePaths(paths); return; }
+}
+document.addEventListener('contextmenu', function(e){
+  if(!document.body.classList.contains('mode-album')) return;
+  const cell=e.target.closest?e.target.closest('.alb-cell'):null;
+  e.preventDefault();
+  albCtxClose();
+  if(!cell || !cell.getAttribute('data-p')) return;
+  albCtxOpen(e,cell);
+});
+document.addEventListener('mousedown', function(e){
+  if(!window._albCtx || !window._albCtx.open) return;
+  if(e.target.closest && e.target.closest('#albCtx')) return;
+  albCtxClose();
+});
+document.addEventListener('scroll', function(){ if(window._albCtx&&window._albCtx.open) albCtxClose(); }, true);
+document.addEventListener('keydown', function(e){ if(e.key==='Escape' && window._albCtx&&window._albCtx.open) albCtxClose(); });
+(function(){
+  const m=document.getElementById('albCtx');
+  if(!m) return;
+  m.addEventListener('click', function(e){
+    const it=e.target.closest?e.target.closest('.alb-ctx-item'):null;
+    if(!it || it.classList.contains('dis')) return;
+    albCtxDo(it.getAttribute('data-a'));
+  });
+})();
+
+// ==================== 回收站 / 去重的滑动选择（iOS 相册式） ====================
+let _slideDrag=false,_slideMode=false,_slideKind='',_slideContainer=null,_slideLast={x:0,y:0},_slideSuppress=false,_slideTimer=null;
+function slideApply(cell,on,kind){
+  if(!cell) return;
+  if(kind==='bin'){
+    const B=window._bin, id=cell.getAttribute('data-id');
+    if(!id) return;
+    if(!!B.sel[id]!==!!on) binToggle(id);
+  } else {
+    const cb=cell.querySelector('input[type=checkbox]');
+    if(!cb) return;
+    if(!!cb.checked!==!!on){ cb.checked=!!on; dupToggle(cb); }
+  }
+}
+function slideCellAt(x,y,kind){
+  const el=document.elementFromPoint(x,y);
+  if(!el || !el.closest) return null;
+  const c=el.closest('.bin-cell, .dup-cell');
+  if(!c) return null;
+  const k=c.classList.contains('bin-cell')?'bin':'dup';
+  return k===kind?c:null;
+}
+document.addEventListener('mousedown', function(e){
+  if(_slideDrag || e.button!==0) return;
+  const el=e.target;
+  if(!el || !el.closest) return;
+  const cell=el.closest('.bin-cell, .dup-cell');
+  if(!cell) return;
+  if(el.tagName==='INPUT') return;
+  const kind=cell.classList.contains('bin-cell')?'bin':'dup';
+  const container=kind==='bin'?document.getElementById('binGrid'):document.getElementById('dupList');
+  if(!container) return;
+  e.preventDefault();
+  _slideDrag=true; _slideKind=kind; _slideContainer=container;
+  _slideLast={x:e.clientX,y:e.clientY};
+  if(kind==='bin'){
+    const B=window._bin, id=cell.getAttribute('data-id');
+    _slideMode=!B.sel[id];
+  } else {
+    const cb=cell.querySelector('input[type=checkbox]');
+    _slideMode=!(cb&&cb.checked);
+  }
+  slideApply(cell,_slideMode,kind);
+  container.classList.add('dragging');
+  slideStartScroll();
+});
+document.addEventListener('mousemove', function(e){
+  if(!_slideDrag) return;
+  _slideLast={x:e.clientX,y:e.clientY};
+  const cell=slideCellAt(e.clientX,e.clientY,_slideKind);
+  if(cell) slideApply(cell,_slideMode,_slideKind);
+});
+document.addEventListener('mouseup', function(){
+  if(!_slideDrag) return;
+  _slideDrag=false;
+  _slideSuppress=true;
+  setTimeout(function(){ _slideSuppress=false; },250);
+  if(_slideContainer) _slideContainer.classList.remove('dragging');
+  _slideContainer=null;
+  slideStopScroll();
+});
+function slideStartScroll(){
+  slideStopScroll();
+  _slideTimer=setInterval(function(){
+    if(!_slideDrag){ slideStopScroll(); return; }
+    const g=_slideContainer; if(!g) return;
+    const r=g.getBoundingClientRect();
+    let dy=0;
+    if(_slideLast.y<r.top+46) dy=-16;
+    else if(_slideLast.y>r.bottom-46) dy=16;
+    if(!dy) return;
+    g.scrollTop+=dy;
+    const cell=slideCellAt(_slideLast.x,_slideLast.y,_slideKind);
+    if(cell) slideApply(cell,_slideMode,_slideKind);
+  }, 60);
+}
+function slideStopScroll(){ if(_slideTimer){ clearInterval(_slideTimer); _slideTimer=null; } }
+
+function albOpenPathEl(el){ const p=el.getAttribute('data-p'); if(p) albOpenPath(p); }
+function albOpenPath(p){
+  window._alb.viewerPath=p;
+  const v=document.getElementById('albView');
+  iosShow(v, 'flex');
+  const img=document.getElementById('albViewImg'); const box=document.getElementById('albViewVideoBox');
+  img.style.display='block'; box.style.display='none';
+  const th=window._alb.thumbs[p]; if(th) img.src=th;
+  post('albview|'+p);
+}
+function closeAlbView(){
+  const v=document.getElementById('albView');
+  const vid=document.getElementById('albViewVideo');
+  if(vid){ try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){} }
+  window._alb.viewerPath=null;
+  iosHide(v);
+}
+function albFmtShutter(ex){
+  if(!ex || !isFinite(ex)) return '';
+  if(ex>=1) return (Math.round(ex*10)/10)+' s';
+  return '1/'+Math.round(1/ex)+' s';
+}
+function albExifHtml(m){
+  const rows=[];
+  function add(k,v){ if(v!==undefined && v!==null && String(v).length && String(v)!=='0') rows.push([k,v]); }
+  add('文件名', m.n);
+  add('类型', albTypeName(m.t));
+  add('拍摄时间', m.dt?albFmtTime(m.dt):'');
+  add('尺寸', (m.w&&m.h)?(m.w+' × '+m.h):'');
+  add('文件大小', m.s?fmtSize(m.s):'');
+  add('品牌', m.mk);
+  add('机型', m.md);
+  add('镜头', m.ln);
+  add('光圈', m.ap?('f/'+m.ap):'');
+  add('快门', albFmtShutter(m.ex));
+  add('ISO', m.is);
+  add('焦距', m.fl?(m.fl+' mm'):'');
+  add('时长', m.t==='video'?albFmtDur(m.d):'');
+  add('实况伴生', m.c);
+  add('坐标', (m.la||m.lo)?(Number(m.la).toFixed(6)+', '+Number(m.lo).toFixed(6)):'');
+  rows.push(['拍摄地址', (m.la||m.lo)?(m.addr||'查询中…（需联网）'):'']);
+  add('路径', m.p);
+  let html='';
+  rows.forEach(function(r){
+    if(r[0]==='拍摄地址'){ html+='<div class="row" id="albVAddrRow"><span class="k">'+r[0]+'</span><span class="v" id="albVAddr">'+escHtml(r[1])+'</span></div>'; return; }
+    if(r[0]==='路径'){ html+='<div class="row"><span class="k">'+r[0]+'</span><span class="v" style="font-size:10px;color:#888">'+escHtml(r[1])+'</span></div>'; return; }
+    html+='<div class="row"><span class="k">'+r[0]+'</span><span class="v">'+escHtml(r[1])+'</span></div>';
+  });
+  return html;
+}
+function albSetAddr(p,addr){
+  if(window._alb.viewerPath!==p) return;
+  const el=document.getElementById('albVAddr');
+  if(el) el.textContent=addr||'（未能解析地址，可联网后重试）';
+}
+function albShowViewer(m){
+  const img=document.getElementById('albViewImg');
+  const box=document.getElementById('albViewVideoBox');
+  const vid=document.getElementById('albViewVideo');
+  const hint=document.getElementById('albVHint');
+  document.getElementById('albVName').textContent=m.n||'';
+  const info=[albTypeName(m.t)];
+  if(m.w&&m.h) info.push(m.w+' × '+m.h);
+  if(m.dt) info.push('拍摄 '+albFmtTime(m.dt));
+  document.getElementById('albVInfo').textContent=info.filter(Boolean).join('　·　');
+  const ex=document.getElementById('albVExif'); if(ex) ex.innerHTML=albExifHtml(m);
+  window._alb.viewerPath=m.p;
+  if(m.t==='video'){
+    img.style.display='none'; box.style.display='flex';
+    hint.textContent='若黑屏或无法播放（MOV/HEVC 编码），请点右下「用系统程序打开」';
+    try{ vid.src=albFileUrl(m.p); vid.load(); }catch(e){}
+    if(m.data){ /* 首帧由 <video> 自己解码 */ }
+  } else {
+    img.style.display='block'; box.style.display='none';
+    if(m.data) img.src=m.data;
+    else img.src='';
+  }
+}
+function albViewIndex(){
+  const list=albFiltered();
+  for(let i=0;i<list.length;i++) if(list[i].p===window._alb.viewerPath) return i;
+  return -1;
+}
+function albViewStep(d){
+  const list=albFiltered(); const idx=albViewIndex();
+  if(idx<0) return;
+  const ni=(idx+d+list.length)%list.length;
+  albOpenPath(list[ni].p);
+}
+function albOpenWith(){
+  if(window._alb.viewerPath) post('albopenfile|'+window._alb.viewerPath);
+}
+function albDeleteCurrent(){
+  const p=window._alb.viewerPath; if(!p) return;
+  const it=window._alb.byPath[p]||{};
+  const note=it.t==='live'?'\n（实况照片的 MOV/AAE 会一起移入回收站）':'';
+  if(!confirm('确定删除「'+(it.n||p)+'」？'+note+'\n文件会移入软件回收站，可在相册「回收站」还原。')) return;
+  window._albDelList=[p];
+  post('albdelete|'+p);
+  closeAlbView();
+}
+function albDeleteSelected(){
+  const paths=Object.keys(window._alb.selSet);
+  if(!paths.length) return;
+  if(!confirm('确定删除选中的 '+paths.length+' 项？\n文件会移入软件回收站，可在相册「回收站」还原；实况照片的伴生 MOV/AAE 会一起移入。')) return;
+  window._albDelList=paths.slice();
+  post('albdelete|'+paths.join('\n'));
+}
+function albAfterDelete(files){
+  const A=window._alb;
+  let animated=false;
+  try{
+    document.querySelectorAll('.alb-cell[data-p]').forEach(function(c){
+      if(files.indexOf(c.getAttribute('data-p'))>=0){ c.classList.add('removing'); animated=true; }
+    });
+  }catch(e){}
+  const finish=function(){
+    A.items=(A.items||[]).filter(function(i){ return files.indexOf(i.p)<0; });
+    files.forEach(function(p){ delete A.byPath[p]; delete A.thumbs[p]; delete A.selSet[p]; });
+    A.sel=false; document.getElementById('albSelBtn').textContent='选择';
+    albUpdateSelBtn();
+    albRender();
+    if(A.tab==='map') albDrawMarkers(true);
+  };
+  if(animated) setTimeout(finish, 240); else finish();
+}
+function albDedup(){
+  const root=window._alb.root;
+  if(root) post('dupsrc|'+root);
+  setTimeout(function(){
+    showDupPanel();
+    if(root) setTimeout(function(){ post('dupscan'); },200);
+  },250);
+}
+
+// ---- 应用内回收站 ----
+window._bin={items:[],sel:{},dir:'',thumbs:{}};
+function binOpen(){
+  iosShow(document.getElementById('binOverlay'), 'flex');
+  post('albinlist');
+}
+function binClose(){ iosHide(document.getElementById('binOverlay')); }
+function binRender(){
+  const B=window._bin, grid=document.getElementById('binGrid');
+  let total=0; B.items.forEach(function(it){ total+=it.size||0; });
+  document.getElementById('binSub').textContent=B.items.length+' 项 · '+fmtSize(total);
+  const dt=document.getElementById('binDirText');
+  dt.textContent='目录：'+(B.dir||''); dt.title=B.dir||'';
+  if(!B.items.length){
+    grid.innerHTML='<div class="bin-empty">回收站是空的。相册 / 去重里删除的照片会先放到这里，可以随时还原。</div>';
+    binUpdateSel(); return;
+  }
+  grid.innerHTML=B.items.map(function(it){
+    const on=B.sel[it.id]?' on':'';
+    const th=B.thumbs[it.sp];
+    return '<div class="bin-cell'+on+'" data-id="'+escHtml(it.id)+'">'
+      + '<div class="bin-thumb" data-sp="'+escHtml(it.sp)+'"'+(th?' style="background-image:url('+th+')"':'')+'>'+(th?'':'⏳')+'</div>'
+      + '<input type="checkbox" class="bin-chk"'+(B.sel[it.id]?' checked':'')+'>'
+      + '<div class="bin-info"><div class="bin-name" title="'+escHtml(it.name)+'">'+escHtml(it.name)+'</div>'
+      + '<div class="bin-sub">'+escHtml(it.time)+'　'+fmtSize(it.size)+'</div>'
+      + '<div class="bin-sub" title="'+escHtml(it.orig)+'">原：'+escHtml(it.orig)+'</div></div></div>';
+  }).join('');
+  grid.querySelectorAll('.bin-cell').forEach(function(cell){
+    const id=cell.getAttribute('data-id');
+    cell.onclick=function(ev){ if(ev.target && ev.target.tagName==='INPUT') return; if(_slideSuppress) return; binToggle(id); };
+    cell.ondblclick=function(){ const it=B.items.filter(function(x){ return x.id===id; })[0]; if(it) post('albopenfile|'+it.sp); };
+    const chk=cell.querySelector('.bin-chk');
+    if(chk) chk.onclick=function(ev){ ev.stopPropagation(); binToggle(id); };
+  });
+  B.items.forEach(function(it){ if(!B.thumbs[it.sp]) post('albthumb|'+it.sp); });
+  binUpdateSel();
+}
+function binSync(){
+  const B=window._bin;
+  document.querySelectorAll('.bin-cell').forEach(function(c){
+    const id=c.getAttribute('data-id'), on=!!B.sel[id];
+    c.classList.toggle('on',on);
+    const chk=c.querySelector('.bin-chk'); if(chk) chk.checked=on;
+  });
+  binUpdateSel();
+}
+function binUpdateSel(){
+  const B=window._bin, n=Object.keys(B.sel).length;
+  document.getElementById('binSelInfo').textContent='已选 '+n+' 项';
+  const all=document.getElementById('binAll');
+  all.checked = B.items.length>0 && n===B.items.length;
+}
+function binToggle(id){
+  const B=window._bin;
+  if(B.sel[id]) delete B.sel[id]; else B.sel[id]=1;
+  binSync();
+}
+function binToggleAll(on){
+  const B=window._bin;
+  B.sel={};
+  if(on) B.items.forEach(function(it){ B.sel[it.id]=1; });
+  binSync();
+}
+function binRestoreSel(){
+  const ids=Object.keys(window._bin.sel);
+  if(!ids.length){ toastMsg('请先勾选要还原的项目'); return; }
+  post('albinrestore|'+ids.join('\n'));
+}
+function binPurgeSel(){
+  const ids=Object.keys(window._bin.sel);
+  if(!ids.length){ toastMsg('请先勾选要彻底删除的项目'); return; }
+  if(!confirm('彻底删除选中的 '+ids.length+' 项？\n删除后文件将从硬盘移除，无法恢复。')) return;
+  post('albinpurge|'+ids.join('\n'));
+}
+function binEmptyAll(){
+  const n=window._bin.items.length;
+  if(!n){ toastMsg('回收站已经是空的'); return; }
+  if(!confirm('清空回收站会彻底删除 '+n+' 项，无法恢复。确定继续？')) return;
+  post('albinempty');
+}
+
+// ---- 地图 ----
+function albLoadLeaflet(cb){
+  if(window.L){ cb(); return; }
+  if(window._alb.leafletLoading){ setTimeout(function(){ albLoadLeaflet(cb); },120); return; }
+  window._alb.leafletLoading=true;
+  const s=document.createElement('script');
+  s.src='assets/vendor/leaflet/leaflet.js';
+  s.onload=function(){ window._alb.leafletLoading=false; cb(); };
+  s.onerror=function(){ window._alb.leafletLoading=false; toastMsg('地图库加载失败'); };
+  document.body.appendChild(s);
+}
+function albBuildMap(){
+  const A=window._alb;
+  albLoadLeaflet(function(){
+    if(!A.map){
+      A.map=L.map('albMap',{zoomControl:true,attributionControl:false}).setView([32,110],4);
+      L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+        {subdomains:'1234',maxZoom:18,minZoom:3}).addTo(A.map);
+      A.layer=L.layerGroup().addTo(A.map);
+      A.map.on('zoomend',function(){
+        clearTimeout(A.zoomTimer);
+        A.zoomTimer=setTimeout(function(){ albDrawMarkers(true,true); },90);
+      });
+    }
+    setTimeout(function(){ A.map.invalidateSize(); albDrawMarkers(true,false); },120);
+  });
+}
+// WGS-84 → GCJ-02（高德瓦片用火星坐标）
+function albGcj(lat,lon){
+  const a=6378245.0, ee=0.00669342162296594323, PI=Math.PI;
+  if(lon<72.004||lon>137.8347||lat<0.8293||lat>55.8271) return [lat,lon];
+  function tLat(x,y){ let r=-100+2*x+3*y+0.2*y*y+0.1*x*y+0.2*Math.sqrt(Math.abs(x)); r+=(20*Math.sin(6*x*PI)+20*Math.sin(2*x*PI))*2/3; r+=(20*Math.sin(y*PI)+40*Math.sin(y/3*PI))*2/3; r+=(160*Math.sin(y/12*PI)+320*Math.sin(y*PI/30))*2/3; return r; }
+  function tLon(x,y){ let r=300+x+2*y+0.1*x*x+0.1*x*y+0.1*Math.sqrt(Math.abs(x)); r+=(20*Math.sin(6*x*PI)+20*Math.sin(2*x*PI))*2/3; r+=(20*Math.sin(x*PI)+40*Math.sin(x/3*PI))*2/3; r+=(150*Math.sin(x/12*PI)+300*Math.sin(x/30*PI))*2/3; return r; }
+  let dLat=tLat(lon-105,lat-35), dLon=tLon(lon-105,lat-35);
+  const rad=PI/180, m=Math.sin(lat*rad);
+  let magic=1-ee*m*m, sq=Math.sqrt(magic);
+  dLat=(dLat*180)/((a*(1-ee))/(magic*sq)*PI);
+  dLon=(dLon*180)/(a/sq*Math.cos(lat*rad)*PI);
+  return [lat+dLat, lon+dLon];
+}
+function albDrawMarkers(rebuild, keepView){
+  const A=window._alb;
+  if(!A.map||!A.layer) return;
+  const items=A.items.filter(function(i){ return (i.la||i.lo); });
+  if(!rebuild) return;
+  A.layer.clearLayers();
+  const zoom=A.map.getZoom();
+  const pts=[];
+  // 任意缩放级别都显示缩略图；缩得越小图标越小，同一像素格内自动合并成一张带数量角标的缩略图
+  const size = zoom>=14?58:(zoom>=11?52:(zoom>=8?44:38));
+  const grid = size+6;
+  const buckets={}, groups=[];
+  items.forEach(function(i){
+    const c=albGcj(i.la,i.lo);
+    pts.push(c);
+    let pt;
+    try { pt=A.map.latLngToContainerPoint(c); } catch(e){ pt={x:0,y:0}; }
+    const key=Math.floor(pt.x/grid)+'_'+Math.floor(pt.y/grid);
+    let b=buckets[key];
+    if(b){ b.items.push(i); } else { b={c:c,items:[i]}; buckets[key]=b; groups.push(b); }
+  });
+  groups.forEach(function(g){
+    const rep=g.items[0], cnt=g.items.length, th=A.thumbs[rep.p];
+    const inner=th?'<img src="'+th+'">':(rep.t==='video'?'<div class="dot" style="background:#c0392b"></div>':(rep.t==='live'?'<div class="dot" style="background:#d68910"></div>':'<div class="dot"></div>'));
+    const html='<div class="mk-wrap">'+inner+(cnt>1?'<i class="alb-mark-n">'+cnt+'</i>':'')+'</div>';
+    const icon=L.divIcon({className:'alb-mark',html:html,iconSize:[size,size]});
+    L.marker(g.c,{icon:icon}).addTo(A.layer).bindPopup(albPopup(rep,cnt));
+  });
+  if(!keepView && !A.fitted && pts.length){
+    A.map.fitBounds(L.latLngBounds(pts).pad(0.15),{maxZoom:12});
+    A.fitted=true;
+  }
+}
+function albPopup(i, cnt){
+  const th=window._alb.thumbs[i.p];
+    return '<div style="min-width:150px"><div style="font-size:12px;margin-bottom:4px">'+escHtml(i.n)+(cnt>1?'　<span style="color:#888">此处 '+cnt+' 张</span>':'')+'</div>'+
+    (th?'<img src="'+th+'" style="width:150px;height:auto;border-radius:4px;display:block;margin-bottom:4px">':'')+
+    '<div style="font-size:11px;color:#888">'+albFmtTime(i.dt)+'</div>'+
+    '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
+}
+</script>
 </body></html>
