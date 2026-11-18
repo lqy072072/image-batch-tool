@@ -300,9 +300,14 @@ body.skin-light .fx-card .d { color:#666; }
 .dup-bar { height:5px; background:#1f1f1f; border-radius:3px; overflow:hidden; margin:8px 0 4px; }
 .dup-bar > div { height:100%; width:0; background:#0969da; transition:width .15s; }
 .dup-stat { font-size:10px; color:#999; min-height:13px; }
-.dup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.62); z-index:900; display:none; align-items:center; justify-content:center; }
-.dup-panel { width:min(1180px,94vw); height:min(88vh,900px); background:#232323; border:1px solid #3a3a3a; border-radius:10px; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.6); overflow:hidden; }
-.dup-head { padding:12px 16px; border-bottom:1px solid #333; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.dup-overlay { position:fixed; inset:0; background:transparent; pointer-events:none; z-index:900; display:none; align-items:center; justify-content:center; }
+.dup-panel { pointer-events:auto; width:min(940px,74vw); height:min(640px,72vh); background:#232323; border:1px solid #3a3a3a; border-radius:12px; display:flex; flex-direction:column; box-shadow:0 24px 70px rgba(0,0,0,.72); overflow:hidden; position:relative; }
+.dup-panel.min { height:auto; width:min(520px,60vw); }
+.dup-panel.min .dup-tools, .dup-panel.min .dup-list { display:none; }
+.dup-head { padding:12px 16px; border-bottom:1px solid #333; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; cursor:move; user-select:none; }
+.dup-head .ops { display:flex; align-items:center; gap:4px; }
+.dup-head .mini { cursor:pointer; color:#999; font-size:14px; padding:2px 8px; border-radius:4px; }
+.dup-head .mini:hover { background:#3a3a3a; color:#fff; }
 .dup-head .t { font-size:14px; color:#eee; font-weight:600; }
 .dup-head .s { font-size:11px; color:#888; margin-left:10px; font-weight:400; }
 .dup-head .x { cursor:pointer; color:#999; font-size:16px; padding:2px 8px; border-radius:4px; }
@@ -376,6 +381,12 @@ body.skin-light .alb-ctx-item.dis { color:#b4b6ba; }
 .alb-body { flex:1; position:relative; overflow:hidden; display:flex; }
 .alb-grid { flex:1; overflow-y:auto; padding:10px 14px 60px; display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start; }
 .alb-folder-h { flex:0 0 100%; font-size:12px; color:#9aa0a6; margin:14px 0 2px; padding-bottom:4px; border-bottom:1px solid #303030; display:flex; justify-content:space-between; }
+.alb-day-h { flex:0 0 100%; position:sticky; top:0; z-index:3; font-size:13px; color:#cfd3d8; margin:10px 0 2px; padding:8px 2px 8px; border-bottom:1px solid #3a3a3a; display:flex; justify-content:space-between; align-items:center; background:#1b1b1b; cursor:pointer; }
+.alb-day-h:hover { color:#fff; background:#242424; }
+.alb-day-h .n { font-size:11px; color:#8b9096; margin-left:8px; }
+.alb-day-h .picked { color:#7fb3e8; font-size:11px; margin-left:10px; }
+body.skin-light .alb-day-h { background:#f2f2f5; color:#333; border-color:#ddd; }
+body.skin-light .alb-day-h:hover { background:#eaeaf0; color:#111; }
 .alb-cell { position:relative; width:var(--alb-cw,150px); height:var(--alb-cw,150px); flex:0 0 auto; background:#232325; border-radius:8px; overflow:hidden; cursor:pointer; border:1px solid #2f3033; }
 .alb-cell:hover { border-color:#4a4d52; }
 .alb-cell img { width:100%; height:100%; object-fit:cover; display:block; background:#191919; }
@@ -890,9 +901,9 @@ window.addEventListener('mouseup', function(e) {
 
 <div class="dup-overlay" id="dupOverlay">
   <div class="dup-panel">
-    <div class="dup-head">
+    <div class="dup-head" onmousedown="dupDragStart(event)">
       <div><span class="t">照片去重</span><span class="s" id="dupHeadSub"></span></div>
-      <span class="x" onclick="closeDupPanel()">✕</span>
+      <div class="ops"><span class="mini" id="dupMinBtn" onclick="dupToggleMin()" title="最小化/还原">—</span><span class="x" onclick="closeDupPanel()">✕</span></div>
     </div>
     <div class="dup-tools">
       <button class="mini-btn" onclick="post('dupsrc')">扫描文件夹</button>
@@ -963,6 +974,7 @@ window.addEventListener('mouseup', function(e) {
       <span class="alb-tab" data-tab="map">地图</span>
     </div>
     <div class="alb-right">
+      <button class="mini-btn" id="albTimeBtn" onclick="albToggleTimeSort()" title="按拍摄时间排列，并按天分组">按时间</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(-1)" title="缩小缩略图（Ctrl+滚轮也可缩放）">−</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(1)" title="放大缩略图（Ctrl+滚轮也可缩放）">＋</button>
       <div class="alb-opt-wrap">
@@ -998,6 +1010,7 @@ window.addEventListener('mouseup', function(e) {
 </div>
 <div class="alb-ctx" id="albCtx">
   <div class="alb-ctx-item" data-a="info">详细信息</div>
+  <div class="alb-ctx-item" data-a="folder">打开图片所在文件夹</div>
   <div class="alb-ctx-item" data-a="save">另存为…</div>
   <div class="alb-ctx-item" data-a="edit">编辑</div>
   <div class="alb-ctx-item danger" data-a="del">删除</div>
@@ -1942,6 +1955,15 @@ if (window.chrome && chrome.webview) {
       const info = document.getElementById('dupLightInfo');
       if (li) li.src = m.data;
       if (info) info.innerHTML = '<b>' + escHtml(m.n) + '</b><br>' + m.w + ' × ' + m.h + '　' + fmtSize(m.s) + '<br><span style="color:#888">' + escHtml(m.p) + '</span>';
+    } else if (m.type === 'dupthumb') {
+      if(m.t){ window._dupThumbs=window._dupThumbs||{}; window._dupThumbs[m.p]=m.t; }
+      dupFillThumb(m.p, m.t);
+    } else if (m.type === 'dupwarm') {
+      window._dupWarm={done:m.done||0,total:m.total||0,finished:!!m.finished};
+      const st=document.getElementById('dupStat');
+      const open=document.getElementById('dupOverlay');
+      if(st && !window._dupRunning && open && open.style.display==='flex' && m.total)
+        st.textContent='后台预分析 '+m.done+' / '+m.total+(m.finished?' · 已完成':'');
     } else if (m.type === 'dupdone') {
       const st = document.getElementById('dupStat');
       if (st) st.textContent = '已移入回收站 ' + (m.moved||0) + ' 张' + (m.comps ? '（含 ' + m.comps + ' 个伴生文件）' : '') + (m.failed ? '，失败 ' + m.failed : '') + '，可在相册「回收站」还原';
@@ -2010,7 +2032,7 @@ if (window.chrome && chrome.webview) {
       window._alb.byPath = {};
       window._alb.thumbs = {};
       window._alb.thumbQueue = [];
-      window._alb.thumbBusy = false;
+      window._alb.thumbActive = 0;
       window._alb.selSet = {};
       window._alb.viewerPath = null;
       window._alb.loading = true;
@@ -2064,13 +2086,33 @@ if (window.chrome && chrome.webview) {
         window._alb.pageLoading = true;
         post('albpage|' + window._alb.items.length + '|200');
       }
+    } else if (m.type === 'albpartial') {
+      // 扫描过程中先到的项：直接追加显示，不再等整轮扫描结束
+      const A = window._alb, items = m.items || [];
+      const added = [];
+      for (let i=0;i<items.length;i++) {
+        if (A.byPath[items[i].p]) continue;
+        A.items.push(items[i]); A.byPath[items[i].p] = items[i]; added.push(items[i]);
+      }
+      if (m.total && m.total > A.total) A.total = m.total;
+      const gridP = document.getElementById('albGrid');
+      if (added.length && gridP && A.tab === 'all' && !A.sel) {
+        albQueuePartial(added);
+        const emP = document.getElementById('albEmpty'); if (emP) emP.style.display = 'none';
+      }
+      const ovP = document.getElementById('albOverlay');
+      if (ovP && A.items.length) ovP.style.display = 'none';
+      const subP = document.getElementById('albSub');
+      if (subP) subP.textContent = '已载入 ' + A.items.length + ' 项 · 继续扫描中…';
+      const footP = document.getElementById('albFootInfo');
+      if (footP) footP.textContent = (A.roots||[]).join('  |  ') + '　·　当前 ' + albFiltered().length + ' / 共 ' + A.items.length + ' 项';
     } else if (m.type === 'albthumb') {
       window._alb.thumbs[m.p] = m.t;
       albFillThumb(m.p, m.t);
       document.querySelectorAll('.bin-thumb').forEach(function(el){
         if(el.getAttribute('data-sp') === m.p){ el.style.backgroundImage='url('+m.t+')'; el.textContent=''; }
       });
-      window._alb.thumbBusy = false;
+      window._alb.thumbActive = Math.max(0, (window._alb.thumbActive||0) - 1);
       albPumpThumbs();
     } else if (m.type === 'albview') {
       albShowViewer(m);
@@ -2371,8 +2413,9 @@ function renderDupGroups(){
     html+='<div class="dup-group"><div class="dup-group-h"><span>第 '+(gi+1)+' 组 · '+g.length+' 张</span><span>组内按分辨率排序，第 1 张默认保留</span></div><div class="dup-cells">';
     for(let k=0;k<g.length;k++){
       const it=g[k]; const ck=!!window._dupSel[it.p];
-      html+='<div class="dup-cell '+(k===0?"keep":"")+(ck?" out":"")+'">'
-        + (it.t?'<img src="'+it.t+'" onclick="dupOpenLight('+gi+','+k+')" title="点击放大对比">':'<div class="ph" onclick="dupOpenLight('+gi+','+k+')">点击加载预览</div>')
+      const dt=window._dupThumbs&&window._dupThumbs[it.p];
+      html+='<div class="dup-cell '+(k===0?"keep":"")+(ck?" out":"")+'" data-dp="'+escHtml(it.p)+'">'
+        + (dt?'<img src="'+dt+'" onclick="dupOpenLight('+gi+','+k+')" title="点击放大对比">':'<div class="ph" onclick="dupOpenLight('+gi+','+k+')">载入中…</div>')
         + '<div class="nm" title="'+escHtml(it.n)+'">'+escHtml(it.n)+'</div>'
         + '<div class="mt">'+(it.w?it.w+"×"+it.h:"—")+' · '+fmtSize(it.s)+'</div>'
         + ((it.c&&it.c.length)?'<div class="mt" style="color:#7fb0ff" title="'+escHtml(it.c.join(", "))+'">实况：'+escHtml(it.c.join(", "))+'</div>':'')
@@ -2383,6 +2426,39 @@ function renderDupGroups(){
     html+="</div></div>";
   }
   list.innerHTML=html; list.dataset.built="1"; dupUpdateSelInfo();
+  window._dupThumbReq={};   // DOM 重建后旧的请求标记失效，需要按新节点重新请求
+  list._dupThumbCursor=0;
+  if(!list._thumbScroll){ list._thumbScroll=true; list.addEventListener('scroll', function(){ if((Date.now()-(list._thumbT||0))>120){ list._thumbT=Date.now(); dupQueueThumbs(); } }); }
+  dupQueueThumbs();
+}
+// 去重结果里的预览图按需逐张加载，不再在扫描结束时一次性解码几百张
+function dupQueueThumbs(){
+  const list=document.getElementById("dupList"); if(!list) return;
+  window._dupThumbReq=window._dupThumbReq||{};
+  const cells=list.querySelectorAll(".dup-cell");
+  let start=list._dupThumbCursor||0, sent=0;
+  for(let i=start;i<cells.length && sent<120;i++){
+    const p=cells[i].getAttribute("data-dp");
+    list._dupThumbCursor=i+1;
+    if(!p || window._dupThumbReq[p]) continue;
+    if(cells[i].querySelector("img")) continue;
+    window._dupThumbReq[p]=1; post("dupthumb|"+p); sent++;
+  }
+}
+function dupFillThumb(path,data){
+  const list=document.getElementById("dupList"); if(!list||!data) return;
+  const cells=list.querySelectorAll(".dup-cell");
+  for(let i=0;i<cells.length;i++){
+    if(cells[i].getAttribute("data-dp")!==path) continue;
+    const ph=cells[i].querySelector(".ph");
+    if(ph && !cells[i].querySelector("img")){
+      const im=document.createElement("img"); im.src=data; im.alt=""; im.title="点击放大对比";
+      im.onclick=(function(pp){ return function(){ dupOpenLightByPath(pp); }; })(path);
+      cells[i].insertBefore(im, cells[i].firstChild);
+      ph.remove();
+    }
+    return;
+  }
 }
 function dupToggle(cb){
   const p=cb.getAttribute("data-p");
@@ -2400,8 +2476,34 @@ function showDupPanel(){
   iosShow(document.getElementById("dupOverlay"), "flex");
   if(!window._dupGroups||!window._dupGroups.length) post("dupshow");
   renderDupGroups();
+  dupQueueThumbs();
 }
 function closeDupPanel(){ iosHide(document.getElementById("dupOverlay")); }
+function dupToggleMin(){
+  const p=document.querySelector('.dup-panel'); if(!p) return;
+  p.classList.toggle('min');
+  const b=document.getElementById('dupMinBtn'); if(b) b.textContent=p.classList.contains('min')?'▢':'—';
+}
+let _dupDrag=null;
+function dupDragStart(e){
+  if(e.target.closest && e.target.closest('.ops')) return;
+  const p=document.querySelector('.dup-panel'); if(!p) return;
+  const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(p.style.transform||'');
+  _dupDrag={x:e.clientX,y:e.clientY,ox:m?parseFloat(m[1]):0,oy:m?parseFloat(m[2]):0,p:p};
+  e.preventDefault();
+}
+document.addEventListener('mousemove', function(e){
+  if(!_dupDrag) return;
+  _dupDrag.p.style.transform='translate('+(_dupDrag.ox+e.clientX-_dupDrag.x)+'px,'+(_dupDrag.oy+e.clientY-_dupDrag.y)+'px)';
+});
+document.addEventListener('mouseup', function(){ _dupDrag=null; });
+function dupOpenLightByPath(path){
+  const gs=window._dupGroups||[];
+  for(let gi=0;gi<gs.length;gi++){
+    const g=gs[gi].items||[];
+    for(let k=0;k<g.length;k++) if(g[k].p===path){ dupOpenLight(gi,k); return; }
+  }
+}
 function dupMoveSelected(){
   const sel=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];});
   if(!sel.length){ alert("还没有勾选要移出的照片。"); return; }
@@ -2452,7 +2554,7 @@ document.addEventListener("keydown",function(e){
   },{passive:false});
 })();
 // ==================== 相册 UI ====================
-window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},thumbQueue:[],thumbBusy:false,tab:'all',sel:false,selSet:{},viewerPath:null,loading:true,total:0,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:''};
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,loading:true,total:0,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:'',timeSort:false};
 
 function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -2613,6 +2715,7 @@ function albSetTab(tab){
   if(tab!=='person') A.person=-1;
   if(tab!=='device') A.device='';
   document.querySelectorAll('.alb-tab').forEach(function(x){ x.classList.toggle('on', x.dataset.tab===tab); });
+  const tb=document.getElementById('albTimeBtn'); if(tb) tb.style.display = tab==='all'?'':'none';
   albRender();
 }
 document.addEventListener('click',function(e){
@@ -2632,7 +2735,43 @@ function albFiltered(){
     if(g){ const set={}; (g.faces||[]).forEach(function(f){ set[f.p]=1; }); return all.filter(function(i){ return set[i.p]; }); }
     return [];
   }
+  if(tab==='all' && A.timeSort){
+    return all.slice().sort(function(a,b){
+      const ta=a.dt||0, tb=b.dt||0;
+      if(ta&&tb) return tb-ta;
+      if(ta) return -1;
+      if(tb) return 1;
+      return (a.n||'').localeCompare(b.n||'');
+    });
+  }
   return all;
+}
+function albToggleTimeSort(){
+  const A=window._alb; A.timeSort=!A.timeSort;
+  const b=document.getElementById('albTimeBtn');
+  if(b){ b.style.background=A.timeSort?'#0969da':''; b.style.color=A.timeSort?'#fff':''; b.style.borderColor=A.timeSort?'#1f7ae0':''; }
+  albRender();
+  toastMsg(A.timeSort?'已按拍摄时间排列，并按天分组':'已恢复正常顺序');
+}
+function albDayKey(i){
+  if(i && i.dt){ const d=new Date(i.dt*1000); const p=function(n){return n<10?'0'+n:''+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+  return 'unknown';
+}
+function albDayLabel(k){
+  if(k==='unknown') return '未知日期';
+  const p=k.split('-'); const d=new Date(parseInt(p[0],10),parseInt(p[1],10)-1,parseInt(p[2],10));
+  const w=['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+  return p[0]+'年'+(parseInt(p[1],10))+'月'+(parseInt(p[2],10))+'日 · '+w;
+}
+function albDayPick(k){
+  const A=window._alb;
+  if(!A.sel){ toastMsg('先点右上「选择」，再点日期可整组选中当天照片'); return; }
+  const list=albFiltered().filter(function(i){ return albDayKey(i)===k; });
+  if(!list.length) return;
+  const all=list.every(function(i){ return !!A.selSet[i.p]; });
+  list.forEach(function(i){ if(all) delete A.selSet[i.p]; else A.selSet[i.p]=true; });
+  albRender(); albSyncSelAllBtn(); albUpdateSelBtn();
+  toastMsg((all?'已取消 ':'已选中 ')+list.length+' 张 · '+albDayLabel(k));
 }
 function albSetDevice(d){ window._alb.device=d||''; window._alb.tab='device'; albRender(); }
 function albSetDeviceEl(el){ albSetDevice(el.getAttribute('data-k')||''); }
@@ -2676,8 +2815,32 @@ function albCellHtml(i){
     '<input type="checkbox" class="chk"'+checked+' onclick="event.stopPropagation();albCellChk(this)"></div>';
 }
 
+// 扫描边扫边显示：分帧插入，避免一次 200 张 DOM 把界面卡住
+function albQueuePartial(items){
+  const A=window._alb;
+  if(!A.renderQ) A.renderQ=[];
+  for(let i=0;i<items.length;i++) A.renderQ.push(items[i]);
+  if(A.renderScheduled) return;
+  A.renderScheduled=true;
+  const step=function(){
+    A.renderScheduled=false;
+    const grid=document.getElementById('albGrid');
+    if(!grid || A.tab!=='all' || A.sel){ A.renderQ=[]; return; }
+    const chunk=A.renderQ.splice(0,50);
+    if(!chunk.length) return;
+    let html='';
+    for(let j=0;j<chunk.length;j++) html+=albCellHtml(chunk[j]);
+    grid.insertAdjacentHTML('beforeend',html);
+    for(let k=0;k<chunk.length;k++) if(!A.thumbs[chunk[k].p]) A.thumbQueue.push(chunk[k].p);
+    albPumpThumbs();
+    if(A.renderQ.length){ A.renderScheduled=true; requestAnimationFrame(step); }
+  };
+  requestAnimationFrame(step);
+}
+
 function albRender(){
   const grid=document.getElementById('albGrid'); if(!grid) return;
+  window._alb.renderQ=[]; window._alb.renderScheduled=false;
   const mapEl=document.getElementById('albMap'), empty=document.getElementById('albEmpty');
   const personEl=document.getElementById('albPerson');
   const tab=window._alb.tab;
@@ -2726,6 +2889,17 @@ function albRender(){
       html+='<div class="alb-folder-h"><span data-k="'+escAttr(k)+'" onclick="albSetDeviceEl(this)" style="cursor:pointer;color:#7fb3e8">'+escHtml(k)+'</span><span>'+groups[k].length+' 项</span></div>';
       groups[k].forEach(function(i){ html+=albCellHtml(i); });
     });
+  } else if(tab==='all' && window._alb.timeSort){
+    const groups={}, order=[];
+    list.forEach(function(i){ const k=albDayKey(i); if(!groups[k]){groups[k]=[]; order.push(k);} groups[k].push(i); });
+    order.forEach(function(k){
+      const g=groups[k];
+      let picked=0; g.forEach(function(i){ if(window._alb.selSet[i.p]) picked++; });
+      html+='<div class="alb-day-h" onclick="albDayPick(\''+k+'\')" title="选择模式下点击可整组选中当天照片">'+
+        '<span>'+escHtml(albDayLabel(k))+'<span class="n">'+g.length+' 张</span>'+(picked?'<span class="picked">已选 '+picked+'</span>':'')+'</span>'+
+        '<span class="n">'+(window._alb.sel?'点击选中当天':'')+'</span></div>';
+      g.forEach(function(i){ html+=albCellHtml(i); });
+    });
   } else {
     list.forEach(function(i){ html+=albCellHtml(i); });
   }
@@ -2749,24 +2923,47 @@ function albRender(){
 
 function albPumpThumbs(){
   const A=window._alb;
-  if(A.thumbBusy) return;
-  while(A.thumbQueue.length){
+  if(!A) return;
+  if(!A.thumbActive) A.thumbActive=0;
+  const MAX=4;
+  while(A.thumbQueue.length && A.thumbActive<MAX){
     const p=A.thumbQueue.shift();
     if(A.thumbs[p]) continue;
-    A.thumbBusy=true;
+    A.thumbActive++;
     post('albthumb|'+p);
-    setTimeout(function(){ if(window._alb.thumbBusy){ window._alb.thumbBusy=false; albPumpThumbs(); } },5000);
-    return;
   }
 }
+
+// 用户滚到哪儿，就把那儿还没加载的预览图插到队首，先出图
+function albPrioritizeVisible(){
+  const A=window._alb, g=document.getElementById('albGrid');
+  if(!A||!g) return;
+  const gr=g.getBoundingClientRect();
+  const cells=g.querySelectorAll('.alb-cell');
+  const vis=[], set={};
+  for(let i=0;i<cells.length;i++){
+    const r=cells[i].getBoundingClientRect();
+    if(r.bottom<gr.top-180 || r.top>gr.bottom+240) continue;
+    const p=cells[i].getAttribute('data-p');
+    if(!p || A.thumbs[p] || set[p]) continue;
+    set[p]=1; vis.push(p);
+  }
+  if(!vis.length) return;
+  A.thumbQueue=A.thumbQueue.filter(function(p){ return !set[p]; });
+  A.thumbQueue=vis.concat(A.thumbQueue);
+  albPumpThumbs();
+} 
 // 大目录滚动加载：接近底部时再向后端要下一页
 (function(){
+  let lastPri=0;
   function bind(){
     const g=document.getElementById('albGrid');
     if(!g || g._albScrollBound) return;
     g._albScrollBound=true;
     g.addEventListener('scroll', function(){
       const A=window._alb; if(!A) return;
+      const now=Date.now();
+      if(now-lastPri>120){ lastPri=now; albPrioritizeVisible(); }
       if(A.items.length>=A.total || A.pageLoading) return;
       if(g.scrollTop + g.clientHeight > g.scrollHeight - 500){
         A.pageLoading=true;
@@ -2960,6 +3157,7 @@ function albCtxOpen(e,cell){
   const m=document.getElementById('albCtx');
   if(!m) return;
   m.querySelector('[data-a="info"]').classList.toggle('dis',multi);
+  const fol=m.querySelector('[data-a="folder"]'); if(fol) fol.classList.toggle('dis',multi);
   const cnt=m.querySelector('[data-a="save"]'); if(cnt) cnt.textContent=multi?('另存为 '+paths.length+' 张…'):'另存为…';
   const ed=m.querySelector('[data-a="edit"]'); if(ed) ed.textContent=multi?('编辑 '+paths.length+' 张'):'编辑';
   const dl=m.querySelector('[data-a="del"]'); if(dl) dl.textContent=multi?('删除 '+paths.length+' 项'):'删除';
@@ -2976,6 +3174,7 @@ function albCtxDo(a){
   albCtxClose();
   if(!C.path) return;
   if(a==='info'){ if(C.multi) return; albOpenPath(C.path); return; }
+  if(a==='folder'){ if(C.multi) return; post('albopenfolder|'+C.path); return; }
   if(a==='save'){ if(!paths.length) return; post('albsaveas|'+paths.join('\n')); return; }
   if(a==='edit'){ albEditPaths(paths); return; }
   if(a==='del'){ albDeletePaths(paths); return; }
@@ -3210,12 +3409,12 @@ function albAfterDelete(files){
   if(animated) setTimeout(finish, 240); else finish();
 }
 function albDedup(){
-  const root=window._alb.root;
-  if(root) post('dupsrc|'+root);
+  post('dupalbum');
   setTimeout(function(){
     showDupPanel();
-    if(root) setTimeout(function(){ post('dupscan'); },200);
-  },250);
+    // 相册载入阶段已在后台算好指纹，这里主要做一次快速比对，不再重复读盘
+    setTimeout(function(){ post('dupscan'); }, 120);
+  },200);
 }
 
 // ---- 应用内回收站 ----

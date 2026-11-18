@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.00-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.00/image-batch-tool_v2.00_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.01-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.01/image-batch-tool_v2.01_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 720MB，已内置 Python 运行时与 AI 模型）：
 
-**[👉 下载 image-batch-tool_v2.00_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.00/image-batch-tool_v2.00_setup.exe)**
+**[👉 下载 image-batch-tool_v2.01_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.01/image-batch-tool_v2.01_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -42,7 +42,7 @@
 - **交互**：前后对比拉帘（拖动分割线）、单张重做、参数预设保存/读取/记忆、列表只渲染可视窗口
 - **深色 Mac 风格 UI**：WebView2 渲染
 
-## 相册（v2.00 新增）
+## 相册（v2.00 新增，v2.01 增强）
 
 独立「相册」入口（`相册.lnk --album`），与图片编辑分开启动，支持多根目录、全部 / 照片 / 视频 / 实况 / 文件夹 / 设备 / 人物 / 地图 八个视图。
 
@@ -55,6 +55,14 @@
 - **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存
 
 ![选项菜单](docs/screenshots/album_v2_menu.png)
+
+### v2.01 更新
+- **断点续扫**：扫描过程中每 3 秒或每完成一个目录落盘一次进度，关闭后再启动会跳过已完成目录，从断点继续
+- **右键定位**：相册右键菜单新增「打开图片所在文件夹」，单选时打开资源管理器并选中文件，多选时灰态
+- **覆盖升级保留进度**：扫描索引、缩略图、去重指纹保存在用户目录和缓存目录，覆盖安装后先显示上次已加载内容，再做增量核对
+- **任务栏图标**：相册与图片编辑按启动模式显示对应图标，安装包使用图片编辑图标
+- **加载更流畅**：扫描/去重线程降为低于正常优先级，后台补缩略图时主动给看图操作让路，边扫边显示改为分帧插入
+- **版本统一**：关于界面、安装向导与安装包版本统一为 2.01
 
 ![自动更新](docs/screenshots/album_v2_autoupdate.png)
 
