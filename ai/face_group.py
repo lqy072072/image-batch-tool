@@ -1,31 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-相册 - 人脸分类引擎
-用法：python face_group.py <图片路径列表文件(UTF-8, 每行一个)>
+相册 - 人脸分类引擎（支持增量与断点状态）
+用法：python face_group.py <图片路径列表文件(UTF-8, 每行一个)> [状态文件]
 
-算法：
-  1) 检测：OpenCV YuNet（face_detection_yunet.onnx），比 Haar 稳，带 5 点关键点
-  2) 对齐 + 特征：OpenCV SFace（face_recognition_sface.onnx，ArcFace 系 128 维），
-     官方同一人余弦阈值约 0.363
-  3) 聚类：按余弦相似度贪心归组（取最近组质心，质心随成员更新），
-     再按组内人脸数排序输出
-
-输出行协议（\t 分隔）：
-  P\t<done>\t<total>            进度
-  F\t<gid>\t<path>\tx\ty\tw\th   某人脸所在照片与框（原图像素坐标）
-  G\t<gid>\t<base64 jpeg>       组封面（对齐后的人脸缩略图）
-  E\t<msg>                      非致命错误
+状态文件保存已分析图片的脸部特征和分组，下次只处理新增/变化的图片；
+旧的组仍保留，新增人脸优先归入已有组。
 """
 import base64
+import json
 import os
 import sys
 
 import cv2
 import numpy as np
 
-SIM_THRESHOLD = 0.36      # SFace 余弦阈值（官方 0.363，略放宽提升召回）
-MAX_SIDE = 1400           # 检测前缩放上限，兼顾速度与小人脸召回
+SIM_THRESHOLD = 0.36
+MAX_SIDE = 1400
 CONF = 0.65
+STATE_VERSION = 1
 
 
 def log_err(msg):
@@ -44,7 +36,6 @@ def imread_unicode(path):
 
 
 def ascii_model_path(path):
-    """OpenCV 的 dnn 导入器在含中文的路径上会读不到 onnx，这里复制到纯 ASCII 的临时目录再加载。"""
     try:
         path.encode("ascii")
         return path
@@ -64,11 +55,53 @@ def ascii_model_path(path):
     return dst
 
 
+def norm_feat(values):
+    try:
+        f = np.array(values, dtype=np.float32).reshape(-1)
+        n = float(np.linalg.norm(f))
+        if n < 1e-6:
+            return None
+        return f / n
+    except Exception:
+        return None
+
+
+def load_state(path):
+    try:
+        if path and os.path.exists(path):
+            with open(path, "r", encoding="utf-8-sig") as f:
+                obj = json.load(f)
+            if isinstance(obj, dict):
+                return obj
+    except Exception as e:
+        log_err("读取人脸状态失败: %s" % e)
+    return {}
+
+
+def save_state(path, images, thumbs):
+    if not path:
+        return
+    try:
+        state = {
+            "version": STATE_VERSION,
+            "images": images,
+            "thumbs": thumbs,
+        }
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, path)
+    except Exception as e:
+        log_err("保存人脸状态失败: %s" % e)
+
+
 def main():
     if len(sys.argv) < 2:
         log_err("缺少参数：图片列表文件")
         return 2
     list_file = sys.argv[1]
+    state_file = sys.argv[2] if len(sys.argv) > 2 else ""
     if not os.path.exists(list_file):
         log_err("列表文件不存在")
         return 2
@@ -85,34 +118,116 @@ def main():
 
     with open(list_file, "r", encoding="utf-8-sig") as f:
         paths = [ln.strip() for ln in f if ln.strip()]
-    total = len(paths)
 
-    detector = cv2.FaceDetectorYN_create(ascii_model_path(det_model), "", (640, 640), CONF, 0.3, 1000)
-    recognizer = cv2.FaceRecognizerSF_create(ascii_model_path(rec_model), "")
+    state = load_state(state_file)
+    images = state.get("images", {}) if isinstance(state.get("images", {}), dict) else {}
+    thumbs = state.get("thumbs", {}) if isinstance(state.get("thumbs", {}), dict) else {}
 
-    groups = []      # {"centroid": np.ndarray(128), "count": int, "thumb": (score, b64)}
-    thumbs = {}      # gid -> (score, b64)
+    # 清理旧版本/损坏的条目，重建每组的特征和数量。
+    group_sum = {}
+    group_count = {}
+    max_gid = -1
+    bad = []
+    for path, rec in list(images.items()):
+        if not isinstance(rec, dict) or not isinstance(rec.get("faces"), list):
+            bad.append(path)
+            continue
+        for face in rec.get("faces", []):
+            try:
+                feat = norm_feat(face.get("feat"))
+                gid = int(face.get("gid"))
+            except Exception:
+                feat = None
+            if feat is None:
+                bad.append(path)
+                continue
+            if gid < 0:
+                continue
+            if gid not in group_sum:
+                group_sum[gid] = np.zeros(128, dtype=np.float32)
+                group_count[gid] = 0
+            group_sum[gid] += feat
+            group_count[gid] += 1
+            max_gid = max(max_gid, gid)
+    for path in bad:
+        images.pop(path, None)
+
+    def centroid(gid):
+        s = group_sum.get(gid)
+        if s is None:
+            return None
+        n = float(np.linalg.norm(s))
+        if n < 1e-6:
+            return None
+        return s / n
+
+    def remove_path(path):
+        rec = images.pop(path, None)
+        if not rec:
+            return
+        for face in rec.get("faces", []):
+            try:
+                feat = norm_feat(face.get("feat"))
+                gid = int(face.get("gid"))
+            except Exception:
+                continue
+            if feat is None or gid not in group_sum:
+                continue
+            group_sum[gid] -= feat
+            group_count[gid] = group_count.get(gid, 0) - 1
+            if group_count[gid] <= 0:
+                group_sum.pop(gid, None)
+                group_count.pop(gid, None)
 
     def assign(feat):
+        nonlocal max_gid
         best_gid, best_sim = -1, -1.0
-        for gid, g in enumerate(groups):
-            s = float(np.dot(g["centroid"], feat))
+        for gid in list(group_sum.keys()):
+            c = centroid(gid)
+            if c is None:
+                continue
+            s = float(np.dot(c, feat))
             if s > best_sim:
                 best_sim, best_gid = s, gid
         if best_gid >= 0 and best_sim >= SIM_THRESHOLD:
-            g = groups[best_gid]
-            n = g["count"]
-            c = (g["centroid"] * n + feat) / (n + 1)
-            nrm = np.linalg.norm(c)
-            g["centroid"] = c / nrm if nrm > 1e-6 else feat
-            g["count"] = n + 1
+            group_sum[best_gid] += feat
+            group_count[best_gid] += 1
             return best_gid, best_sim
-        groups.append({"centroid": feat.copy(), "count": 1})
-        return len(groups) - 1, 1.0
+        gid = max_gid + 1
+        max_gid = gid
+        group_sum[gid] = feat.copy()
+        group_count[gid] = 1
+        return gid, 1.0
 
-    done = 0
-    faces_total = 0
+    # 只处理新增或大小/修改时间变化的图片，旧图片不再重新检测。
+    todo = []
+    valid = set(paths)
     for path in paths:
+        try:
+            st = os.stat(path)
+            size, mtime = int(st.st_size), int(st.st_mtime_ns)
+        except Exception:
+            continue
+        old = images.get(path)
+        if old and int(old.get("size", -1)) == size and int(old.get("mtime", -1)) == mtime:
+            continue
+        if old:
+            remove_path(path)
+        images[path] = {"size": size, "mtime": mtime, "faces": []}
+        todo.append(path)
+
+    # 删除已经不在当前相册清单中的旧图片。
+    for path in list(images.keys()):
+        if path not in valid:
+            remove_path(path)
+
+    total = len(todo)
+    detector = cv2.FaceDetectorYN_create(ascii_model_path(det_model), "", (640, 640), CONF, 0.3, 1000)
+    recognizer = cv2.FaceRecognizerSF_create(ascii_model_path(rec_model), "")
+
+    global_max = max(group_sum.keys()) if group_sum else -1
+    done = 0
+    for path in todo:
         done += 1
         if done % 5 == 0 or done == total:
             sys.stdout.write("P\t%d\t%d\n" % (done, total))
@@ -150,36 +265,54 @@ def main():
             try:
                 aligned = recognizer.alignCrop(img, row)
                 feat = recognizer.feature(aligned)
-                feat = np.array(feat, dtype=np.float32).reshape(-1)
-                nrm = np.linalg.norm(feat)
-                if nrm < 1e-6:
+                feat = norm_feat(feat)
+                if feat is None:
                     continue
-                feat = feat / nrm
             except Exception:
                 continue
 
             gid, sim = assign(feat)
-            faces_total += 1
             ox, oy, ow, oh = int(x / scale), int(y / scale), int(bw / scale), int(bh / scale)
-            sys.stdout.write("F\t%d\t%s\t%d\t%d\t%d\t%d\n" % (gid, path, ox, oy, ow, oh))
-            sys.stdout.flush()
+            images[path]["faces"].append({
+                "gid": int(gid),
+                "x": ox, "y": oy, "w": ow, "h": oh,
+                "feat": [round(float(v), 6) for v in feat.tolist()],
+            })
 
-            old = thumbs.get(gid)
-            if old is None or score > old[0]:
+            old = thumbs.get(str(gid))
+            if old is None or score > float(old.get("score", -1)):
                 try:
                     thumb = cv2.resize(aligned, (96, 96), interpolation=cv2.INTER_AREA)
                     ok, buf = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                     if ok:
-                        thumbs[gid] = (score, base64.b64encode(buf.tobytes()).decode("ascii"))
+                        thumbs[str(gid)] = {
+                            "score": round(score, 6),
+                            "b64": base64.b64encode(buf.tobytes()).decode("ascii"),
+                        }
                 except Exception:
                     pass
 
-    for gid in sorted(thumbs.keys()):
-        sys.stdout.write("G\t%d\t%s\n" % (gid, thumbs[gid][1]))
-        sys.stdout.flush()
+    # 输出全部已有分组/人脸，界面可以完整替换。
+    for path in paths:
+        rec = images.get(path)
+        if not rec:
+            continue
+        for face in rec.get("faces", []):
+            sys.stdout.write("F\t%d\t%s\t%d\t%d\t%d\t%d\n" % (
+                int(face.get("gid", 0)), path,
+                int(face.get("x", 0)), int(face.get("y", 0)),
+                int(face.get("w", 0)), int(face.get("h", 0))))
+            sys.stdout.flush()
+
+    for gid in sorted(thumbs.keys(), key=lambda s: int(s)):
+        t = thumbs.get(gid)
+        if isinstance(t, dict) and t.get("b64"):
+            sys.stdout.write("G\t%d\t%s\n" % (int(gid), t["b64"]))
+            sys.stdout.flush()
 
     sys.stdout.write("P\t%d\t%d\n" % (total, total))
     sys.stdout.flush()
+    save_state(state_file, images, thumbs)
     return 0
 
 

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // 图片批处理工具 - WebView2 桌面应用
 // 作者：純潔の工口君
 // ------------------------------------------------------------
@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
@@ -101,6 +102,17 @@ namespace ImageBatchTool
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            // 记录所有未处理异常，避免“窗口一闪就没了”却查不到原因
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (s, e) =>
+            {
+                try { MainForm.Log("UI线程异常: " + e.Exception); } catch { }
+                try { MessageBox.Show("程序遇到异常：\r\n" + e.Exception.Message, "图片批处理工具", MessageBoxButtons.OK, MessageBoxIcon.Error); } catch { }
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                try { MainForm.Log("致命异常: " + e.ExceptionObject); } catch { }
+            };
             string mode = "album";
             if (args != null && args.Length > 0)
             {
@@ -111,10 +123,14 @@ namespace ImageBatchTool
                     if (al == "--album" || al == "/album" || al == "album") { mode = "album"; break; }
                 }
             }
+            MainForm.Log("程序启动 mode=" + mode);
             var main = new MainForm();
             main.StartupMode = mode;
             main.ApplyModeIcon();
+            main.FormClosed += (s, e) => MainForm.Log("主窗口已关闭");
+            Application.ApplicationExit += (s, e) => MainForm.Log("ApplicationExit");
             Application.Run(main);
+            MainForm.Log("Application.Run 返回");
         }
     }
 
@@ -1406,7 +1422,7 @@ namespace ImageBatchTool
         public static void Log(string msg)
         {
             try {
-                string p = Path.Combine(Path.GetDirectoryName(typeof(MainForm).Assembly.Location), "crop_debug.log");
+                string p = Path.Combine(CacheSub("logs"), "app.log");
                 File.AppendAllText(p, DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
             } catch {}
         }
@@ -1432,6 +1448,7 @@ namespace ImageBatchTool
             DoubleBuffered = true;
             Opacity = 0;
 
+            try { MigrateLegacyCache(); } catch {}
             web = new WebView2();
             web.Dock = DockStyle.Fill;
             Controls.Add(web);
@@ -1500,7 +1517,18 @@ namespace ImageBatchTool
         {
             try
             {
-                await web.EnsureCoreWebView2Async(null);
+                string webData = CacheSub("webview2");
+                CoreWebView2Environment env = null;
+                try
+                {
+                    env = await CoreWebView2Environment.CreateAsync(null, webData, null);
+                }
+                catch (Exception ex)
+                {
+                    Log("WebView2 环境创建失败: " + ex.Message);
+                }
+                if (env != null) await web.EnsureCoreWebView2Async(env);
+                else await web.EnsureCoreWebView2Async(null);
                 int tries = 0;
                 while (web.CoreWebView2 == null && tries < 20) { await Task.Delay(100); tries++; }
                 if (web.CoreWebView2 == null) { MessageBox.Show("WebView2 初始化超时"); return; }
@@ -1522,11 +1550,26 @@ namespace ImageBatchTool
                 };
                 web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "app.local", Application.StartupPath, CoreWebView2HostResourceAccessKind.Allow);
+                try
+                {
+                    string mediaDir = CacheSub("media");
+                    web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                        "media.local", mediaDir, CoreWebView2HostResourceAccessKind.Allow);
+                }
+                catch { }
                 web.CoreWebView2.WebMessageReceived += Web_Message;
+                web.CoreWebView2.NavigationCompleted += async (s, e) =>
+                {
+                    Log("页面加载完成 success=" + e.IsSuccess + " url=" + web.Source);
+                    // 兜底：即使页面没有发出 ready，也不能让窗口一直停在 Opacity=0
+                    await Task.Delay(1800);
+                    try { if (Opacity < 1) { Opacity = 1; Show(); Activate(); } } catch { }
+                };
                 string skinFile = Path.Combine(Application.StartupPath, "skin.txt");
                 string skin = "dark";
                 try { if (File.Exists(skinFile)) skin = File.ReadAllText(skinFile).Trim().ToLower(); } catch {}
-                web.CoreWebView2.Navigate("http://app.local/ui.html?skin=" + skin);
+                // 加版本参数和启动模式，避免覆盖安装后 WebView2 继续命中旧 ui.html 的 HTTP 缓存
+                web.CoreWebView2.Navigate("http://app.local/ui.html?skin=" + skin + "&mode=" + StartupMode + "&v=" + DateTime.Now.Ticks);
                 SendState();
             }
             catch (Exception ex) { MessageBox.Show("WebView2 初始化失败：\n" + ex.Message); }
@@ -1580,6 +1623,7 @@ namespace ImageBatchTool
                 switch (action)
                 {
                     case "ready":
+                        Log("页面 ready，显示主窗口");
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
                         Opacity = 1; Show(); Activate();
                         Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
@@ -1840,15 +1884,36 @@ namespace ImageBatchTool
                         break;
                     case "albaddpath":
                         {
-                            string picked2 = "";
-                            InvokeUi(() => {
-                                using (var d = new FolderBrowserDialog()) {
-                                    d.Description = "选择相册文件夹（可普通文件夹，也可直接选磁盘根目录，会扫描全部子目录）";
-                                    d.ShowNewFolderButton = false;
-                                    if (d.ShowDialog() == DialogResult.OK) picked2 = d.SelectedPath;
+                            // 不要在 WebView2 的消息回调里直接弹模态对话框：WebView2 会重入消息循环，
+                            // 容易出现主窗口被隐藏/卡死甚至进程异常。放到消息处理完之后再弹。
+                            Log("打开添加相册路径对话框");
+                            BeginInvoke((Action)(() => {
+                                string picked2 = "";
+                                try
+                                {
+                                    using (var d = new FolderBrowserDialog())
+                                    {
+                                        d.Description = "选择相册文件夹（可普通文件夹，也可直接选磁盘根目录，会扫描全部子目录）";
+                                        d.ShowNewFolderButton = false;
+                                        if (d.ShowDialog(this) == DialogResult.OK) picked2 = d.SelectedPath;
+                                    }
                                 }
-                            });
-                            if (!string.IsNullOrEmpty(picked2)) AddAlbRoot(picked2);
+                                catch (Exception ex)
+                                {
+                                    Log("添加相册路径对话框异常: " + ex.Message);
+                                    Send("{\"type\":\"toast\",\"msg\":" + JsonStr("选择文件夹失败: " + ex.Message) + "}");
+                                }
+                                if (!string.IsNullOrEmpty(picked2))
+                                {
+                                    Log("选择相册路径: " + picked2);
+                                    AddAlbRoot(picked2);
+                                }
+                                else Log("取消添加相册路径");
+                                // 某些系统上文件夹对话框关闭后 WebView2 会丢掉相册模式，这里强制恢复，
+                                // 避免用户看到“相册消失/像崩溃一样”的空白编辑器。
+                                Send("{\"type\":\"appmode\",\"mode\":\"album\"}");
+                                try { web.CoreWebView2.ExecuteScriptAsync("try{setAppMode('album');openAlbum();}catch(e){}"); } catch { }
+                            }));
                         }
                         break;
                     case "albpath":
@@ -1910,6 +1975,9 @@ namespace ImageBatchTool
                             int.TryParse(parts[1], out off0); int.TryParse(parts[2], out cnt0);
                             SendAlbPage(off0, cnt0);
                         }
+                        break;
+                    case "albselectall":
+                        SendAlbAllPaths();
                         break;
                     case "albthumbs":
                         if (parts.Length > 2)
@@ -2269,14 +2337,16 @@ namespace ImageBatchTool
         volatile bool dupRunning = false, dupPaused = false, dupCancel = false;
         volatile bool dupUseAlbum = false;
         volatile bool dupWarmRunning = false, dupWarmDone = false, dupWarmAgain = false;
+        volatile bool dupReady = false;
+        string dupSig = "";
         int dupDone = 0, dupTotal = 0;
-        string dupLastGroupsJson = "{\"type\":\"dupgroups\",\"total\":0,\"items\":[]}";
+        string dupLastGroupsJson = "{\"type\":\"dupgroups\",\"total\":0,\"files\":0,\"items\":[]}";
 
         readonly object dupCacheLock = new object();
         Dictionary<string, DupEnt> dupCache = new Dictionary<string, DupEnt>(StringComparer.OrdinalIgnoreCase);
         volatile bool dupCacheLoaded = false;
 
-        string DupCacheFile() { return Path.Combine(CfgDir(), "dup_index.dat"); }
+        string DupCacheFile() { return Path.Combine(CacheSub("index"), "dup_index.dat"); }
 
         void LoadDupCache()
         {
@@ -2393,7 +2463,15 @@ namespace ImageBatchTool
             var snap = new List<string>();
             foreach (var it in albItems)
                 if (it.type != "video" && IsDupImage(it.path)) snap.Add(it.path);
-            if (snap.Count == 0) return;
+            if (snap.Count == 0) { dupWarmDone = true; TryAutoDup(); return; }
+            // 当前相册签名和上次去重结果一致时，直接复用缓存结果，不再逐张检查指纹。
+            if (TryLoadDupResult())
+            {
+                dupWarmDone = true;
+                Send(dupLastGroupsJson);
+                SendDupState();
+                return;
+            }
             dupWarmRunning = true; dupWarmDone = false; dupWarmAgain = false;
             var t = new Thread(delegate()
             {
@@ -2428,6 +2506,7 @@ namespace ImageBatchTool
                 {
                     dupWarmRunning = false;
                     if (dupWarmAgain) StartDupWarm();
+                    else TryAutoDup();
                 }
             });
             t.IsBackground = true; t.Priority = ThreadPriority.BelowNormal; t.Start();
@@ -2439,6 +2518,82 @@ namespace ImageBatchTool
             string ext = Path.GetExtension(f == null ? "" : f).ToLower();
             return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp" || ext == ".tif" || ext == ".tiff" || ext == ".webp"
                 || ext == ".heic" || ext == ".heif";
+        }
+
+        string DupSigFile() { return Path.Combine(CacheSub("index"), "dup_groups.sig"); }
+        string DupGroupsFile() { return Path.Combine(CacheSub("index"), "dup_groups.json"); }
+
+        string AlbDupSignature()
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var it in albItems)
+                {
+                    if (it.type == "video" || !IsDupImage(it.path)) continue;
+                    sb.Append(it.path.ToLowerInvariant()).Append('\t').Append(it.size).Append('\t');
+                    AlbCacheEnt ce;
+                    if (albIndex.TryGetValue(it.path.ToLowerInvariant(), out ce) && ce != null) sb.Append(ce.mtime);
+                    else
+                    {
+                        try { sb.Append(File.GetLastWriteTimeUtc(it.path).Ticks); } catch { }
+                    }
+                    sb.Append('\n');
+                }
+                using (var md5 = MD5.Create())
+                {
+                    var h = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+                    return BitConverter.ToString(h).Replace("-", "").ToLowerInvariant();
+                }
+            }
+            catch { return ""; }
+        }
+
+        void SaveDupResult(string sig)
+        {
+            try
+            {
+                if (!dupUseAlbum || string.IsNullOrEmpty(sig) || dupLastGroupsJson == null) return;
+                File.WriteAllText(DupGroupsFile(), dupLastGroupsJson, new System.Text.UTF8Encoding(false));
+                File.WriteAllText(DupSigFile(), sig, new System.Text.UTF8Encoding(false));
+                dupSig = sig; dupReady = true;
+            }
+            catch { }
+        }
+
+        bool TryLoadDupResult()
+        {
+            try
+            {
+                string sig = AlbDupSignature();
+                if (string.IsNullOrEmpty(sig)) return false;
+                if (dupReady && dupSig == sig && dupLastGroupsJson != null) return true;
+                string gf = DupGroupsFile(), sf = DupSigFile();
+                if (!File.Exists(gf) || !File.Exists(sf)) return false;
+                if (File.ReadAllText(sf).Trim() != sig) return false;
+                dupLastGroupsJson = File.ReadAllText(gf);
+                dupSig = sig; dupReady = true;
+                return true;
+            }
+            catch { return false; }
+        }
+
+        void TryAutoDup()
+        {
+            if (dupRunning || albItems.Count == 0) return;
+            try
+            {
+                if (TryLoadDupResult())
+                {
+                    Send(dupLastGroupsJson);
+                    SendDupState();
+                    return;
+                }
+                dupUseAlbum = true;
+                if (string.IsNullOrEmpty(dupDst)) dupDst = BinDir();
+                StartDupScan();
+            }
+            catch { }
         }
 
         // Live Photo / 实况照片的伴生文件（视频、编辑记录），主名相同即视为同一组
@@ -2543,7 +2698,7 @@ namespace ImageBatchTool
         {
             DupSend("{\"type\":\"dupstate\",\"src\":" + JsonStr(dupUseAlbum ? "相册全部照片" : dupSrc) + ",\"dst\":" + JsonStr(dupDst) +
                     ",\"running\":" + (dupRunning ? "true" : "false") + ",\"paused\":" + (dupPaused ? "true" : "false") +
-                    ",\"warm\":" + (dupWarmDone ? "true" : "false") + "}");
+                    ",\"warm\":" + (dupWarmDone ? "true" : "false") + ",\"ready\":" + (dupReady ? "true" : "false") + "}");
         }
 
         void StartDupScan()
@@ -2556,7 +2711,8 @@ namespace ImageBatchTool
             else if (string.IsNullOrEmpty(dupSrc) || !Directory.Exists(dupSrc)) { Send("{\"type\":\"toast\",\"msg\":\"请先选择扫描文件夹\"}"); return; }
             if (string.IsNullOrEmpty(dupDst)) dupDst = BinDir();
             LoadDupCache();
-            dupCancel = false; dupPaused = false; dupRunning = true;
+            dupCancel = false; dupPaused = false; dupRunning = true; dupReady = false;
+            SendDupState();
             var t = new Thread(DupScanThread); t.IsBackground = true; t.Priority = ThreadPriority.BelowNormal; t.Start();
         }
 
@@ -2564,6 +2720,7 @@ namespace ImageBatchTool
         {
             try
             {
+                string scanSig = dupUseAlbum ? AlbDupSignature() : "";
                 DupSend("{\"type\":\"dup\",\"phase\":\"enum\",\"done\":0,\"total\":0}");
                 var paths = new List<string>();
                 if (dupUseAlbum)
@@ -2744,6 +2901,7 @@ namespace ImageBatchTool
                 jsb.Append("]}");
                 dupLastGroupsJson = jsb.ToString();
                 Send(dupLastGroupsJson);
+                if (dupUseAlbum && !dupCancel) SaveDupResult(scanSig);
                 int nodec = 0; foreach (var it0 in list) if (!it0.decoded) nodec++;
                 DupSend("{\"type\":\"dup\",\"phase\":\"done\",\"done\":" + n + ",\"total\":" + n + ",\"groups\":" + outGroups.Count + ",\"nodecode\":" + nodec + "}");
             }
@@ -3172,6 +3330,25 @@ namespace ImageBatchTool
             public int iso;
         }
 
+        class AlbScanDir
+        {
+            public string path, root;
+            public long stamp;
+        }
+
+        class AlbScanCtx
+        {
+            public ConcurrentDictionary<string, AlbCacheEnt> newIndex = new ConcurrentDictionary<string, AlbCacheEnt>();
+            public ConcurrentDictionary<string, long> newStamps = new ConcurrentDictionary<string, long>();
+            public List<AlbItem> items = new List<AlbItem>();
+            public List<AlbItem> pending = new List<AlbItem>();
+            public object gate = new object();
+            public int done = 0;
+            public int streamed = 0;
+            public bool changed = false;
+            public DateTime lastSend = DateTime.UtcNow;
+        }
+
         Dictionary<string, AlbCacheEnt> albIndex = new Dictionary<string, AlbCacheEnt>();
         // 按目录归集的索引：目录未变化时整目录直接复用，不再逐个文件 stat
         Dictionary<string, List<AlbCacheEnt>> albByDir = new Dictionary<string, List<AlbCacheEnt>>();
@@ -3199,9 +3376,7 @@ namespace ImageBatchTool
         {
             try
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                return Path.Combine(dir, "alb_index.dat");
+                return Path.Combine(CacheSub("index"), "alb_index.dat");
             }
             catch { return Path.Combine(Path.GetTempPath(), "alb_index.dat"); }
         }
@@ -3210,9 +3385,7 @@ namespace ImageBatchTool
         {
             try
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                return Path.Combine(dir, "alb_dirs.dat");
+                return Path.Combine(CacheSub("index"), "alb_dirs.dat");
             }
             catch { return Path.Combine(Path.GetTempPath(), "alb_dirs.dat"); }
         }
@@ -3235,6 +3408,78 @@ namespace ImageBatchTool
                 }
             }
             catch { }
+        }
+
+        // 根目录被移除/文件已被删除时，立即把旧索引和旧列表裁剪到当前根目录，
+        // 避免下一轮增量扫描把已移除目录里的图片重新合并回来。
+        void PruneAlbumToCurrentRoots()
+        {
+            var keptItems = new List<AlbItem>();
+            foreach (var it in albItems)
+            {
+                if (string.IsNullOrEmpty(AlbRootOf(it.path))) continue;
+                if (!File.Exists(it.path)) continue;
+                keptItems.Add(it);
+            }
+
+            var keptIndex = new Dictionary<string, AlbCacheEnt>();
+            foreach (var kv in albIndex)
+            {
+                var e = kv.Value;
+                if (e == null || string.IsNullOrEmpty(e.realPath)) continue;
+                if (string.IsNullOrEmpty(AlbRootOf(e.realPath))) continue;
+                if (!File.Exists(e.realPath)) continue;
+                keptIndex[kv.Key] = e;
+            }
+
+            var keptStamps = new Dictionary<string, long>();
+            foreach (var kv in albDirStamp)
+            {
+                if (string.IsNullOrEmpty(AlbRootOf(kv.Key))) continue;
+                if (!Directory.Exists(kv.Key)) continue;
+                keptStamps[kv.Key] = kv.Value;
+            }
+
+            albItems = keptItems;
+            albIndex = keptIndex;
+            albDirStamp = keptStamps;
+            SaveAlbIndex(keptIndex);
+            SaveAlbDirStamps(keptStamps);
+            RebuildAlbByDir();
+        }
+
+        void RebuildAlbByDir()
+        {
+            var byDir = new Dictionary<string, List<AlbCacheEnt>>();
+            foreach (var kv in albIndex)
+            {
+                string dk = Path.GetDirectoryName(kv.Value.realPath);
+                if (dk == null) dk = "";
+                dk = dk.ToLowerInvariant();
+                List<AlbCacheEnt> lst;
+                if (!byDir.TryGetValue(dk, out lst)) { lst = new List<AlbCacheEnt>(); byDir[dk] = lst; }
+                lst.Add(kv.Value);
+            }
+            albByDir = byDir;
+        }
+
+        void SendAlbumStatsNow(bool auto)
+        {
+            int photos = 0, videos = 0, lives = 0, geotag = 0;
+            var devices = new Dictionary<string, int>();
+            foreach (var it in albItems)
+            {
+                if (it.type == "photo") photos++;
+                else if (it.type == "video") videos++;
+                else lives++;
+                if (it.lat != 0 || it.lon != 0) geotag++;
+                string dev = string.IsNullOrEmpty(it.model) ? "未知设备" : it.model;
+                if (it.type != "video") { if (devices.ContainsKey(dev)) devices[dev]++; else devices[dev] = 1; }
+            }
+            Send("{\"type\":\"albstats\",\"root\":" + JsonStr(albRoots.Count > 0 ? albRoots[0] : "") +
+                 ",\"roots\":" + JsonStr(string.Join("\n", albRoots.ToArray())) + ",\"total\":" + albItems.Count +
+                 ",\"photos\":" + photos + ",\"videos\":" + videos + ",\"lives\":" + lives + ",\"geo\":" + geotag +
+                 ",\"devices\":" + devices.Count + (auto ? ",\"auto\":true" : ""));
         }
 
         void SaveAlbDirStamps(Dictionary<string, long> stamps)
@@ -3327,6 +3572,13 @@ namespace ImageBatchTool
                     if (stamps.ContainsKey(dk)) continue;   // 这个目录本轮已扫完，以新结果为准（可丢掉已删文件）
                     if (!merged.ContainsKey(kv.Key)) merged[kv.Key] = kv.Value;
                 }
+                // 中途落盘也不能把已移除根目录的旧条目写回来。
+                var dropKeys = new List<string>();
+                foreach (var kv in merged) if (string.IsNullOrEmpty(AlbRootOf(kv.Value.realPath))) dropKeys.Add(kv.Key);
+                foreach (var k in dropKeys) merged.Remove(k);
+                var dropStamps = new List<string>();
+                foreach (var kv in stamps) if (string.IsNullOrEmpty(AlbRootOf(kv.Key))) dropStamps.Add(kv.Key);
+                foreach (var k in dropStamps) stamps.Remove(k);
                 SaveAlbIndex(merged);
                 SaveAlbDirStamps(stamps);
             }
@@ -3353,6 +3605,8 @@ namespace ImageBatchTool
                 {
                     var e = kv.Value;
                     if (string.IsNullOrEmpty(e.realPath) || !File.Exists(e.realPath)) continue;
+                    // 已从相册移除的根目录，其旧索引不能再出现在缓存相册里。
+                    if (string.IsNullOrEmpty(AlbRootOf(e.realPath))) continue;
                     var it = new AlbItem();
                     it.path = e.realPath;
                     it.name = Path.GetFileName(e.realPath);
@@ -3392,12 +3646,106 @@ namespace ImageBatchTool
             catch { }
         }
 
+        // ---- 统一缓存根目录：安装目录下 cache（安装目录不可写时回退到 LocalAppData） ----
+        static string CacheRoot()
+        {
+            string d = Path.Combine(Application.StartupPath, "cache");
+            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); return d; }
+            catch
+            {
+                try
+                {
+                    d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ImageBatchTool", "cache");
+                    if (!Directory.Exists(d)) Directory.CreateDirectory(d);
+                    return d;
+                }
+                catch { return Path.Combine(Path.GetTempPath(), "ImageBatchTool_cache"); }
+            }
+        }
+
+        static string CacheSub(string name)
+        {
+            string d = Path.Combine(CacheRoot(), name);
+            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); } catch { }
+            return d;
+        }
+
+        // 详情页内嵌播放视频时，WebView2 不允许 http://app.local 直接读 file:/// 视频。
+        // 把伴生视频复制/更新到 cache\media，再通过 media.local 虚拟站点提供同源可播放地址。
+        static string AlbPrepareMedia(string src)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(src) || !File.Exists(src)) return "";
+                string dir = CacheSub("media");
+                var fi = new FileInfo(src);
+                string key = src.ToLowerInvariant() + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks;
+                string hash;
+                using (var md5 = System.Security.Cryptography.MD5.Create())
+                {
+                    byte[] hb = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key));
+                    hash = BitConverter.ToString(hb).Replace("-", "").Substring(0, 8).ToLowerInvariant();
+                }
+                string baseName = Path.GetFileNameWithoutExtension(src);
+                foreach (char c in Path.GetInvalidFileNameChars()) baseName = baseName.Replace(c, '_');
+                string ext = Path.GetExtension(src).ToLowerInvariant();
+                string name = baseName + "_" + hash + ext;
+                string dst = Path.Combine(dir, name);
+                if (!File.Exists(dst) || new FileInfo(dst).Length != fi.Length)
+                    File.Copy(src, dst, true);
+                return "http://media.local/" + Uri.EscapeDataString(name);
+            }
+            catch { return ""; }
+        }
+
+        static void MoveCacheContents(string src, string dst)
+        {
+            try
+            {
+                if (!Directory.Exists(src)) return;
+                Directory.CreateDirectory(dst);
+                foreach (var f in Directory.GetFiles(src))
+                {
+                    try
+                    {
+                        string to = Path.Combine(dst, Path.GetFileName(f));
+                        if (!File.Exists(to)) File.Move(f, to);
+                        else File.Delete(f);
+                    }
+                    catch { }
+                }
+                try { Directory.Delete(src, true); } catch { }
+            }
+            catch { }
+        }
+
+        // 把旧版本的临时缩略图 / AppData 索引迁移到新的安装目录 cache
+        static void MigrateLegacyCache()
+        {
+            try
+            {
+                MoveCacheContents(Path.Combine(Path.GetTempPath(), "ibt_thumbs"), CacheSub("thumbs"));
+                MoveCacheContents(Path.Combine(Path.GetTempPath(), "ibt_vthumbs"), CacheSub("vthumbs"));
+                string oldCfg = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+                string newIdx = CacheSub("index");
+                foreach (var n in new[] { "alb_index.dat", "alb_dirs.dat", "dup_index.dat" })
+                {
+                    try
+                    {
+                        string old = Path.Combine(oldCfg, n);
+                        string dst = Path.Combine(newIdx, n);
+                        if (File.Exists(old) && !File.Exists(dst)) File.Move(old, dst);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
         // ---- 缩略图磁盘缓存 ----
         static string AlbThumbDir()
         {
-            string d = Path.Combine(Path.GetTempPath(), "ibt_thumbs");
-            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); } catch { }
-            return d;
+            return CacheSub("thumbs");
         }
         static string AlbThumbFile(string path)
         {
@@ -3539,6 +3887,8 @@ namespace ImageBatchTool
                 bool dup = false;
                 foreach (var r in albRoots) if (string.Equals(r.TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) { dup = true; break; }
                 if (!dup) { albRoots.Add(p); SaveAlbRoots(); SetupAlbWatchers(); }
+                Log("添加相册根目录: " + p + " (共 " + albRoots.Count + " 个)");
+                PruneAlbumToCurrentRoots();
                 SendAlbRoots();
                 StartAlbumScan();
             }
@@ -3551,13 +3901,19 @@ namespace ImageBatchTool
                 if (string.Equals(albRoots[i].TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) albRoots.RemoveAt(i);
             SaveAlbRoots();
             SetupAlbWatchers();
+            PruneAlbumToCurrentRoots();
             SendAlbRoots();
             if (albRoots.Count == 0)
             {
                 albItems = new List<AlbItem>();
                 Send("{\"type\":\"albstats\",\"root\":\"\",\"total\":0,\"photos\":0,\"videos\":0,\"lives\":0,\"geo\":0,\"devices\":0}");
             }
-            else StartAlbumScan();
+            else
+            {
+                // 先把旧根目录的图片从当前列表里清掉，再开始新一轮扫描。
+                SendAlbumStatsNow(false);
+                StartAlbumScan();
+            }
         }
 
         bool IsAlbImage(string f)
@@ -3663,219 +4019,310 @@ namespace ImageBatchTool
             catch { }
         }
 
+        void AlbScanSendProgress(AlbScanCtx ctx, long total)
+        {
+            long done; int items;
+            lock (ctx.gate) { done = ctx.done; items = ctx.items.Count; }
+            if (total > 0 && done > total) done = total;
+            Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":" + done + ",\"total\":" + total + ",\"items\":" + items + "}");
+        }
+
+        void AlbScanFlush(AlbScanCtx ctx, long total, bool force)
+        {
+            lock (ctx.gate)
+            {
+                if (ctx.pending.Count == 0)
+                {
+                    if (force) AlbScanSendProgress(ctx, total);
+                    return;
+                }
+                bool due = force || ctx.pending.Count >= 120 || (DateTime.UtcNow - ctx.lastSend).TotalMilliseconds >= 350;
+                if (!due) return;
+                int take = force ? ctx.pending.Count : Math.Min(ctx.pending.Count, 200);
+                var batch = ctx.pending.GetRange(0, take);
+                ctx.pending.RemoveRange(0, take);
+                ctx.streamed += take;
+                SendAlbPartial(batch, ctx.items.Count);
+                ctx.lastSend = DateTime.UtcNow;
+                long done = ctx.done;
+                if (total > 0 && done > total) done = total;
+                Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":" + done + ",\"total\":" + total + ",\"items\":" + ctx.items.Count + "}");
+            }
+        }
+
+        void AlbScanAppend(AlbScanCtx ctx, List<AlbItem> batch, long total)
+        {
+            if (batch == null || batch.Count == 0) return;
+            lock (ctx.gate)
+            {
+                ctx.items.AddRange(batch);
+                ctx.pending.AddRange(batch);
+            }
+            AlbScanFlush(ctx, total, false);
+        }
+
+        void AlbScanCheckpointNow(AlbScanCtx ctx)
+        {
+            try
+            {
+                if ((DateTime.UtcNow - albLastCkpt).TotalSeconds < 3) return;
+                albLastCkpt = DateTime.UtcNow;
+                var idx = new Dictionary<string, AlbCacheEnt>(ctx.newIndex);
+                var stamps = new Dictionary<string, long>(ctx.newStamps);
+                SaveAlbIndexPartial(idx, stamps);
+            }
+            catch { }
+        }
+
+        void AlbScanDirWorker(AlbScanDir job, AlbScanCtx ctx, bool full, long total)
+        {
+            try
+            {
+                string dpath = job.path;
+                string dl = dpath.ToLowerInvariant();
+                long liveStamp = job.stamp;
+                try { liveStamp = Directory.GetLastWriteTimeUtc(dpath).Ticks; } catch { }
+                bool cachedDir = !full && job.stamp != 0 && liveStamp == job.stamp && albDirStamp.ContainsKey(dl) && albDirStamp[dl] == job.stamp;
+                string dirRoot = job.root;
+
+                var dirItems = new List<AlbItem>(64);
+                var imgBase = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var vidBase = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                if (cachedDir)
+                {
+                    List<AlbCacheEnt> ents;
+                    if (albByDir.TryGetValue(dl, out ents) && ents != null && ents.Count > 0)
+                    {
+                        foreach (var ce in ents)
+                        {
+                            string bn = Path.GetFileNameWithoutExtension(ce.realPath);
+                            if (IsAlbImage(ce.realPath)) { if (!imgBase.ContainsKey(bn)) imgBase[bn] = ce.realPath; }
+                            else if (IsAlbVideo(ce.realPath)) { if (!vidBase.ContainsKey(bn)) vidBase[bn] = ce.realPath; }
+                        }
+                        foreach (var ce in ents)
+                        {
+                            Interlocked.Increment(ref ctx.done);
+                            string lk = ce.realPath.ToLowerInvariant();
+                            AlbItem it = AlbItemFromEnt(ce, dirRoot);
+                            string bn = Path.GetFileNameWithoutExtension(ce.realPath);
+                            bool isImg = IsAlbImage(ce.realPath);
+                            if (isImg) it.type = vidBase.ContainsKey(bn) ? "live" : "photo";
+                            else if (imgBase.ContainsKey(bn)) continue;
+                            else it.type = "video";
+                            ctx.newIndex[lk] = ce;
+                            dirItems.Add(it);
+                            if (dirItems.Count >= 150)
+                            {
+                                AlbScanAppend(ctx, dirItems, total);
+                                dirItems = new List<AlbItem>(64);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    var files = new List<FileInfo>(64);
+                    try
+                    {
+                        var di = new DirectoryInfo(dpath);
+                        foreach (var fi in di.EnumerateFiles())
+                        {
+                            if (IsAlbImage(fi.Name) || IsAlbVideo(fi.Name)) files.Add(fi);
+                        }
+                    }
+                    catch { }
+                    foreach (var fi in files)
+                    {
+                        string bn = Path.GetFileNameWithoutExtension(fi.Name);
+                        if (IsAlbImage(fi.Name)) { if (!imgBase.ContainsKey(bn)) imgBase[bn] = fi.FullName; }
+                        else { if (!vidBase.ContainsKey(bn)) vidBase[bn] = fi.FullName; }
+                    }
+                    foreach (var fi in files)
+                    {
+                        Interlocked.Increment(ref ctx.done);
+                        string f = fi.FullName;
+                        bool isImg = IsAlbImage(f);
+                        string bn = Path.GetFileNameWithoutExtension(f);
+                        if (!isImg && imgBase.ContainsKey(bn)) continue;
+                        long fsize = 0, mt = 0;
+                        try { fsize = fi.Length; mt = fi.LastWriteTimeUtc.Ticks; } catch { }
+                        string lk = f.ToLowerInvariant();
+                        AlbCacheEnt ce;
+                        albIndex.TryGetValue(lk, out ce);
+                        bool hit = ce != null && ce.size == fsize && ce.mtime == mt && mt != 0;
+
+                        var it = new AlbItem();
+                        it.path = f; it.name = fi.Name; it.root = dirRoot;
+                        string rel = it.root.Length > 0 && f.Length >= it.root.Length ? f.Substring(it.root.Length).TrimStart('\\') : f;
+                        it.folder = Path.GetDirectoryName(rel);
+                        if (string.IsNullOrEmpty(it.folder)) it.folder = ".";
+                        it.size = fsize;
+                        it.type = isImg ? (vidBase.ContainsKey(bn) ? "live" : "photo") : "video";
+
+                        if (hit)
+                        {
+                            it.taken = ce.taken; it.w = ce.w; it.h = ce.h;
+                            it.lat = ce.lat; it.lon = ce.lon; it.dur = ce.dur;
+                            it.make = ce.make; it.model = ce.model; it.lens = ce.lens;
+                            it.fnum = ce.fnum; it.exposure = ce.exposure; it.focal = ce.focal; it.iso = ce.iso;
+                        }
+                        else
+                        {
+                            ctx.changed = true;
+                            it.taken = mt > 0 ? (long)((mt - 621355968000000000L) / 10000000L) : 0;
+                            if (isImg)
+                            {
+                                ExifMeta meta;
+                                if (ExifDetail(f, out meta))
+                                {
+                                    if (meta.taken > 0) it.taken = meta.taken;
+                                    it.lat = meta.lat; it.lon = meta.lon;
+                                    it.make = meta.make; it.model = meta.model; it.lens = meta.lens;
+                                    it.fnum = meta.fnum; it.exposure = meta.exposure; it.focal = meta.focal; it.iso = meta.iso;
+                                }
+                                try { using (var b = DupLoad(f)) { it.w = b.Width; it.h = b.Height; } } catch { }
+                                if (it.w == 0)
+                                {
+                                    try { using (var b = ShellThumb(f, 256)) { if (b != null) { it.w = b.Width; it.h = b.Height; } } } catch { }
+                                }
+                            }
+                            else
+                            {
+                                double du = 0; long ct = 0;
+                                if (Mp4Info(f, out du, out ct)) { it.dur = du; if (ct > 0) it.taken = ct; }
+                            }
+                            ce = new AlbCacheEnt();
+                            ce.realPath = f; ce.size = fsize; ce.mtime = mt; ce.type = it.type;
+                            ce.taken = it.taken; ce.w = it.w; ce.h = it.h; ce.lat = it.lat; ce.lon = it.lon; ce.dur = it.dur;
+                            ce.make = it.make; ce.model = it.model; ce.lens = it.lens;
+                            ce.fnum = it.fnum; ce.exposure = it.exposure; ce.focal = it.focal; ce.iso = it.iso;
+                        }
+                        ce.realPath = f;
+                        ctx.newIndex[lk] = ce;
+                        dirItems.Add(it);
+                        if (dirItems.Count >= 150)
+                        {
+                            AlbScanAppend(ctx, dirItems, total);
+                            dirItems = new List<AlbItem>(64);
+                        }
+                    }
+                }
+
+                AlbScanAppend(ctx, dirItems, total);
+                ctx.newStamps[dl] = liveStamp;
+            }
+            catch (Exception ex)
+            {
+                Log("目录扫描失败 " + job.path + ": " + ex.Message);
+            }
+        }
+
         void AlbScanThread()
         {
             try
             {
+                var roots = new List<string>(albRoots);
+                Log("相册扫描开始 roots=" + string.Join(" | ", roots.ToArray()) + " full=" + albScanFull);
                 Send("{\"type\":\"albscan\",\"phase\":\"enum\",\"done\":0,\"total\":0}");
                 LoadAlbIndex();
                 LoadAlbDirStamps();
                 bool full = albScanFull;
+
                 var skipDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
                     "$RECYCLE.BIN", "System Volume Information", "$WinREAgent", "node_modules", ".git",
                     "Windows", "Program Files", "Program Files (x86)", "ProgramData"
                 };
-                var newIndex = new Dictionary<string, AlbCacheEnt>();
-                var newStamps = new Dictionary<string, long>();
-                var items = new List<AlbItem>();
-                bool changed = false;
-                var pending = new List<AlbItem>();
-                int streamed = 0;
-                var lastSend = DateTime.UtcNow;
 
-                foreach (var root in albRoots)
+                // 第一遍只做目录枚举和媒体文件计数，得到真实总数；多根目录同时枚举。
+                var jobs = new ConcurrentBag<AlbScanDir>();
+                long[] totalBox = new long[1];
+                int enumParallel = Math.Max(2, Math.Min(6, Environment.ProcessorCount));
+                Parallel.ForEach(roots, new ParallelOptions { MaxDegreeOfParallelism = enumParallel }, root =>
                 {
                     var stack = new Stack<DirectoryInfo>();
-                    try { stack.Push(new DirectoryInfo(root)); } catch { continue; }
+                    try { stack.Push(new DirectoryInfo(root)); } catch { return; }
                     while (stack.Count > 0)
                     {
-                        var di = stack.Pop();
+                        DirectoryInfo di;
+                        try { di = stack.Pop(); } catch { break; }
                         string dpath = di.FullName;
-                        string dl = dpath.ToLowerInvariant();
-                        long dirM = 0;
-                        try { dirM = di.LastWriteTimeUtc.Ticks; } catch { }
-                        bool cachedDir = !full && dirM != 0 && albDirStamp.ContainsKey(dl) && albDirStamp[dl] == dirM;
-                        string dirRoot = AlbRootOf(dpath) ?? "";
-
+                        long stamp = 0;
+                        try { stamp = di.LastWriteTimeUtc.Ticks; } catch { }
                         try
                         {
                             foreach (var sub in di.EnumerateDirectories())
                             {
-                                string sn = sub.Name;
-                                if (skipDirs.Contains(sn)) continue;
+                                if (skipDirs.Contains(sub.Name)) continue;
+                                try { if ((sub.Attributes & FileAttributes.ReparsePoint) != 0) continue; } catch { }
                                 stack.Push(sub);
                             }
                         }
                         catch { }
-
-                        var dirItems = new List<AlbItem>(64);
-                        var imgBase = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                        var vidBase = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-                        if (cachedDir)
+                        int count = 0;
+                        try
                         {
-                            List<AlbCacheEnt> ents;
-                            if (albByDir.TryGetValue(dl, out ents) && ents != null && ents.Count > 0)
-                            {
-                                // 目录时间戳没变：直接复用上次的元数据，完全不碰磁盘
-                                foreach (var ce in ents)
-                                {
-                                    string bn = Path.GetFileNameWithoutExtension(ce.realPath);
-                                    if (IsAlbImage(ce.realPath)) { if (!imgBase.ContainsKey(bn)) imgBase[bn] = ce.realPath; }
-                                    else if (IsAlbVideo(ce.realPath)) { if (!vidBase.ContainsKey(bn)) vidBase[bn] = ce.realPath; }
-                                }
-                                foreach (var ce in ents)
-                                {
-                                    string lk = ce.realPath.ToLowerInvariant();
-                                    AlbItem it = AlbItemFromEnt(ce, dirRoot);
-                                    string bn = Path.GetFileNameWithoutExtension(ce.realPath);
-                                    bool isImg = IsAlbImage(ce.realPath);
-                                    if (isImg) it.type = vidBase.ContainsKey(bn) ? "live" : "photo";
-                                    else if (imgBase.ContainsKey(bn)) continue; // 已算作实况照片的伴生视频
-                                    else it.type = "video";
-                                    newIndex[lk] = ce;
-                                    dirItems.Add(it);
-                                }
-                            }
+                            foreach (var fi in di.EnumerateFiles())
+                                if (IsAlbImage(fi.Name) || IsAlbVideo(fi.Name)) count++;
                         }
-                        else
-                        {
-                            var files = new List<FileInfo>(64);
-                            try
-                            {
-                                foreach (var fi in di.EnumerateFiles())
-                                {
-                                    if (IsAlbImage(fi.Name) || IsAlbVideo(fi.Name)) files.Add(fi);
-                                }
-                            }
-                            catch { }
-                            foreach (var fi in files)
-                            {
-                                string bn = Path.GetFileNameWithoutExtension(fi.Name);
-                                if (IsAlbImage(fi.Name)) { if (!imgBase.ContainsKey(bn)) imgBase[bn] = fi.FullName; }
-                                else { if (!vidBase.ContainsKey(bn)) vidBase[bn] = fi.FullName; }
-                            }
-                            foreach (var fi in files)
-                            {
-                                string f = fi.FullName;
-                                bool isImg = IsAlbImage(f);
-                                string bn = Path.GetFileNameWithoutExtension(f);
-                                if (!isImg && imgBase.ContainsKey(bn)) continue;
-                                long fsize = 0, mt = 0;
-                                try { fsize = fi.Length; mt = fi.LastWriteTimeUtc.Ticks; } catch { }
-                                string lk = f.ToLowerInvariant();
-                                AlbCacheEnt ce;
-                                albIndex.TryGetValue(lk, out ce);
-                                bool hit = ce != null && ce.size == fsize && ce.mtime == mt && mt != 0;
-
-                                var it = new AlbItem();
-                                it.path = f; it.name = fi.Name; it.root = dirRoot;
-                                string rel = it.root.Length > 0 && f.Length >= it.root.Length ? f.Substring(it.root.Length).TrimStart('\\') : f;
-                                it.folder = Path.GetDirectoryName(rel);
-                                if (string.IsNullOrEmpty(it.folder)) it.folder = ".";
-                                it.size = fsize;
-                                it.type = isImg ? (vidBase.ContainsKey(bn) ? "live" : "photo") : "video";
-
-                                if (hit)
-                                {
-                                    it.taken = ce.taken; it.w = ce.w; it.h = ce.h;
-                                    it.lat = ce.lat; it.lon = ce.lon; it.dur = ce.dur;
-                                    it.make = ce.make; it.model = ce.model; it.lens = ce.lens;
-                                    it.fnum = ce.fnum; it.exposure = ce.exposure; it.focal = ce.focal; it.iso = ce.iso;
-                                }
-                                else
-                                {
-                                    changed = true;
-                                    it.taken = mt > 0 ? (long)((mt - 621355968000000000L) / 10000000L) : 0;
-                                    if (isImg)
-                                    {
-                                        ExifMeta meta;
-                                        if (ExifDetail(f, out meta))
-                                        {
-                                            if (meta.taken > 0) it.taken = meta.taken;
-                                            it.lat = meta.lat; it.lon = meta.lon;
-                                            it.make = meta.make; it.model = meta.model; it.lens = meta.lens;
-                                            it.fnum = meta.fnum; it.exposure = meta.exposure; it.focal = meta.focal; it.iso = meta.iso;
-                                        }
-                                        try { using (var b = DupLoad(f)) { it.w = b.Width; it.h = b.Height; } } catch { }
-                                        if (it.w == 0)
-                                        {
-                                            try { using (var b = ShellThumb(f, 256)) { if (b != null) { it.w = b.Width; it.h = b.Height; } } } catch { }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        double du = 0; long ct = 0;
-                                        if (Mp4Info(f, out du, out ct)) { it.dur = du; if (ct > 0) it.taken = ct; }
-                                    }
-                                    ce = new AlbCacheEnt();
-                                    ce.realPath = f; ce.size = fsize; ce.mtime = mt; ce.type = it.type;
-                                    ce.taken = it.taken; ce.w = it.w; ce.h = it.h; ce.lat = it.lat; ce.lon = it.lon; ce.dur = it.dur;
-                                    ce.make = it.make; ce.model = it.model; ce.lens = it.lens;
-                                    ce.fnum = it.fnum; ce.exposure = it.exposure; ce.focal = it.focal; ce.iso = it.iso;
-                                }
-                                ce.realPath = f;
-                                newIndex[lk] = ce;
-                                dirItems.Add(it);
-                                // 单个超大平铺目录也要边解析边推送，不能等整个目录跑完
-                                if (dirItems.Count >= 150)
-                                {
-                                    items.AddRange(dirItems);
-                                    pending.AddRange(dirItems);
-                                    dirItems.Clear();
-                                    if (streamed < 900 && pending.Count > 0)
-                                    {
-                                        int take0 = Math.Min(pending.Count, 200);
-                                        var batch0 = pending.GetRange(0, take0);
-                                        pending.RemoveRange(0, take0);
-                                        streamed += take0;
-                                        SendAlbPartial(batch0, items.Count);
-                                        lastSend = DateTime.UtcNow;
-                                        Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":" + items.Count + ",\"total\":" + items.Count + "}");
-                                        AlbScanCheckpoint(newIndex, newStamps);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (dirItems.Count > 0)
-                        {
-                            items.AddRange(dirItems);
-                            pending.AddRange(dirItems);
-                            bool due = pending.Count >= 120 || (DateTime.UtcNow - lastSend).TotalMilliseconds >= 350;
-                            if (due && streamed < 900)
-                            {
-                                int take = Math.Min(pending.Count, 200);
-                                var batch = pending.GetRange(0, take);
-                                pending.RemoveRange(0, take);
-                                streamed += take;
-                                SendAlbPartial(batch, items.Count);
-                                lastSend = DateTime.UtcNow;
-                                Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":" + items.Count + ",\"total\":" + items.Count + "}");
-                            }
-                        }
-                        newStamps[dl] = dirM;
-                        AlbScanCheckpoint(newIndex, newStamps);
+                        catch { }
+                        if (count > 0) Interlocked.Add(ref totalBox[0], count);
+                        jobs.Add(new AlbScanDir { path = dpath, root = AlbRootOf(dpath) ?? "", stamp = stamp });
                     }
-                }
+                });
 
-                if (pending.Count > 0 && streamed < 900)
+                long total = totalBox[0];
+                var ctx = new AlbScanCtx();
+                Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":0,\"total\":" + total + "}");
+                int scanParallel = Math.Max(2, Math.Min(6, Environment.ProcessorCount));
+                var scanTask = Task.Run(() =>
                 {
-                    SendAlbPartial(pending, items.Count);
-                    pending.Clear();
-                }
+                    Parallel.ForEach(jobs, new ParallelOptions { MaxDegreeOfParallelism = scanParallel }, job =>
+                        AlbScanDirWorker(job, ctx, full, total));
+                });
 
-                bool changed2 = changed || items.Count != albItems.Count;
+                // 主线程每 2 秒刷新真实进度，并落一次断点；扫描线程不阻塞界面。
+                while (!scanTask.IsCompleted)
+                {
+                    if (scanTask.Wait(2000)) break;
+                    AlbScanSendProgress(ctx, total);
+                    AlbScanCheckpointNow(ctx);
+                }
+                scanTask.Wait();
+                AlbScanFlush(ctx, total, true);
+                AlbScanSendProgress(ctx, total);
+
+                var items = ctx.items;
+                var newIndex = new Dictionary<string, AlbCacheEnt>(ctx.newIndex);
+                var newStamps = new Dictionary<string, long>(ctx.newStamps);
+                bool changed2 = ctx.changed || items.Count != albItems.Count;
+
+                items.RemoveAll(delegate(AlbItem it) { return string.IsNullOrEmpty(AlbRootOf(it.path)); });
+                var finalIndex = new Dictionary<string, AlbCacheEnt>();
+                foreach (var kv in newIndex)
+                {
+                    if (kv.Value == null || string.IsNullOrEmpty(kv.Value.realPath)) continue;
+                    if (string.IsNullOrEmpty(AlbRootOf(kv.Value.realPath))) continue;
+                    finalIndex[kv.Key] = kv.Value;
+                }
+                newIndex = finalIndex;
+                var finalStamps = new Dictionary<string, long>();
+                foreach (var kv in newStamps)
+                {
+                    if (string.IsNullOrEmpty(AlbRootOf(kv.Key))) continue;
+                    finalStamps[kv.Key] = kv.Value;
+                }
+                newStamps = finalStamps;
                 items.Sort(delegate(AlbItem a, AlbItem b) {
                     if (a.taken != b.taken) return b.taken.CompareTo(a.taken);
                     return string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase);
                 });
+
                 bool autoUpdate = albScanAuto || albItems.Count > 0;
                 albItems = items;
                 albIndex = newIndex;
                 SaveAlbIndex(newIndex);
                 SaveAlbDirStamps(newStamps);
-                // 重建目录索引，下一次扫描直接按目录命中
                 var byDir = new Dictionary<string, List<AlbCacheEnt>>();
                 foreach (var kv in newIndex)
                 {
@@ -3928,9 +4375,10 @@ namespace ImageBatchTool
                     }
                     catch { }
                 }
-                try { StartDupWarm(); StartAlbThumbWarm(); } catch { }
+                try { StartDupWarm(); StartAlbThumbWarm(); StartFaceScan(true); } catch { }
+                Log("相册扫描完成 items=" + items.Count + " files=" + total);
             }
-            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("相册扫描失败: " + ex.Message) + "}"); }
+            catch (Exception ex) { Log("相册扫描异常: " + ex); Send("{\"type\":\"toast\",\"msg\":" + JsonStr("相册扫描失败: " + ex.Message) + "}"); }
             finally
             {
                 albRunning = false;
@@ -3942,6 +4390,23 @@ namespace ImageBatchTool
                     StartAlbumScan(true, false);
                 }
             }
+        }
+
+        void SendAlbAllPaths()
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append("{\"type\":\"albselectall\",\"total\":").Append(albItems.Count).Append(",\"paths\":[");
+                for (int i = 0; i < albItems.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    sb.Append(JsonStr(albItems[i].path));
+                }
+                sb.Append("]}");
+                Send(sb.ToString());
+            }
+            catch { }
         }
 
         void SendAlbPage(int off, int cnt)
@@ -3969,9 +4434,7 @@ namespace ImageBatchTool
 
         static string VThumbDir()
         {
-            string d = Path.Combine(Path.GetTempPath(), "ibt_vthumbs");
-            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); } catch { }
-            return d;
+            return CacheSub("vthumbs");
         }
 
         static string VThumbCache(string path)
@@ -4022,7 +4485,6 @@ namespace ImageBatchTool
                     if (c != null && !File.Exists(c)) todo.Add(v);
                 }
                 if (todo.Count == 0) return;
-                if (todo.Count > 600) todo = todo.GetRange(0, 600);
                 string py = PyExePath();
                 const int CH = 20;
                 for (int i = 0; i < todo.Count; i += CH)
@@ -4187,10 +4649,21 @@ namespace ImageBatchTool
                 }
                 catch { }
                 string comps = "";
+                string liveVid = "";
                 if (typ == "live")
                 {
                     var cs = DupCompanions(path);
-                    if (cs != null) { for (int i = 0; i < cs.Length; i++) { if (i > 0) comps += ", "; comps += Path.GetFileName(cs[i]); } }
+                    if (cs != null)
+                    {
+                        for (int i = 0; i < cs.Length; i++)
+                        {
+                            if (i > 0) comps += ", ";
+                            comps += Path.GetFileName(cs[i]);
+                            string ext = Path.GetExtension(cs[i]).ToLowerInvariant();
+                            if (liveVid.Length == 0 && (ext == ".mov" || ext == ".mp4"))
+                                liveVid = cs[i];
+                        }
+                    }
                 }
                 string mk = hit != null ? (hit.make ?? "") : "";
                 string md = hit != null ? (hit.model ?? "") : "";
@@ -4210,12 +4683,16 @@ namespace ImageBatchTool
                     }
                 }
                 string addr = (la != 0 || lo != 0) ? GeoCached(la, lo) : "";
+                string liveUrl = (typ == "live" && liveVid.Length > 0) ? AlbPrepareMedia(liveVid) : "";
+                string videoUrl = typ == "video" ? AlbPrepareMedia(path) : "";
                 Send("{\"type\":\"albview\",\"p\":" + JsonStr(path) + ",\"n\":" + JsonStr(Path.GetFileName(path)) +
                      ",\"t\":" + JsonStr(typ) + ",\"s\":" + sz + ",\"w\":" + w + ",\"h\":" + h +
                      ",\"dt\":" + dt + ",\"d\":" + (long)du +
                      ",\"la\":" + la.ToString("0.######", CultureInfo.InvariantCulture) +
                      ",\"lo\":" + lo.ToString("0.######", CultureInfo.InvariantCulture) +
                      ",\"c\":" + JsonStr(comps) +
+                     ",\"lv\":" + JsonStr(liveVid) + ",\"lvurl\":" + JsonStr(liveUrl) +
+                     ",\"vu\":" + JsonStr(videoUrl) +
                      ",\"mk\":" + JsonStr(mk) + ",\"md\":" + JsonStr(md) + ",\"ln\":" + JsonStr(ln) +
                      ",\"ap\":" + ap.ToString("0.##", CultureInfo.InvariantCulture) +
                      ",\"ex\":" + ex.ToString("0.########", CultureInfo.InvariantCulture) +
@@ -4327,12 +4804,75 @@ namespace ImageBatchTool
         // ---- 人脸分组（调用 python + OpenCV 检测与聚类）----
         volatile bool faceRunning = false;
         volatile bool faceStop = false;
+        volatile bool faceAgain = false;
         System.Diagnostics.Process faceProc = null;
+        string faceLastJson = "";
 
-        void StartFaceScan()
+        string FaceStateFile() { return Path.Combine(CacheSub("index"), "face_state.json"); }
+        string FaceResultFile() { return Path.Combine(CacheSub("index"), "face_groups.json"); }
+        string FaceSigFile() { return Path.Combine(CacheSub("index"), "face_groups.sig"); }
+
+        string FaceSignature()
         {
-            if (faceRunning) { Send("{\"type\":\"toast\",\"msg\":\"人脸分析正在进行\"}"); return; }
-            if (albItems.Count == 0) { Send("{\"type\":\"toast\",\"msg\":\"相册还没有照片\"}"); return; }
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var it in albItems)
+                {
+                    if (it.type == "video") continue;
+                    sb.Append(it.path.ToLowerInvariant()).Append('\t').Append(it.size).Append('\t');
+                    AlbCacheEnt ce;
+                    if (albIndex.TryGetValue(it.path.ToLowerInvariant(), out ce) && ce != null) sb.Append(ce.mtime);
+                    else { try { sb.Append(File.GetLastWriteTimeUtc(it.path).Ticks); } catch { } }
+                    sb.Append('\n');
+                }
+                using (var md5 = MD5.Create())
+                {
+                    var h = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+                    return BitConverter.ToString(h).Replace("-", "").ToLowerInvariant();
+                }
+            }
+            catch { return ""; }
+        }
+
+        void SaveFaceResult(string json, string sig)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(sig)) return;
+                File.WriteAllText(FaceResultFile(), json, new System.Text.UTF8Encoding(false));
+                File.WriteAllText(FaceSigFile(), sig, new System.Text.UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        bool TryLoadFaceResult()
+        {
+            try
+            {
+                string sig = FaceSignature();
+                if (string.IsNullOrEmpty(sig)) return false;
+                string rf = FaceResultFile(), sf = FaceSigFile();
+                if (!File.Exists(rf) || !File.Exists(sf)) return false;
+                if (File.ReadAllText(sf).Trim() != sig) return false;
+                faceLastJson = File.ReadAllText(rf);
+                return !string.IsNullOrEmpty(faceLastJson);
+            }
+            catch { return false; }
+        }
+
+        void StartFaceScan() { StartFaceScan(false); }
+
+        void StartFaceScan(bool auto)
+        {
+            if (faceRunning) { if (auto) faceAgain = true; else Send("{\"type\":\"toast\",\"msg\":\"人脸分析正在进行\"}"); return; }
+            if (albItems.Count == 0) { if (!auto) Send("{\"type\":\"toast\",\"msg\":\"相册还没有照片\"}"); return; }
+            if (TryLoadFaceResult())
+            {
+                Send(faceLastJson);
+                if (!auto) Send("{\"type\":\"toast\",\"msg\":\"人物分组已是最新\"}");
+                return;
+            }
             faceRunning = true; faceStop = false;
             var th = new Thread(FaceScanThread); th.IsBackground = true; th.Start();
         }
@@ -4342,6 +4882,7 @@ namespace ImageBatchTool
             System.Diagnostics.Process proc = null;
             try
             {
+                string scanSig = FaceSignature();
                 var list = new List<string>();
                 foreach (var it in albItems) if (it.type != "video") list.Add(it.path);
                 string dir = Path.GetDirectoryName(Application.ExecutablePath);
@@ -4351,11 +4892,13 @@ namespace ImageBatchTool
                 if (!File.Exists(script)) { Send("{\"type\":\"toast\",\"msg\":\"缺少 ai\\\\face_group.py\"}"); return; }
                 string listFile = Path.Combine(Path.GetTempPath(), "ibt_faces_" + DateTime.Now.Ticks + ".txt");
                 File.WriteAllLines(listFile, list.ToArray(), System.Text.Encoding.UTF8);
+                string stateFile = FaceStateFile();
+                try { Directory.CreateDirectory(Path.GetDirectoryName(stateFile)); } catch { }
                 Send("{\"type\":\"albfaces\",\"phase\":\"enum\",\"done\":0,\"total\":" + list.Count + "}");
 
                 var psi = new System.Diagnostics.ProcessStartInfo();
                 psi.FileName = py;
-                psi.Arguments = "\"" + script + "\" \"" + listFile + "\"";
+                psi.Arguments = "\"" + script + "\" \"" + listFile + "\" \"" + stateFile + "\"";
                 psi.UseShellExecute = false;
                 psi.CreateNoWindow = true;
                 psi.RedirectStandardOutput = true;
@@ -4396,11 +4939,18 @@ namespace ImageBatchTool
                         Send("{\"type\":\"toast\",\"msg\":" + JsonStr("人脸分析: " + line) + "}");
                     }
                 }
-                try { proc.WaitForExit(5000); } catch { }
+                int exitCode = -1;
+                try { proc.WaitForExit(5000); exitCode = proc.ExitCode; } catch { }
 
                 if (faceStop)
                 {
                     Send("{\"type\":\"albfaces\",\"phase\":\"stop\"}");
+                    return;
+                }
+                // 模型缺失等原因导致脚本异常退出时，不要把空结果写成缓存，否则以后会一直显示 0 个人物。
+                if (exitCode != 0 && facesTotal == 0)
+                {
+                    Send("{\"type\":\"albfaces\",\"phase\":\"error\",\"msg\":" + JsonStr("人脸分析失败，脚本退出码 " + exitCode) + "}");
                     return;
                 }
 
@@ -4422,7 +4972,10 @@ namespace ImageBatchTool
                     shown++;
                 }
                 sb.Append("]}");
-                Send(sb.ToString());
+                string faceJson = sb.ToString();
+                faceLastJson = faceJson;
+                Send(faceJson);
+                SaveFaceResult(faceJson, scanSig);
             }
             catch (Exception ex)
             {
@@ -4433,6 +4986,11 @@ namespace ImageBatchTool
                 try { if (proc != null && !proc.HasExited) proc.Kill(); } catch { }
                 faceProc = null;
                 faceRunning = false;
+                if (faceAgain)
+                {
+                    faceAgain = false;
+                    StartFaceScan(true);
+                }
             }
         }
 
@@ -4794,7 +5352,10 @@ namespace ImageBatchTool
                 delFile(DupCacheFile());
                 delFile(DupCacheFile() + ".tmp");
                 lock (dupCacheLock) { dupCache.Clear(); dupCacheLoaded = false; }
-                // 2) 缩略图 / 视频封面缓存
+                // 2) 缩略图 / 视频封面缓存（安装目录 cache）
+                delDir(Path.Combine(CacheRoot(), "thumbs"));
+                delDir(Path.Combine(CacheRoot(), "vthumbs"));
+                // 兼容旧版本残留
                 delDir(Path.Combine(Path.GetTempPath(), "ibt_thumbs"));
                 delDir(Path.Combine(Path.GetTempPath(), "ibt_vthumbs"));
                 // 3) 修图/选片过程产生的临时文件（保留最近 2 分钟内的，避免误删正在使用的）
@@ -6648,3 +7209,4 @@ namespace ImageBatchTool
         string JsonStr(string s) { return "\"" + (s??"").Replace("\\","\\\\").Replace("\"","\\\"") + "\""; }
     }
 }
+

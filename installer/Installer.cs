@@ -155,7 +155,6 @@ namespace ImageBatchInstaller
             bottomPanel.Controls.Add(backBtn);
 
             var authorLabel = new Label();
-            authorLabel.Text = "by Doubao";
             authorLabel.ForeColor = SubTextColor;
             authorLabel.Font = new Font("微软雅黑", 8.5f);
             authorLabel.AutoSize = false;
