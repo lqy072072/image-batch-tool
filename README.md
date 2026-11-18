@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v1.07-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.07_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v1.07-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.07/image-batch-tool_v1.07_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 604MB，已内置 Python 运行时与 AI 模型）：
 
-**[👉 下载 image-batch-tool_v1.07_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.07_setup.exe)**
+**[👉 下载 image-batch-tool_v1.07_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.07/image-batch-tool_v1.07_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
