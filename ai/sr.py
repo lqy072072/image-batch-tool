@@ -87,12 +87,20 @@ def main():
 
     tile = 256        # 分块边长（模型输入）
     overlap = 16      # 重叠像素，用于融合接缝
-    out = np.zeros((H * scale, W * scale, 3), dtype=np.float32)
-    weight = np.zeros((H * scale, W * scale, 1), dtype=np.float32)
+
+    # 先跑一块探测模型真实放大倍数（x4 模型也能给「2× 导出」用，避免只取左上角）
+    probe = cv2.copyMakeBorder(img[:min(tile, H), :min(tile, W)], 0, max(0, tile - min(tile, H)),
+                               0, max(0, tile - min(tile, W)), cv2.BORDER_REPLICATE)
+    a, b = probe.shape[:2]
+    pout = run_tile(sess, probe, in_name, False)
+    real_scale = max(1, int(round(pout.shape[0] / float(a))))
+
+    out = np.zeros((H * real_scale, W * real_scale, 3), dtype=np.float32)
+    weight = np.zeros((H * real_scale, W * real_scale, 1), dtype=np.float32)
 
     # 羽化权重（中间 1，边缘渐变）
-    ramp = np.ones(tile * scale, dtype=np.float32)
-    ramp_len = overlap * scale
+    ramp = np.ones(tile * real_scale, dtype=np.float32)
+    ramp_len = overlap * real_scale
     if ramp_len > 1:
         f = (np.arange(ramp_len, dtype=np.float32) + 1) / ramp_len
         ramp[:ramp_len] = f
@@ -115,10 +123,10 @@ def main():
             else:
                 pad = patch
             up = run_tile(sess, pad, in_name, False)
-            oh, ow = int(ph * scale), int(pw * scale)
+            oh, ow = int(ph * real_scale), int(pw * real_scale)
             up = up[:oh, :ow]
             w = wgt[:oh, :ow]
-            oy, ox = y * scale, x * scale
+            oy, ox = y * real_scale, x * real_scale
             out[oy:oy + oh, ox:ox + ow] += up * w
             weight[oy:oy + oh, ox:ox + ow] += w
 
@@ -129,6 +137,10 @@ def main():
     res = (out * 255).astype(np.uint8)
     res = cv2.fastNlMeansDenoisingColored(res, None, 2, 2, 7, 21)
     res = cv2.detailEnhance(res, sigma_s=6, sigma_r=0.10)
+
+    # 模型倍数 != 目标倍数时再缩放到目标（x4 模型出 2× 也走这里）
+    if scale != real_scale:
+        res = cv2.resize(res, (W * scale, H * scale), interpolation=cv2.INTER_AREA if scale < real_scale else cv2.INTER_LANCZOS4)
 
     if dst.lower().endswith(".png"):
         cv2.imencode(".png", res)[1].tofile(dst)

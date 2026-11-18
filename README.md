@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v1.06-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.06_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v1.07-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.07_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 604MB，已内置 Python 运行时与 AI 模型）：
 
-**[👉 下载 image-batch-tool_v1.06_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.06_setup.exe)**
+**[👉 下载 image-batch-tool_v1.07_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v1.06/image-batch-tool_v1.07_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -126,6 +126,13 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 ```
 
 ## 更新记录
+
+### v1.07
+- 美颜新增 **去油光 / 牙齿美白 / 脖子肤色统一 / 眼神光**（只压不抬、口腔区保护、上脸肤色增益上限、虹膜左上补真实高光点）
+- 证件照质量三项：**肩线水平检测**（输出倾角）、**发丝边缘颜色去污**（按与底色色差压 alpha，消除亮边）、**300dpi 校验并写入 DPI 元数据**（冲印按 300dpi 打印）
+- 输出新增 **统一转 sRGB**：读取源图内嵌 ICC 做真实色彩转换，解决相机 Adobe RGB 图在手机/网页偏色
+- Real-ESRGAN 真超分权重接入说明与分块推理（有 onnx 权重时自动启用，否则 Lanczos 兜底）
+- 关于页版本号改为 1.07
 
 ### v1.06
 - 新增 **输出与批处理**：多线程并发（AI 相关分支自动退回串行）、断点续跑、重名策略（覆盖/加序号/跳过）、EXIF + ICC 元数据保留（方向归一）

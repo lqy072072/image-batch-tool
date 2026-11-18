@@ -989,8 +989,9 @@ namespace ImageBatchTool
         // ---- 美颜相机（分项美颜）参数拼装：beauty_pro.py 接受 smooth=60,white=35,... ----
         static readonly string[] ProKeys = { "smooth", "white", "spot", "dark", "eye", "lip",
                                              "lipcolor", "rosy", "slim", "eyesize", "nose", "chin",
-                                             "aifix", "aifix_strength" };
-        static readonly double[] ProDefaults = { 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 55 };
+                                             "aifix", "aifix_strength",
+                                             "shine", "teeth", "neck", "glint" };
+        static readonly double[] ProDefaults = { 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 55, 0, 0, 0, 0 };
 
         public static string BuildParams(System.Collections.Generic.Dictionary<string, double> par)
         {
@@ -1760,7 +1761,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start(Path.Combine(Application.StartupPath, "luts")); } catch {}
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 1.06\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 1.07\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -3622,6 +3623,14 @@ namespace ImageBatchTool
                     var ep = new EncoderParameters(1);
                     ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
                     outBmp.Save(dst, LUT.JpegCodec, ep);
+
+                    // 统一转 sRGB：拿源图内嵌 ICC 做真实色彩转换（只在开启时多跑一次 Python）
+                    if (par.ContainsKey("icc_convert") && par["icc_convert"] > 0.5)
+                    {
+                        string iccErr;
+                        string iccOut = PyTools.Run(BeautyRunner.PythonExe, "srgb.py", new string[] { dst }, 60000, out iccErr);
+                        if (iccOut != null && iccOut.Contains("\"converted\": true")) Log("已转 sRGB: " + Path.GetFileName(dst));
+                    }
                 }
                 finally
                 {

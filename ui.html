@@ -400,6 +400,7 @@ window.addEventListener('mouseup', function(e) {
         <label class="chk"><input type="checkbox" onchange="setParam('out_subdir',this.checked?1:0)"> 保留来源子目录</label>
         <label class="chk"><input type="checkbox" onchange="setParam('skip_existing',this.checked?1:0)"> 断点续跑（已导出则跳过）</label>
         <label class="chk"><input type="checkbox" checked onchange="setParam('exif_keep',this.checked?1:0)"> 保留 EXIF / ICC</label>
+        <label class="chk"><input type="checkbox" onchange="setParam('icc_convert',this.checked?1:0)"> 统一转 sRGB（去相机 ICC 偏色）</label>
         <label class="chk"><input type="checkbox" onchange="setParam('dither',this.checked?1:0)"> 8bit 抖动（消渐变断层）</label>
         <label class="chk"><input type="checkbox" onchange="setParam('lut_linear',this.checked?1:0)"> 线性空间套 LUT</label>
         <div class="row-line" style="gap:6px">
@@ -770,6 +771,10 @@ const beautySliders = [
   ['bps_eye','亮眼',0,100,0],
   ['bps_lip','口红',0,100,0],
   ['bps_rosy','红润',0,100,0],
+  ['bps_shine','去油光',0,100,0],
+  ['bps_teeth','牙齿美白',0,100,0],
+  ['bps_neck','脖子肤色统一',0,100,0],
+  ['bps_glint','眼神光',0,100,0],
   ['bps_slim','瘦脸',0,100,0],
   ['bps_eyesize','大眼',0,100,0],
   ['bps_nose','瘦鼻',0,100,0],

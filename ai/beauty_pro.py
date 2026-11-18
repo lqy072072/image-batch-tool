@@ -326,6 +326,88 @@ def op_rosy(crop, w, cheek_mask, s):
     return blend(crop, out, ww * 0.85)
 
 
+def op_shine(crop, w, s):
+    """去油光：皮肤内「高亮度 + 低饱和」的镜面反光压回局部底色，保留毛孔质感"""
+    if s <= 0 or w.max() <= 0:
+        return crop
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    V = hsv[:, :, 2].astype(np.float32)
+    S = hsv[:, :, 1].astype(np.float32)
+    hi = ((V > 190) & (S < 80) & (w > 0.20)).astype(np.float32)
+    if hi.sum() < 24:
+        return crop
+    sig = max(2.0, min(crop.shape[:2]) * 0.014)
+    base = cv2.GaussianBlur(crop, (0, 0), sig * 2.2)
+    # 只压不抬：取原图与局部底色的较小值，避免变成一块灰斑
+    target = np.minimum(crop.astype(np.float32), base.astype(np.float32) * 1.02)
+    m = np.clip(feather(hi, 0.006) * w * s * 0.9, 0, 1)
+    return blend(crop, target.astype(np.uint8), m)
+
+
+def op_teeth(crop, mask, s):
+    """牙齿美白：口腔区内「低饱和 + 中高亮度」的像素当作牙齿，去黄提亮"""
+    if s <= 0:
+        return crop
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    V = hsv[:, :, 2].astype(np.float32)
+    S = hsv[:, :, 1].astype(np.float32)
+    teeth = ((mask == 11) & (S < 85) & (V > 105)).astype(np.float32)
+    if teeth.sum() < 16:
+        return crop                                        # 没露牙就不动，避免糊嘴
+    m = np.clip(feather(teeth, 0.004) * s * 0.85, 0, 1)
+    lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB).astype(np.float32)
+    lab[:, :, 0] = np.clip(lab[:, :, 0] + (255.0 - lab[:, :, 0]) * 0.20 * s, 0, 255)
+    lab[:, :, 1] = 128.0 + (lab[:, :, 1] - 128.0) * (1.0 - 0.25 * s)   # 去红
+    lab[:, :, 2] = 128.0 + (lab[:, :, 2] - 128.0) * (1.0 - 0.32 * s)   # 去黄
+    out = cv2.cvtColor(np.clip(lab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR)
+    return blend(crop, out, m)
+
+
+def op_neck(crop, w, y0, s):
+    """颈/下脸肤色统一：下巴以下皮肤按上脸肤色做受限增益，把「脸白脖子黑」拉平"""
+    if s <= 0 or w.max() <= 0:
+        return crop
+    h, wd = crop.shape[:2]
+    y0 = int(max(2, min(h - 2, y0)))
+    band = np.zeros((h, wd), np.float32)
+    band[y0:] = 1.0
+    lower = w * band
+    upper = w.copy()
+    upper[y0:] = 0.0
+    if lower.sum() < 150 or upper.sum() < 150:
+        return crop
+    ref = crop[upper > 0.5].astype(np.float32).mean(axis=0)
+    cur = crop[lower > 0.5].astype(np.float32).mean(axis=0)
+    gain = np.clip(ref / np.maximum(cur, 1.0), 0.82, 1.22)      # 增益封顶，防止过曝
+    src = crop.astype(np.float32)
+    adj = np.clip(src * (gain * s + (1.0 - s)), 0, 255)
+    m = np.clip(lower * (0.55 * s), 0, 1)
+    return blend(crop, adj.astype(np.uint8), m)
+
+
+def op_glint(crop, eyes, s):
+    """眼神光：在虹膜左上补一个小高光点，让眼睛「活」起来"""
+    if s <= 0 or eyes.max() <= 0:
+        return crop
+    out = crop.astype(np.float32)
+    n, lab, stats, _ = cv2.connectedComponentsWithStats((eyes > 0.3).astype(np.uint8), 8)
+    h, wd = crop.shape[:2]
+    for i in range(1, n):
+        area = stats[i, cv2.CC_STAT_AREA]
+        if area < h * wd * 0.0004:
+            continue
+        cx, cy = float(lab[i][0]), float(lab[i][1])
+        r = max(2, int(np.sqrt(area / np.pi) * 0.5))
+        gx, gy = int(cx - r * 0.38), int(cy - r * 0.38)
+        if not (0 <= gx < wd and 0 <= gy < h):
+            continue
+        m = np.zeros((h, wd), np.float32)
+        cv2.circle(m, (gx, gy), max(1, int(r * 0.75)), 1.0, -1)
+        m = cv2.GaussianBlur(m, (0, 0), max(1.0, r * 0.7)) * (0.75 * s)
+        out = out + (255.0 - out) * m[:, :, None]
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
 # ---------------------------------------------------------------- 几何层变形
 def _grid(h, wd):
     yy, xx = np.mgrid[0:h, 0:wd].astype(np.float32)
@@ -505,6 +587,10 @@ def process_face(img, face, p, parser, mesher):
     work = op_eye(work, eyes.astype(np.float32), p['eye'] / 100.0)
     work = op_lip(work, lips.astype(np.float32), p['lip'] / 100.0, int(p['lipcolor']))
     work = op_rosy(work, skin_w, cheek, p['rosy'] / 100.0)
+    work = op_shine(work, skin_w, p['shine'] / 100.0)
+    work = op_teeth(work, mask, p['teeth'] / 100.0)
+    work = op_neck(work, skin_w, int((cy - y1) + fw * 0.38), p['neck'] / 100.0)
+    work = op_glint(work, eyes.astype(np.float32), p['glint'] / 100.0)
 
     work = warp_all(work, pts, p, fw, keep=rigid_soft)
 
@@ -526,6 +612,7 @@ DEFAULTS = {
     'smooth': 0.0, 'white': 0.0, 'spot': 0.0, 'dark': 0.0, 'eye': 0.0,
     'lip': 0.0, 'lipcolor': 2.0, 'rosy': 0.0, 'slim': 0.0, 'eyesize': 0.0,
     'nose': 0.0, 'chin': 0.0, 'aifix': 0.0, 'aifix_strength': 55.0,
+    'shine': 0.0, 'teeth': 0.0, 'neck': 0.0, 'glint': 0.0,
 }
 
 

@@ -137,8 +137,49 @@ def replace_bg(img, color, face=None, mask=None):
     mask2 = cv2.erode((mask > 127).astype(np.uint8), np.ones((er * 2 + 1, er * 2 + 1), np.uint8))
     alpha = cv2.GaussianBlur(mask2.astype(np.float32), (0, 0), max(1.0, min(img.shape[:2]) * 0.003))
     alpha = np.clip(alpha, 0, 1)
-    out = img.astype(np.float32) * alpha[:, :, None] + np.array(color, np.float32) * (1 - alpha[:, :, None])
+    # 颜色去污：边缘像素若接近底色，说明是半透明混合，按色差把 alpha 再压一点，
+    # 发丝不会裹一圈亮边 / 原背景残留色
+    bg = np.array(color, np.float32)
+    d = np.linalg.norm(img.astype(np.float32) - bg[None, None, :], axis=2)
+    a_color = np.clip(d / 55.0, 0, 1)
+    edge = cv2.dilate(mask2.astype(np.uint8), np.ones((er * 4 + 1, er * 4 + 1), np.uint8)).astype(np.float32)
+    edge = cv2.GaussianBlur(edge, (0, 0), max(1.0, er * 2.0))
+    a_color = np.clip(a_color + (1.0 - edge), 0, 1)      # 只作用于边缘带
+    alpha = np.minimum(alpha, np.maximum(a_color, alpha * 0.55))
+    out = img.astype(np.float32) * alpha[:, :, None] + bg[None, None, :] * (1 - alpha[:, :, None])
     return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def estimate_shoulder_angle(mask):
+    """肩线水平度：取抠图下半部分每列最低点拟合直线，返回倾角（度，正值右肩高）"""
+    if mask is None:
+        return None
+    ys, xs = np.where(mask > 127)
+    if len(ys) < 50:
+        return None
+    h, w = mask.shape[:2]
+    y_cut = int(ys.min() + (ys.max() - ys.min()) * 0.72)   # 只看肩部及以下
+    cols, bots = [], []
+    for x in range(int(w * 0.12), int(w * 0.88)):
+        col = np.where(mask[y_cut:, x] > 127)[0]
+        if len(col) >= 2:
+            cols.append(x)
+            bots.append(y_cut + int(col.max()))
+    if len(cols) < 20:
+        return None
+    cols = np.asarray(cols, np.float32)
+    bots = np.asarray(bots, np.float32)
+    k = np.polyfit(cols, bots, 1)[0]
+    return float(np.degrees(np.arctan(k)))
+
+
+def dpi_check(W, H, size_mode):
+    """按证件照实物尺寸估算有效打印分辨率（300dpi 为冲印标准）"""
+    mm = {0: (25.0, 35.0), 1: (35.0, 49.0), 2: (33.0, 48.0)}
+    if size_mode in mm:
+        mw, mh = mm[size_mode]
+        return round(min(W / mw * 25.4, H / mh * 25.4), 1)
+    return None
 
 
 def make_sheet(img, W, H, SW=1800, SH=1200):
@@ -199,18 +240,37 @@ def main():
         img = cv2.imread(src, cv2.IMREAD_COLOR)
 
     portrait, face_out = crop_id_centered(img.copy(), faces, W, H)
-    portrait = replace_bg(portrait, bgc, face_out)
+    p_mask = person_mask(portrait, face_out)
+    portrait = replace_bg(portrait, bgc, face_out, p_mask)
+    shoulder = estimate_shoulder_angle(p_mask)
+    dpi = dpi_check(W, H, size_mode)
 
     if sheet:
         out = make_sheet(portrait, W, H, SW, SH)
     else:
         out = portrait
 
-    if dst.lower().endswith(".png"):
-        cv2.imencode(".png", out)[1].tofile(dst)
-    else:
-        cv2.imencode(".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), 96])[1].tofile(dst)
-    print(json.dumps({"ok": True, "faces": len(faces), "w": out.shape[1], "h": out.shape[0], "sheet": bool(sheet)}))
+    # 输出带 300dpi 元数据，冲印店按 300dpi 打印不会再缩成 72dpi
+    wrote = False
+    try:
+        from PIL import Image
+        im = Image.fromarray(out[:, :, ::-1])
+        if dst.lower().endswith((".jpg", ".jpeg")):
+            im.save(dst, quality=96, subsampling=0, dpi=(300, 300))
+        else:
+            im.save(dst, dpi=(300, 300))
+        wrote = True
+    except Exception:
+        wrote = False
+    if not wrote:
+        if dst.lower().endswith(".png"):
+            cv2.imencode(".png", out)[1].tofile(dst)
+        else:
+            cv2.imencode(".jpg", out, [int(cv2.IMWRITE_JPEG_QUALITY), 96])[1].tofile(dst)
+    print(json.dumps({"ok": True, "faces": len(faces), "w": out.shape[1], "h": out.shape[0],
+                      "sheet": bool(sheet),
+                      "shoulder": None if shoulder is None else round(shoulder, 1),
+                      "dpi": dpi}))
 
 
 if __name__ == "__main__":
