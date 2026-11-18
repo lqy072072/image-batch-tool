@@ -1562,6 +1562,8 @@ namespace ImageBatchTool
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
                         Opacity = 1; Show(); Activate();
                         Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
+                        // 页面这时才真正能收消息：补发一次完整状态（LUT 列表、文件列表、输出目录）
+                        SendState();
                         break;
                     case "addfolder":
                         InvokeUi(() => {
