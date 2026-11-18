@@ -1331,6 +1331,13 @@ namespace ImageBatchTool
         public SplashForm Splash;
         readonly List<string> files = new List<string>();
         readonly List<string> lutFiles = new List<string>();
+        // 字符串参数（输出命名模板等，double 字典放不下）
+        readonly Dictionary<string, string> parS = new Dictionary<string, string>();
+        // 批量暂停 / 中止 / 失败清单
+        volatile bool pauseFlag = false;
+        volatile bool stopFlag = false;
+        readonly List<string[]> failList = new List<string[]>();
+        bool running = false;
         int selected = -1;
         string outputDir = "";
         CubeLut activeLut = null;
@@ -1475,6 +1482,22 @@ namespace ImageBatchTool
                 int tries = 0;
                 while (web.CoreWebView2 == null && tries < 20) { await Task.Delay(100); tries++; }
                 if (web.CoreWebView2 == null) { MessageBox.Show("WebView2 初始化超时"); return; }
+                // 拖放交给宿主窗体处理（WebView2 不吞掉拖放）
+                try { web.AllowExternalDrop = false; } catch { }
+                this.AllowDrop = true;
+                this.DragEnter += (s, ev) => {
+                    if (ev.Data.GetDataPresent(DataFormats.FileDrop)) ev.Effect = DragDropEffects.Copy;
+                    else ev.Effect = DragDropEffects.None;
+                };
+                this.DragDrop += (s, ev) => {
+                    try {
+                        string[] paths = (string[])ev.Data.GetData(DataFormats.FileDrop);
+                        if (paths == null || paths.Length == 0) return;
+                        int added = AddPaths(paths);
+                        AutoSelectFirst(); SendState(); QueuePreview();
+                        Send("{\"type\":\"toast\",\"msg\":\"已添加 " + added + " 张（共 " + files.Count + " 张）\"}");
+                    } catch (Exception ex) { Log("拖放异常: " + ex.Message); }
+                };
                 web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "app.local", Application.StartupPath, CoreWebView2HostResourceAccessKind.Allow);
                 web.CoreWebView2.WebMessageReceived += Web_Message;
@@ -1495,6 +1518,32 @@ namespace ImageBatchTool
                 else
                     web.CoreWebView2.PostWebMessageAsJson(json);
             } catch {}
+        }
+
+        static bool IsImageFile(string f)
+        {
+            string ext = Path.GetExtension(f == null ? "" : f).ToLower();
+            return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp" || ext == ".tif" || ext == ".tiff";
+        }
+
+        // 统一入口：把文件/文件夹路径加入列表（拖放与消息共用）
+        int AddPaths(System.Collections.Generic.IEnumerable<string> paths)
+        {
+            int added = 0;
+            foreach (var p in paths)
+            {
+                try
+                {
+                    if (Directory.Exists(p))
+                    {
+                        foreach (var f in Directory.GetFiles(p, "*.*", SearchOption.AllDirectories))
+                            if (IsImageFile(f) && !files.Contains(f)) { files.Add(f); added++; }
+                    }
+                    else if (IsImageFile(p) && !files.Contains(p)) { files.Add(p); added++; }
+                }
+                catch (Exception ex) { Log("添加路径失败 " + p + ": " + ex.Message); }
+            }
+            return added;
         }
 
         void Web_Message(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -1566,6 +1615,45 @@ namespace ImageBatchTool
                     case "clear":
                         files.Clear(); selected = -1; cachedBase = null;
                         SendState(); Send("{\"type\":\"clearpreview\"}");
+                        break;
+                    case "addpath": {
+                            // 拖放：一次一个路径（文件或文件夹），文件夹递归收集
+                            if (parts.Length < 2) break;
+                            string p = msg.Substring(action.Length + 1);
+                            int added = AddPaths(new string[] { p });
+                            AutoSelectFirst(); SendState(); QueuePreview();
+                            Send("{\"type\":\"toast\",\"msg\":\"已添加 " + added + " 张（共 " + files.Count + " 张）\"}");
+                        }
+                        break;
+                    case "pause": {
+                            if (!running) { Send("{\"type\":\"toast\",\"msg\":\"当前没有正在运行的批量任务\"}"); break; }
+                            pauseFlag = !pauseFlag;
+                            Send("{\"type\":\"runstate\",\"running\":true,\"paused\":" + (pauseFlag ? "true" : "false") + "}");
+                            Send("{\"type\":\"toast\",\"msg\":\"" + (pauseFlag ? "已暂停，处理完当前这张后停下" : "已继续") + "\"}");
+                        }
+                        break;
+                    case "stoprun": {
+                            if (!running) { Send("{\"type\":\"toast\",\"msg\":\"当前没有正在运行的批量任务\"}"); break; }
+                            stopFlag = true; pauseFlag = false;
+                            Send("{\"type\":\"toast\",\"msg\":\"正在停止，未处理的照片会跳过\"}");
+                        }
+                        break;
+                    case "setstr":
+                        if (parts.Length >= 3)
+                            parS[parts[1]] = msg.Substring(action.Length + 1 + parts[1].Length + 1);
+                        break;
+                    case "openfailcsv": {
+                            string lastCsv = parS.ContainsKey("_last_fail_csv") ? parS["_last_fail_csv"] : null;
+                            if (lastCsv != null && File.Exists(lastCsv)) { try { System.Diagnostics.Process.Start(lastCsv); } catch (Exception ex) { Log("打开失败清单失败: " + ex.Message); } }
+                            else Send("{\"type\":\"toast\",\"msg\":\"这次运行没有失败清单，或还没有跑过批量\"}");
+                        }
+                        break;
+                    case "retryfails": {
+                            List<string> retryPaths = new List<string>();
+                            lock (failList) { foreach (var x in failList) retryPaths.Add(x[0]); failList.Clear(); }
+                            if (retryPaths.Count == 0) { Send("{\"type\":\"toast\",\"msg\":\"没有失败项可重试\"}"); break; }
+                            new Thread(() => DoExport(retryPaths)) { IsBackground = true }.Start();
+                        }
                         break;
                     case "setparam":
                         double v; double.TryParse(parts[2], out v);
@@ -1691,7 +1779,7 @@ namespace ImageBatchTool
                             if (ridx >= 0 && ridx < files.Count) {
                                 string rf = files[ridx];
                                 new Thread(() => {
-                                    try { ExportOne(rf); } catch (Exception ex) { Log("重做失败: " + ex.Message); }
+                                    try { ExportOne(rf, ridx + 1); } catch (Exception ex) { Log("重做失败: " + ex.Message); }
                                     Send("{\"type\":\"toast\",\"msg\":\"重做完成：" + Path.GetFileName(rf) + "\"}");
                                     QueuePreview();
                                 }) { IsBackground = true }.Start();
@@ -3412,42 +3500,103 @@ namespace ImageBatchTool
             return bmp;
         }
 
-        // 输出路径：重名策略 0=覆盖 1=加序号 2=跳过
-        string ResolveDst(string srcPath, out bool skip)
+        // 命名模板占位符：{name} {seq} {date} {time} {folder} {yyyy} {mm} {dd}
+        string ExpandName(string tpl, string srcPath, int seq)
+        {
+            string name = Path.GetFileNameWithoutExtension(srcPath);
+            string folder = Path.GetFileName(Path.GetDirectoryName(srcPath));
+            DateTime dt = DateTime.Now;
+            try { dt = File.GetLastWriteTime(srcPath); } catch { }
+            string s = tpl
+                .Replace("{name}", name)
+                .Replace("{seq}", seq.ToString("D3"))
+                .Replace("{date}", dt.ToString("yyyyMMdd"))
+                .Replace("{time}", dt.ToString("HHmmss"))
+                .Replace("{yyyy}", dt.ToString("yyyy"))
+                .Replace("{mm}", dt.ToString("MM"))
+                .Replace("{dd}", dt.ToString("dd"))
+                .Replace("{folder}", folder == null ? "" : folder);
+            foreach (char ch in Path.GetInvalidFileNameChars()) s = s.Replace(ch.ToString(), "_");
+            s = s.Replace("|", "_").Trim();
+            if (s.Length == 0) s = name + "_out";
+            return s;
+        }
+
+        // 输出路径：重名策略 0=覆盖 1=加序号 2=跳过；支持命名模板与保留来源子目录
+        string ResolveDst(string srcPath, int seq, out bool skip)
         {
             skip = false;
-            string baseName = Path.GetFileNameWithoutExtension(srcPath) + "_out";
+            string dir = outputDir;
+            if (par.ContainsKey("out_subdir") && par["out_subdir"] > 0.5)
+            {
+                string parent = Path.GetFileName(Path.GetDirectoryName(srcPath));
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    string sub = Path.Combine(outputDir, parent);
+                    try { Directory.CreateDirectory(sub); dir = sub; } catch { dir = outputDir; }
+                }
+            }
+            string tpl = parS.ContainsKey("out_template") ? parS["out_template"] : "";
+            string baseName = tpl.Trim().Length > 0 ? ExpandName(tpl, srcPath, seq) : Path.GetFileNameWithoutExtension(srcPath) + "_out";
             string ext = ".jpg";
             int mode = par.ContainsKey("dup_mode") ? (int)par["dup_mode"] : 1;
             bool resume = par.ContainsKey("skip_existing") && par["skip_existing"] > 0.5;
-            string first = Path.Combine(outputDir, baseName + ext);
+            string first = Path.Combine(dir, baseName + ext);
             if (resume && File.Exists(first) && new FileInfo(first).Length > 0) { skip = true; return first; }
             if (mode == 0) return first;
             if (!File.Exists(first)) return first;
             if (mode == 2) { skip = true; return first; }
             for (int k = 2; k < 10000; k++)
             {
-                string p = Path.Combine(outputDir, baseName + "_" + k + ext);
+                string p = Path.Combine(dir, baseName + "_" + k + ext);
                 if (!File.Exists(p)) return p;
             }
             return first;
         }
 
-        void ExportOne(string f)
+        void RecordFail(string path, string why)
+        {
+            lock (failList) failList.Add(new string[] { path, why == null ? "" : why });
+        }
+
+        static string CsvCell(string s)
+        {
+            s = (s == null ? "" : s).Replace("\r", " ").Replace("\n", " ");
+            if (s.Contains(",") || s.Contains("\"")) return "\"" + s.Replace("\"", "\"\"") + "\"";
+            return s;
+        }
+
+        string WriteFailCsv()
+        {
+            try
+            {
+                string name = "_failures_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv";
+                string p = Path.Combine(outputDir, name);
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("源文件,原因");
+                lock (failList) foreach (var x in failList) sb.AppendLine(CsvCell(x[0]) + "," + CsvCell(x[1]));
+                File.WriteAllText(p, sb.ToString(), new System.Text.UTF8Encoding(true));
+                return p;
+            }
+            catch (Exception ex) { Log("写失败清单失败: " + ex.Message); return null; }
+        }
+
+        bool ExportOne(string f, int seq)
         {
             bool skip;
-            string dst = ResolveDst(f, out skip);
-            if (skip) { Log("跳过已存在: " + Path.GetFileName(dst)); return; }
+            string dst = ResolveDst(f, seq, out skip);
+            if (skip) { Log("跳过已存在: " + Path.GetFileName(dst)); return true; }
 
             // 证件照走独立流程
             if (par.ContainsKey("id_on") && par["id_on"] > 0.5)
             {
-                ExportIdPhoto(f, dst);
-                return;
+                bool idOk = ExportIdPhoto(f, dst);
+                if (!idOk) RecordFail(f, BeautyRunner.LastError == null ? "证件照处理失败" : BeautyRunner.LastError);
+                return idOk;
             }
 
             Bitmap bmp = RenderOne(f);
-            if (bmp == null) return;
+            if (bmp == null) { RecordFail(f, "渲染失败"); return false; }
             try
             {
                 int sm = par.ContainsKey("out_size") ? (int)par["out_size"] : 0;
@@ -3480,6 +3629,7 @@ namespace ImageBatchTool
                 }
             }
             finally { bmp.Dispose(); }
+            return true;
         }
 
         bool NeedSoloCopy()
@@ -3488,7 +3638,7 @@ namespace ImageBatchTool
                 || (!par.ContainsKey("exif_keep") || par["exif_keep"] > 0.5);
         }
 
-        void ExportIdPhoto(string f, string dst)
+        bool ExportIdPhoto(string f, string dst)
         {
             int sizeMode = par.ContainsKey("id_size") ? (int)par["id_size"] : 0;
             int bg = par.ContainsKey("id_bg") ? (int)par["id_bg"] : 0;
@@ -3502,12 +3652,15 @@ namespace ImageBatchTool
                 string e = (BeautyRunner.LastError ?? "").Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
                 Log("证件照失败 " + Path.GetFileName(f) + ": " + e);
                 Send("{\"type\":\"toast\",\"msg\":\"证件照失败：" + e + "\"}");
+                return false;
             }
-            else Log("证件照完成: " + Path.GetFileName(res));
+            Log("证件照完成: " + Path.GetFileName(res));
+            return true;
         }
 
-        void DoExport()
+        void DoExport(List<string> srcList = null)
         {
+            List<string> list = srcList != null ? srcList : new List<string>(files);
             if (string.IsNullOrEmpty(outputDir)) {
                 string picked = null;
                 InvokeUi(() => {
@@ -3519,8 +3672,12 @@ namespace ImageBatchTool
                 if (string.IsNullOrEmpty(picked)) return;
                 outputDir = picked;
             }
-            int total = files.Count;
+            int total = list.Count;
             if (total == 0) return;
+
+            lock (failList) failList.Clear();
+            running = true; pauseFlag = false; stopFlag = false;
+            Send("{\"type\":\"runstate\",\"running\":true,\"paused\":false}");
 
             // 批量模式：每张图单独分析AI参数，不共用预览缓存
             forceFreshAnalysis = true;
@@ -3535,7 +3692,7 @@ namespace ImageBatchTool
             int workers = aiHeavy ? 1 : (want > 0 ? want : Math.Max(1, Math.Min(4, Environment.ProcessorCount - 1)));
             Log("开始渲染: " + total + " 张，并发 " + workers);
 
-            int cursor = -1, done = 0;
+            int cursor = -1, done = 0, failCount = 0;
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var threads = new List<Thread>();
             for (int w = 0; w < workers; w++)
@@ -3543,10 +3700,18 @@ namespace ImageBatchTool
                 var t = new Thread(() => {
                     while (true)
                     {
+                        while (pauseFlag && !stopFlag) Thread.Sleep(100);
+                        if (stopFlag) break;
                         int idx = Interlocked.Increment(ref cursor);
                         if (idx >= total) break;
-                        try { ExportOne(files[idx]); }
-                        catch (Exception ex) { Log("导出失败 " + files[idx] + ": " + ex.Message); }
+                        try {
+                            if (!ExportOne(list[idx], idx + 1)) Interlocked.Increment(ref failCount);
+                        }
+                        catch (Exception ex) {
+                            Log("导出失败 " + list[idx] + ": " + ex.Message);
+                            RecordFail(list[idx], ex.Message);
+                            Interlocked.Increment(ref failCount);
+                        }
                         int d = Interlocked.Increment(ref done);
                         Send("{\"type\":\"progress\",\"done\":" + d + ",\"total\":" + total + "}");
                     }
@@ -3559,8 +3724,24 @@ namespace ImageBatchTool
 
             forceFreshAnalysis = false;
             ResetAiCache();
-            Send("{\"type\":\"progress\",\"done\":" + total + ",\"total\":" + total + "}");
-            Log("渲染结束: 用时 " + sw.Elapsed.TotalSeconds.ToString("F1") + "s");
+            running = false; pauseFlag = false;
+            Send("{\"type\":\"progress\",\"done\":" + done + ",\"total\":" + total + "}");
+            Send("{\"type\":\"runstate\",\"running\":false,\"paused\":false}");
+            Log("渲染结束: 用时 " + sw.Elapsed.TotalSeconds.ToString("F1") + "s，失败 " + failCount);
+
+            int realFails;
+            lock (failList) realFails = failList.Count;
+            if (realFails > 0) {
+                string csv = WriteFailCsv();
+                if (csv != null) {
+                    parS["_last_fail_csv"] = csv;
+                    Send("{\"type\":\"fails\",\"count\":" + realFails + ",\"csv\":" + JsonStr(csv) + "}");
+                    Send("{\"type\":\"toast\",\"msg\":\"有 " + realFails + " 张失败，已导出清单：_failures_*.csv\"}");
+                }
+            } else {
+                Send("{\"type\":\"toast\",\"msg\":\"全部完成，无失败：" + done + " 张\"}");
+            }
+
             if (par.ContainsKey("open_after") && par["open_after"] > 0.5)
                 try { System.Diagnostics.Process.Start(outputDir); } catch {}
         }

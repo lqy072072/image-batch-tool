@@ -392,10 +392,20 @@ window.addEventListener('mouseup', function(e) {
             <option value="2">跳过</option>
           </select>
         </div>
+        <div class="row-line"><span>命名模板</span>
+          <input id="outTpl" class="mini-input" style="flex:1;min-width:0" placeholder="{name}_{date}_{seq}"
+                 oninput="setStr('out_template', this.value)" title="留空则用「原名_out」">
+        </div>
+        <div style="font-size:10px;color:#666;margin:-3px 0 6px 2px">占位符：{name} {seq} {date} {time} {folder}</div>
+        <label class="chk"><input type="checkbox" onchange="setParam('out_subdir',this.checked?1:0)"> 保留来源子目录</label>
         <label class="chk"><input type="checkbox" onchange="setParam('skip_existing',this.checked?1:0)"> 断点续跑（已导出则跳过）</label>
         <label class="chk"><input type="checkbox" checked onchange="setParam('exif_keep',this.checked?1:0)"> 保留 EXIF / ICC</label>
         <label class="chk"><input type="checkbox" onchange="setParam('dither',this.checked?1:0)"> 8bit 抖动（消渐变断层）</label>
         <label class="chk"><input type="checkbox" onchange="setParam('lut_linear',this.checked?1:0)"> 线性空间套 LUT</label>
+        <div class="row-line" style="gap:6px">
+          <button class="mini-btn" style="flex:1" onclick="post('retryfails')" title="只重跑上次失败的照片">重试失败</button>
+          <button class="mini-btn" style="flex:1" onclick="post('openfailcsv')" title="打开失败清单 CSV">失败清单</button>
+        </div>
         <div class="row-line"><span>导出线程并发数量</span>
           <select class="mini-sel" id="wrkSel" onchange="setParam('workers',this.value)" style="flex:1;min-width:0">
             <option value="0" selected>自动</option>
@@ -674,6 +684,8 @@ window.addEventListener('mouseup', function(e) {
   <div style="flex:1"></div>
   <div class="status-box" id="statusBox" title="当前执行状态">就绪</div>
   <span class="render-name" id="renderName"></span>
+  <button class="tool-btn" id="btnPause" onclick="post('pause')" title="暂停 / 继续（处理完当前这张停下）" style="display:none">暂停</button>
+  <button class="tool-btn" id="btnStop" onclick="post('stoprun')" title="停止剩余照片" style="display:none">停止</button>
   <button class="btn-start" onclick="doExport()">开始</button>
   <div class="progress"><div class="progress-bar" id="pbar"></div></div>
   <span class="status-pct" id="status">0%</span>
@@ -841,6 +853,8 @@ function doExport() {
   document.getElementById('statusBox').textContent = '开始渲染...';
   post('export');
 }
+// 字符串参数（命名模板等）
+function setStr(k, v) { post('setstr|' + k + '|' + v); }
 
 // 滑块
 const lutSliders = [
@@ -1622,6 +1636,19 @@ if (window.chrome && chrome.webview) {
         document.getElementById('renderName').textContent = m.file;
         document.getElementById('statusBox').textContent = m.file;
       }
+    } else if (m.type === 'runstate') {
+      const bp = document.getElementById('btnPause');
+      const bs = document.getElementById('btnStop');
+      const running = !!m.running;
+      if (bp) {
+        bp.style.display = running ? '' : 'none';
+        bp.textContent = m.paused ? '继续' : '暂停';
+      }
+      if (bs) bs.style.display = running ? '' : 'none';
+      if (!running) document.getElementById('statusBox').textContent = '就绪';
+    } else if (m.type === 'fails') {
+      const sb = document.getElementById('statusBox');
+      if (sb) { sb.textContent = m.count + ' 张失败，可点「重试失败」'; sb.style.color = '#ff8f8f'; }
     } else if (m.type === 'orig') {
       _origSrc = m.data;
       renderWipe();
@@ -1764,4 +1791,22 @@ if (window.chrome && chrome.webview) {
   });
 })();
 </script>
+<script>
+// 快捷键：Ctrl+O 添加文件 / Ctrl+Shift+O 添加文件夹 / Ctrl+Enter 开始 / Del 移除 / 空格 拉帘对比
+(function () {
+  function inField(t) { return t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName); }
+  document.addEventListener('keydown', function (e) {
+    if (inField(e.target)) return;
+    var key = e.key;
+    if (e.ctrlKey && !e.shiftKey && (key === 'o' || key === 'O')) { e.preventDefault(); post('addfiles'); return; }
+    if (e.ctrlKey && e.shiftKey && (key === 'o' || key === 'O')) { e.preventDefault(); post('addfolder'); return; }
+    if (e.ctrlKey && key === 'Enter') { e.preventDefault(); if (typeof doExport === 'function') doExport(); return; }
+    if (key === 'Delete' && !e.ctrlKey && !e.altKey) { e.preventDefault(); post('remove'); return; }
+    if (key === ' ' && !e.ctrlKey) {
+      if (typeof toggleWipe === 'function') { e.preventDefault(); toggleWipe(); }
+    }
+  });
+})();
+</script>
+</body></html>
 </body></html>
