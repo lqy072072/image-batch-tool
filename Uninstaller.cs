@@ -135,7 +135,9 @@ static class Uninstaller
             string startMenu = Path.Combine(appData, @"Microsoft\Windows\Start Menu\Programs");
 
             DeleteTree(Path.Combine(appData, "ImageBatchTool"), failed);
+            DeleteTree(Path.Combine(appData, "图片批处理工具"), failed);
             DeleteTree(Path.Combine(localAppData, "ImageBatchTool"), failed);
+            DeleteTree(Path.Combine(localAppData, "ImageBatchTool_cache"), failed);
 
             string[] desktopNames = { "相册.lnk", "图片编辑.lnk", "图片批处理工具.lnk", "卸载图片批处理工具.lnk", "相册.bat", "图片编辑.bat" };
             foreach (string name in desktopNames) DeleteFile(Path.Combine(desktop, name), failed);
@@ -147,9 +149,16 @@ static class Uninstaller
             string temp = Path.GetTempPath();
             DeleteTree(Path.Combine(temp, "ibt_thumbs"), failed);
             DeleteTree(Path.Combine(temp, "ibt_vthumbs"), failed);
+            DeleteTree(Path.Combine(temp, "ImageBatchTool_cache"), failed);
             DeleteTree(Path.Combine(temp, "imgbatch_setup"), failed);
             DeleteFile(Path.Combine(temp, "imgbatch_setup_log.txt"), failed);
             DeleteFile(Path.Combine(temp, "crop_debug.log"), failed);
+            DeleteFile(Path.Combine(temp, "ibt_vthumb_jobs.json"), failed);
+            try
+            {
+                foreach (string f in Directory.GetFiles(temp, "ibt_faces_*.txt")) DeleteFile(f, failed);
+            }
+            catch { }
 
             DeleteRegistryKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\ImageBatchTool", failed);
             DeleteRegistryKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\图片批处理工具", failed);

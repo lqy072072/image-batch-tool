@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -24,6 +24,8 @@ namespace ImageBatchInstaller
         CheckBox desktopShortcut;
         int step = 0;
         string installPath = @"D:\Program Files\图片批量处理工具";
+        internal bool silentMode = false;
+        internal string silentInstallPath = null;
 
         static readonly Color BgColor = Color.FromArgb(32, 32, 36);
         static readonly Color PanelColor = Color.FromArgb(45, 45, 50);
@@ -56,7 +58,7 @@ namespace ImageBatchInstaller
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = BgColor;
             ForeColor = TextColor;
-            Text = "图片批处理工具 v1.04";
+            Text = "图片批处理工具 v2.02";
             DoubleBuffered = true;
 
             // 窗口圆角
@@ -98,7 +100,7 @@ namespace ImageBatchInstaller
             AddCloseCircle(16, 12);
 
             var titleText = new Label();
-            titleText.Text = "图片批处理工具 v1.04 安装向导";
+            titleText.Text = "图片批处理工具 v2.02 安装向导";
             titleText.ForeColor = SubTextColor;
             titleText.Font = new Font("微软雅黑", 9f);
             titleText.AutoSize = false;
@@ -153,13 +155,6 @@ namespace ImageBatchInstaller
             backBtn.Enabled = false;
             backBtn.Click += delegate { if (step > 0) { step--; ShowStep(); } };
             bottomPanel.Controls.Add(backBtn);
-
-            var authorLabel = new Label();
-            authorLabel.ForeColor = SubTextColor;
-            authorLabel.Font = new Font("微软雅黑", 8.5f);
-            authorLabel.AutoSize = false;
-            authorLabel.SetBounds(22, 20, 120, 22);
-            bottomPanel.Controls.Add(authorLabel);
 
             this.Resize += delegate {
                 ApplyWindowRoundedRegion();
@@ -265,7 +260,7 @@ namespace ImageBatchInstaller
                 bodyPanel.Controls.Add(browseBtn);
 
                 desktopShortcut = new CheckBox();
-                desktopShortcut.Text = "在桌面创建快捷方式";
+                desktopShortcut.Text = "在桌面创建「相册」和「图片编辑」快捷方式";
                 desktopShortcut.Checked = true;
                 desktopShortcut.Font = new Font("微软雅黑", 9.5f);
                 desktopShortcut.ForeColor = TextColor;
@@ -355,13 +350,21 @@ namespace ImageBatchInstaller
             if (step < 2) { step++; ShowStep(); }
         }
 
-        void DoInstall()
+        internal void DoInstall()
         {
             try
             {
+                string targetPath = (silentMode && !string.IsNullOrEmpty(silentInstallPath)) ? silentInstallPath : installPath;
                 UpdateStatus("创建目录...");
-                if (!Directory.Exists(installPath))
-                    Directory.CreateDirectory(installPath);
+                if (!Directory.Exists(targetPath))
+                    Directory.CreateDirectory(targetPath);
+
+                UpdateStatus("关闭正在运行的程序...");
+                CloseRunningInstances(targetPath);
+
+                // 覆盖安装时清掉旧版 WebView2 用户数据，避免旧配置/锁文件导致启动白屏或假闪退
+                try { Directory.Delete(Path.Combine(targetPath, "图片批处理工具.exe.WebView2"), true); } catch { }
+                try { File.Delete(Path.Combine(targetPath, "crop_debug.log")); } catch { }
 
                 string myExe = Process.GetCurrentProcess().MainModule.FileName;
                 byte[] self = File.ReadAllBytes(myExe);
@@ -386,58 +389,66 @@ namespace ImageBatchInstaller
                 File.WriteAllBytes(sevenZipDll, ReadRange(self, p7zDll, p7zArch - p7zDll));
                 File.WriteAllBytes(archivePath, ReadRange(self, p7zArch, footerPos - p7zArch));
 
-                UpdateStatus("正在解压文件（约450MB，请稍候）...");
+                UpdateStatus("正在解压文件（请稍候）...");
                 SetProgress(20);
-                var psi = new ProcessStartInfo();
-                psi.FileName = sevenZipExe;
-                psi.Arguments = "x \"" + archivePath + "\" -o\"" + installPath + "\" -y -bso0 -bsp0";
-                psi.UseShellExecute = false;
-                psi.CreateNoWindow = true;
-                psi.WorkingDirectory = tempDir;
-                var p = Process.Start(psi);
+                string sevenZipOutput = "";
+                int pct = 20;
+                int exitCode = ExtractArchive(sevenZipExe, archivePath, targetPath, tempDir, delegate {
+                    if (pct < 85) { pct += 2; SetProgress(pct); }
+                }, out sevenZipOutput);
 
-                // 解压期间模拟进度
-                var timer = new System.Windows.Forms.Timer();
-                int fakeProgress = 20;
-                timer.Interval = 500;
-                timer.Tick += delegate {
-                    if (fakeProgress < 85) {
-                        fakeProgress += 2;
-                        SetProgress(fakeProgress);
-                    }
-                };
-                timer.Start();
-                p.WaitForExit(300000);
-                timer.Stop();
-
-                if (p.ExitCode != 0)
+                if (exitCode != 0)
                 {
-                    throw new Exception("解压失败，代码 " + p.ExitCode);
+                    // 再关一次程序后重试，常见原因是目标文件被占用
+                    CloseRunningInstances(targetPath);
+                    System.Threading.Thread.Sleep(1500);
+                    exitCode = ExtractArchive(sevenZipExe, archivePath, targetPath, tempDir, delegate {}, out sevenZipOutput);
+                }
+
+                if (exitCode != 0)
+                {
+                    string detail = string.IsNullOrEmpty(sevenZipOutput) ? "" : ("：\n" + sevenZipOutput);
+                    throw new Exception("解压失败，代码 " + exitCode + detail + "\n请先关闭『图片批处理工具』后重试，或以管理员身份运行安装包。");
                 }
 
                 SetProgress(90);
 
                 // 验证主程序存在
-                string mainExe = Path.Combine(installPath, "图片批处理工具.exe");
+                string mainExe = Path.Combine(targetPath, "图片批处理工具.exe");
                 if (!File.Exists(mainExe))
                 {
                     // 尝试找exe
-                    var exeFiles = Directory.GetFiles(installPath, "*.exe", SearchOption.TopDirectoryOnly);
+                    var exeFiles = Directory.GetFiles(targetPath, "*.exe", SearchOption.TopDirectoryOnly);
                     if (exeFiles.Length > 0) mainExe = exeFiles[0];
                     else throw new Exception("解压后未找到主程序EXE");
                 }
 
                 UpdateStatus("创建快捷方式...");
                 SetProgress(95);
-                if (desktopShortcut.Checked)
+                bool wantShortcut = silentMode ? true : desktopShortcut.Checked;
+                if (wantShortcut)
                 {
-                    string lnkPath = Path.Combine(GetDesktop(), "图片批处理工具.lnk");
-                    CreateShortcut(mainExe, lnkPath);
-                    if (!File.Exists(lnkPath))
+                    string desktop = GetDesktop();
+                    string albumIco = Path.Combine(targetPath, "相册.ico");
+                    string editIco = Path.Combine(targetPath, "相册_编辑.ico");
+                    if (!File.Exists(albumIco)) albumIco = mainExe;
+                    if (!File.Exists(editIco)) editIco = mainExe;
+
+                    string albumLnk = Path.Combine(desktop, "相册.lnk");
+                    string editLnk = Path.Combine(desktop, "图片编辑.lnk");
+                    CreateShortcut(mainExe, albumLnk, "--album", albumIco, "相册");
+                    CreateShortcut(mainExe, editLnk, "--edit", editIco, "图片编辑");
+
+                    // 兜底：快捷方式创建失败时写 bat
+                    if (!File.Exists(albumLnk))
                     {
-                        // 兜底：直接写bat
-                        string batPath = Path.Combine(GetDesktop(), "图片批处理工具.bat");
-                        File.WriteAllText(batPath, "@echo off\r\ncd /d \"" + installPath + "\"\r\nstart \"\" \"" + mainExe + "\"\r\n");
+                        string batPath = Path.Combine(desktop, "相册.bat");
+                        File.WriteAllText(batPath, "@echo off\r\ncd /d \"" + targetPath + "\"\r\nstart \"\" \"" + mainExe + "\" --album\r\n");
+                    }
+                    if (!File.Exists(editLnk))
+                    {
+                        string batPath = Path.Combine(desktop, "图片编辑.bat");
+                        File.WriteAllText(batPath, "@echo off\r\ncd /d \"" + targetPath + "\"\r\nstart \"\" \"" + mainExe + "\" --edit\r\n");
                     }
                 }
 
@@ -446,6 +457,11 @@ namespace ImageBatchInstaller
             }
             catch (Exception ex)
             {
+                if (silentMode)
+                {
+                    try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "imgbatch_setup_log.txt"), "Silent install error: " + ex + "\r\n"); } catch {}
+                    Environment.Exit(1);
+                }
                 MessageBox.Show("安装失败: " + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -476,7 +492,73 @@ namespace ImageBatchInstaller
             return sb.ToString();
         }
 
-        void CreateShortcut(string target, string lnkPath)
+        // 关闭目标目录里正在运行的主程序，避免覆盖 exe/dll 时解压失败
+        void CloseRunningInstances(string targetPath)
+        {
+            string targetExe = Path.GetFullPath(Path.Combine(targetPath, "图片批处理工具.exe")).ToLowerInvariant();
+            try
+            {
+                foreach (var pr in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (pr.Id == Process.GetCurrentProcess().Id) continue;
+                        string fn = pr.MainModule.FileName;
+                        if (fn == null) continue;
+                        if (Path.GetFullPath(fn).ToLowerInvariant() == targetExe)
+                        {
+                            pr.CloseMainWindow();
+                        }
+                    }
+                    catch { }
+                }
+                System.Threading.Thread.Sleep(2000);
+                foreach (var pr in Process.GetProcesses())
+                {
+                    try
+                    {
+                        if (pr.Id == Process.GetCurrentProcess().Id) continue;
+                        string fn = pr.MainModule.FileName;
+                        if (fn == null) continue;
+                        if (Path.GetFullPath(fn).ToLowerInvariant() == targetExe && !pr.HasExited)
+                        {
+                            pr.Kill();
+                        }
+                    }
+                    catch { }
+                }
+                System.Threading.Thread.Sleep(500);
+            }
+            catch { }
+        }
+
+        int ExtractArchive(string sevenZipExe, string archivePath, string targetPath, string tempDir, Action onTick, out string output)
+        {
+            var sb = new StringBuilder();
+            var psi = new ProcessStartInfo();
+            psi.FileName = sevenZipExe;
+            psi.Arguments = "x \"" + archivePath + "\" -o\"" + targetPath + "\" -y -bso0 -bsp0";
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            psi.WorkingDirectory = tempDir;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            var p = Process.Start(psi);
+            p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) sb.AppendLine(e.Data); };
+            p.ErrorDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) sb.AppendLine(e.Data); };
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+            while (!p.WaitForExit(500))
+            {
+                if (onTick != null) onTick();
+            }
+            p.WaitForExit();
+            output = sb.ToString().Trim();
+            if (output.Length > 1600) output = output.Substring(output.Length - 1600);
+            return p.ExitCode;
+        }
+
+        void CreateShortcut(string target, string lnkPath, string args, string iconPath, string desc)
         {
             try
             {
@@ -486,12 +568,15 @@ namespace ImageBatchInstaller
                     System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { lnkPath });
                 shortcut.GetType().InvokeMember("TargetPath",
                     System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { target });
+                if (!string.IsNullOrEmpty(args))
+                    shortcut.GetType().InvokeMember("Arguments",
+                        System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { args });
                 shortcut.GetType().InvokeMember("WorkingDirectory",
                     System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { Path.GetDirectoryName(target) });
                 shortcut.GetType().InvokeMember("IconLocation",
-                    System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { target + ",0" });
+                    System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { iconPath + ",0" });
                 shortcut.GetType().InvokeMember("Description",
-                    System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { "图片批处理工具" });
+                    System.Reflection.BindingFlags.SetProperty, null, shortcut, new object[] { desc });
                 shortcut.GetType().InvokeMember("Save",
                     System.Reflection.BindingFlags.InvokeMethod, null, shortcut, null);
             } catch (Exception ex) {
@@ -505,6 +590,16 @@ namespace ImageBatchInstaller
         {
             try
             {
+                var cl = Environment.GetCommandLineArgs();
+                if (cl.Length > 1 && string.Equals(cl[1], "/S", StringComparison.OrdinalIgnoreCase))
+                {
+                    var f = new InstallerForm();
+                    f.silentMode = true;
+                    if (cl.Length > 2 && cl[2].StartsWith("/D=", StringComparison.OrdinalIgnoreCase))
+                        f.silentInstallPath = cl[2].Substring(3).Trim('"');
+                    f.DoInstall();
+                    return;
+                }
                 Application.EnableVisualStyles();
                 Application.Run(new InstallerForm());
             }

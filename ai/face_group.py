@@ -17,7 +17,7 @@ import numpy as np
 SIM_THRESHOLD = 0.36
 MAX_SIDE = 1400
 CONF = 0.65
-STATE_VERSION = 1
+STATE_VERSION = 2
 
 
 def log_err(msg):
@@ -102,6 +102,7 @@ def main():
         return 2
     list_file = sys.argv[1]
     state_file = sys.argv[2] if len(sys.argv) > 2 else ""
+    stop_file = sys.argv[3] if len(sys.argv) > 3 else ""
     if not os.path.exists(list_file):
         log_err("列表文件不存在")
         return 2
@@ -210,10 +211,12 @@ def main():
             continue
         old = images.get(path)
         if old and int(old.get("size", -1)) == size and int(old.get("mtime", -1)) == mtime:
-            continue
+            # 兼容旧版状态：没有 done 字段的旧条目视为整轮已完成。
+            if old.get("done", True):
+                continue
         if old:
             remove_path(path)
-        images[path] = {"size": size, "mtime": mtime, "faces": []}
+        images[path] = {"size": size, "mtime": mtime, "faces": [], "done": False}
         todo.append(path)
 
     # 删除已经不在当前相册清单中的旧图片。
@@ -222,75 +225,103 @@ def main():
             remove_path(path)
 
     total = len(todo)
+    album_total = len(paths)
+    processed_before = 0
+    for path in paths:
+        rec = images.get(path)
+        if rec and rec.get("done", True):
+            processed_before += 1
+
     detector = cv2.FaceDetectorYN_create(ascii_model_path(det_model), "", (640, 640), CONF, 0.3, 1000)
     recognizer = cv2.FaceRecognizerSF_create(ascii_model_path(rec_model), "")
 
     global_max = max(group_sum.keys()) if group_sum else -1
     done = 0
+    if total > 0:
+        sys.stdout.write("P\t%d\t%d\n" % (processed_before, album_total))
+        sys.stdout.flush()
     for path in todo:
+        # 用户点“停止分析”或程序准备退出时，从当前断点保存后立刻退出；
+        # 下次启动只处理剩余项，不会重新从第一张开始。
+        if stop_file and os.path.exists(stop_file):
+            save_state(state_file, images, thumbs)
+            sys.stdout.write("P\t%d\t%d\n" % (processed_before + done, album_total))
+            sys.stdout.flush()
+            return 0
         done += 1
         if done % 5 == 0 or done == total:
-            sys.stdout.write("P\t%d\t%d\n" % (done, total))
+            sys.stdout.write("P\t%d\t%d\n" % (processed_before + done, album_total))
             sys.stdout.flush()
 
-        img = imread_unicode(path)
-        if img is None:
-            continue
-        h0, w0 = img.shape[:2]
-        scale = 1.0
-        if max(h0, w0) > MAX_SIDE:
-            scale = MAX_SIDE / float(max(h0, w0))
-            img = cv2.resize(img, (int(w0 * scale), int(h0 * scale)), interpolation=cv2.INTER_AREA)
-        h, w = img.shape[:2]
-        if w < 40 or h < 40:
-            continue
-        detector.setInputSize((w, h))
         try:
-            _, faces = detector.detect(img)
-        except Exception as e:
-            log_err("检测失败 %s: %s" % (os.path.basename(path), e))
-            continue
-        if faces is None:
-            continue
-
-        for row in faces:
-            score = float(row[14])
-            if score < CONF:
+            img = imread_unicode(path)
+            if img is None:
                 continue
-            x, y, bw, bh = [float(v) for v in row[0:4]]
-            x = max(0.0, x); y = max(0.0, y)
-            bw = min(bw, w - x); bh = min(bh, h - y)
-            if bw < 24 or bh < 24:
+            h0, w0 = img.shape[:2]
+            scale = 1.0
+            if max(h0, w0) > MAX_SIDE:
+                scale = MAX_SIDE / float(max(h0, w0))
+                img = cv2.resize(img, (int(w0 * scale), int(h0 * scale)), interpolation=cv2.INTER_AREA)
+            h, w = img.shape[:2]
+            if w < 40 or h < 40:
                 continue
+            detector.setInputSize((w, h))
             try:
-                aligned = recognizer.alignCrop(img, row)
-                feat = recognizer.feature(aligned)
-                feat = norm_feat(feat)
-                if feat is None:
-                    continue
-            except Exception:
+                _, faces = detector.detect(img)
+            except Exception as e:
+                log_err("检测失败 %s: %s" % (os.path.basename(path), e))
+                continue
+            if faces is None:
                 continue
 
-            gid, sim = assign(feat)
-            ox, oy, ow, oh = int(x / scale), int(y / scale), int(bw / scale), int(bh / scale)
-            images[path]["faces"].append({
-                "gid": int(gid),
-                "x": ox, "y": oy, "w": ow, "h": oh,
-                "feat": [round(float(v), 6) for v in feat.tolist()],
-            })
-
-            old = thumbs.get(str(gid))
-            if old is None or score > float(old.get("score", -1)):
+            for row in faces:
+                score = float(row[14])
+                if score < CONF:
+                    continue
+                x, y, bw, bh = [float(v) for v in row[0:4]]
+                x = max(0.0, x); y = max(0.0, y)
+                bw = min(bw, w - x); bh = min(bh, h - y)
+                if bw < 24 or bh < 24:
+                    continue
                 try:
-                    thumb = cv2.resize(aligned, (96, 96), interpolation=cv2.INTER_AREA)
-                    ok, buf = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
-                    if ok:
-                        thumbs[str(gid)] = {
-                            "score": round(score, 6),
-                            "b64": base64.b64encode(buf.tobytes()).decode("ascii"),
-                        }
+                    aligned = recognizer.alignCrop(img, row)
+                    feat = recognizer.feature(aligned)
+                    feat = norm_feat(feat)
+                    if feat is None:
+                        continue
                 except Exception:
-                    pass
+                    continue
+
+                gid, sim = assign(feat)
+                ox, oy, ow, oh = int(x / scale), int(y / scale), int(bw / scale), int(bh / scale)
+                images[path]["faces"].append({
+                    "gid": int(gid),
+                    "x": ox, "y": oy, "w": ow, "h": oh,
+                    "feat": [round(float(v), 6) for v in feat.tolist()],
+                })
+
+                old = thumbs.get(str(gid))
+                if old is None or score > float(old.get("score", -1)):
+                    try:
+                        thumb = cv2.resize(aligned, (96, 96), interpolation=cv2.INTER_AREA)
+                        ok, buf = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+                        if ok:
+                            thumbs[str(gid)] = {
+                                "score": round(score, 6),
+                                "b64": base64.b64encode(buf.tobytes()).decode("ascii"),
+                            }
+                    except Exception:
+                        pass
+        except Exception as e:
+            log_err("分析失败 %s: %s" % (os.path.basename(path), e))
+        finally:
+            rec = images.get(path)
+            if rec is not None:
+                rec["done"] = True
+            # 每 25 张落一次盘；中途被关闭/杀掉后下次从这里继续，
+            # 最多只需重做 24 张，避免 12 万张相册被长时间阻塞在写状态上。
+            if done % 25 == 0:
+                save_state(state_file, images, thumbs)
 
     # 输出全部已有分组/人脸，界面可以完整替换。
     for path in paths:
@@ -310,7 +341,7 @@ def main():
             sys.stdout.write("G\t%d\t%s\n" % (int(gid), t["b64"]))
             sys.stdout.flush()
 
-    sys.stdout.write("P\t%d\t%d\n" % (total, total))
+    sys.stdout.write("P\t%d\t%d\n" % (album_total, album_total))
     sys.stdout.flush()
     save_state(state_file, images, thumbs)
     return 0

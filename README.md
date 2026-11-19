@@ -59,7 +59,7 @@
 ### v2.01 更新
 - **断点续扫**：扫描过程中每 3 秒或每完成一个目录落盘一次进度，关闭后再启动会跳过已完成目录，从断点继续
 - **右键定位**：相册右键菜单新增「打开图片所在文件夹」，单选时打开资源管理器并选中文件，多选时灰态
-- **覆盖升级保留进度**：扫描索引、缩略图、去重指纹保存在用户目录和缓存目录，覆盖安装后先显示上次已加载内容，再做增量核对
+- **覆盖升级保留进度**：扫描索引、缩略图、去重指纹保存在安装目录 `cache`，覆盖安装后先显示上次已加载内容，再做增量核对
 - **任务栏图标**：相册与图片编辑按启动模式显示对应图标，安装包使用图片编辑图标
 - **加载更流畅**：扫描/去重线程降为低于正常优先级，后台补缩略图时主动给看图操作让路，边扫边显示改为分帧插入
 - **版本统一**：关于界面、安装向导与安装包版本统一为 2.01
@@ -132,6 +132,12 @@
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /win32icon:app.ico /out:"图片批处理工具.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs Extras.cs
 ```
 
+卸载程序单独编译（使用独立图标）：
+
+```bash
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /nologo /win32icon:卸载.ico /out:"卸载图片批处理工具.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll Uninstaller.cs
+```
+
 > 从源码构建还需 AI 模型：`GFPGANv1.4.onnx`、`model.onnx`、`face_detection_yunet.onnx` 已在仓库（LFS），`bisenet_resnet18.onnx`（人脸分割）与 `face_mesh_468.onnx`（关键点）体积超出仓库直推上限，请从 [Release 资产](https://github.com/lqy072072/image-batch-tool/releases) 下载后放入 `ai/models/`。
 
 ## 目录结构
@@ -140,6 +146,8 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 ├── WebViewApp.cs          # C# 主程序
 ├── ui.html                # WebView2 前端界面
 ├── app.ico                # 应用图标
+├── 卸载.ico               # 卸载程序图标
+├── Uninstaller.cs         # 卸载程序源码
 ├── ai/
 │   ├── ai_process.py       # AI 调色脚本
 │   ├── beauty.py           # GFPGAN 美颜脚本
