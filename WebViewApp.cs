@@ -24,23 +24,103 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 using System.Windows.Forms;
+using Encoder = System.Drawing.Imaging.Encoder;
 using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
 
 namespace ImageBatchTool
 {
-    // 全局缓存路径：所有缓存和运行时临时文件统一放在安装目录 cache 下。
+    // 全局缓存路径：默认在安装目录 cache；用户可在相册「选项 → 缓存位置」中改到其他文件夹。
+    // 缓存位置配置文件放在 AppData，不能放在 cache 内，否则换位置后会找不到配置。
     static class CacheStore
     {
+        static readonly object sync = new object();
+        static string _root;
+
+        static string ConfigDir()
+        {
+            try { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool"); }
+            catch { return Path.Combine(Application.StartupPath, "config"); }
+        }
+
+        public static string RootConfigFile()
+        {
+            return Path.Combine(ConfigDir(), "cache_root.txt");
+        }
+
+        static string PendingFile()
+        {
+            return Path.Combine(ConfigDir(), "cache_move.txt");
+        }
+
+        public static string DefaultRoot()
+        {
+            return Path.Combine(Application.StartupPath, "cache");
+        }
+
+        static bool PathsEqual(string a, string b)
+        {
+            try
+            {
+                string pa = Path.GetFullPath(a).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string pb = Path.GetFullPath(b).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return string.Equals(pa, pb, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        static bool IsSubPath(string child, string parent)
+        {
+            try
+            {
+                string pc = Path.GetFullPath(child).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string pp = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return pc.StartsWith(pp + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
         public static string Root()
         {
-            string d = Path.Combine(Application.StartupPath, "cache");
-            try { if (!Directory.Exists(d)) Directory.CreateDirectory(d); } catch { }
-            return d;
+            lock (sync)
+            {
+                if (_root != null) return _root;
+                string configured = DefaultRoot();
+                try
+                {
+                    string cfg = RootConfigFile();
+                    if (File.Exists(cfg))
+                    {
+                        string text = File.ReadAllText(cfg).Trim();
+                        if (text.Length > 0) configured = Path.GetFullPath(text);
+                    }
+                }
+                catch { configured = DefaultRoot(); }
+                _root = configured;
+                try
+                {
+                    if (!Directory.Exists(_root)) Directory.CreateDirectory(_root);
+                }
+                catch
+                {
+                    // 自定义盘符暂时不可用时先退回默认位置，保证程序还能启动；
+                    // 配置不改，下次盘符恢复后仍会使用用户设置。
+                    try
+                    {
+                        string fallback = DefaultRoot();
+                        Directory.CreateDirectory(fallback);
+                        _root = fallback;
+                    }
+                    catch { }
+                }
+                EnsureMarker(_root);
+                return _root;
+            }
         }
 
         public static string Sub(string name)
@@ -53,6 +133,183 @@ namespace ImageBatchTool
         public static string TempFile(string prefix, string ext)
         {
             return Path.Combine(Sub("temp"), prefix + Guid.NewGuid().ToString("N") + ext);
+        }
+
+        static void WriteRootConfig(string root)
+        {
+            Directory.CreateDirectory(ConfigDir());
+            File.WriteAllText(RootConfigFile(), root, new System.Text.UTF8Encoding(false));
+        }
+
+        // 缓存根标识：卸载器只清理确实由本程序创建的自定义缓存目录，
+        // 避免误删用户自己选择的其他文件夹中的同名子目录。
+        static void EnsureMarker(string root)
+        {
+            try
+            {
+                string marker = Path.Combine(root, ".ibt_cache_root");
+                if (!File.Exists(marker))
+                    File.WriteAllText(marker, "ImageBatchTool cache root\n", new System.Text.UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        // 只记录待迁移信息；真正移动放在下次启动、WebView2 还没打开缓存目录时执行。
+        // 这样不会在程序运行中移动被 WebView2 锁住的 webview2 目录。
+        public static void RequestMove(string newRoot)
+        {
+            string target = Path.GetFullPath(newRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string oldRoot = Root();
+            if (PathsEqual(oldRoot, target)) throw new InvalidOperationException("新缓存位置与当前位置相同");
+            if (IsSubPath(target, oldRoot) || IsSubPath(oldRoot, target))
+                throw new InvalidOperationException("新缓存位置不能位于当前缓存目录内部，也不能包含当前缓存目录");
+            Directory.CreateDirectory(ConfigDir());
+            File.WriteAllText(PendingFile(), oldRoot + "\r\n" + target, new System.Text.UTF8Encoding(false));
+        }
+
+        static void CopyCacheTree(string src, string dst)
+        {
+            Directory.CreateDirectory(dst);
+            int copied = 0;
+            foreach (string f in Directory.GetFiles(src))
+            {
+                string to = Path.Combine(dst, Path.GetFileName(f));
+                try
+                {
+                    // 支持断点续迁：目标已有且大小、时间一致的文件直接跳过。
+                    // 这样中途退出后再次启动不会把几百 MB 缓存全部重新复制一遍。
+                    if (File.Exists(to))
+                    {
+                        try
+                        {
+                            var si = new FileInfo(f);
+                            var di = new FileInfo(to);
+                            if (si.Length == di.Length &&
+                                si.LastWriteTimeUtc == di.LastWriteTimeUtc)
+                            {
+                                copied++;
+                                if ((copied % 300) == 0) Application.DoEvents();
+                                continue;
+                            }
+                        }
+                        catch { }
+                        try { File.SetAttributes(to, FileAttributes.Normal); } catch { }
+                    }
+                    File.Copy(f, to, true);
+                }
+                catch (Exception ex) { throw new IOException("复制缓存文件失败: " + f + " -> " + to, ex); }
+                copied++;
+                if ((copied % 300) == 0) Application.DoEvents();
+            }
+            foreach (string d in Directory.GetDirectories(src))
+            {
+                string to = Path.Combine(dst, Path.GetFileName(d));
+                CopyCacheTree(d, to);
+            }
+        }
+
+        static void MoveCacheTree(string src, string dst)
+        {
+            if (!Directory.Exists(src))
+            {
+                Directory.CreateDirectory(dst);
+                return;
+            }
+            if (PathsEqual(src, dst)) return;
+
+            bool dstEmpty = Directory.Exists(dst) && Directory.GetFileSystemEntries(dst).Length == 0;
+            if (!Directory.Exists(dst) || dstEmpty)
+            {
+                try
+                {
+                    if (Directory.Exists(dst)) Directory.Delete(dst);
+                    Directory.CreateDirectory(Path.GetDirectoryName(dst));
+                    Directory.Move(src, dst);
+                    return;
+                }
+                catch { /* 跨盘或目录被占用时走逐文件复制 */ }
+            }
+
+            // 目标目录已有内容时合并；旧缓存同名文件覆盖目标中的同名缓存文件。
+            CopyCacheTree(src, dst);
+            try { Directory.Delete(src, true); } catch { }
+        }
+
+        public static void ApplyPendingMove()
+        {
+            string pending = PendingFile();
+            if (!File.Exists(pending)) return;
+
+            // 同一时间只允许一个实例执行迁移。否则用户看到“没窗口”会反复双击，
+            // 多个进程同时把同一份缓存复制到同一目标，互相覆盖并卡死。
+            bool lockTaken = false;
+            Mutex moveMutex = null;
+            try
+            {
+                moveMutex = new Mutex(false, @"Local\ImageBatchToolCacheMove");
+                try { lockTaken = moveMutex.WaitOne(0); }
+                catch (AbandonedMutexException) { lockTaken = true; }
+                if (!lockTaken)
+                {
+                    try { MainForm.Log("另一个实例正在迁移缓存，本次跳过迁移，先使用原缓存启动"); } catch { }
+                    return;
+                }
+                ApplyPendingMoveCore(pending);
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    try { moveMutex.ReleaseMutex(); } catch { }
+                }
+                if (moveMutex != null) moveMutex.Dispose();
+            }
+        }
+
+        static void ApplyPendingMoveCore(string pending)
+        {
+            if (!File.Exists(pending)) return;
+            string[] lines = File.ReadAllLines(pending);
+            if (lines.Length < 2)
+            {
+                try { File.Delete(pending); } catch { }
+                return;
+            }
+            string oldRoot = Path.GetFullPath(lines[0].Trim());
+            string newRoot = Path.GetFullPath(lines[1].Trim());
+            if (PathsEqual(oldRoot, newRoot))
+            {
+                WriteRootConfig(newRoot);
+                _root = newRoot;
+                EnsureMarker(newRoot);
+                File.Delete(pending);
+                return;
+            }
+            if (IsSubPath(newRoot, oldRoot) || IsSubPath(oldRoot, newRoot))
+                throw new InvalidOperationException("缓存迁移路径非法：新位置不能与旧位置互相包含");
+            if (File.Exists(newRoot)) throw new IOException("新缓存位置是一个文件，不是文件夹");
+
+            CacheMigrationForm progress = null;
+            try
+            {
+                progress = new CacheMigrationForm(newRoot);
+                progress.Show();
+                Application.DoEvents();
+                MoveCacheTree(oldRoot, newRoot);
+                // 文件已经移到新位置后先把内存根切过去；即使配置文件写入失败，
+                // 当前进程也不要去重新创建旧目录。
+                lock (sync) { _root = newRoot; }
+                EnsureMarker(newRoot);
+                WriteRootConfig(newRoot);
+                try { File.Delete(pending); } catch { }
+            }
+            finally
+            {
+                if (progress != null)
+                {
+                    try { progress.Close(); progress.Dispose(); } catch { }
+                }
+            }
         }
     }
 
@@ -151,9 +408,31 @@ namespace ImageBatchTool
             main.StartupMode = mode;
             main.ApplyModeIcon();
             main.FormClosed += (s, e) => MainForm.Log("主窗口已关闭");
+            main.FormClosing += (s, e) => { try { main.AiStopAll(); } catch { } };
             Application.ApplicationExit += (s, e) => MainForm.Log("ApplicationExit");
             Application.Run(main);
             MainForm.Log("Application.Run 返回");
+            // 修改缓存位置后重启：等旧 WebView2/文件句柄释放，再拉起新实例。
+            // 新实例启动时会先执行 CacheStore.ApplyPendingMove()，再打开 WebView2。
+            if (MainForm.RestartAfterCacheMove)
+            {
+                MainForm.RestartAfterCacheMove = false;
+                try
+                {
+                    System.Threading.Thread.Sleep(1500);
+                    var psi = new ProcessStartInfo();
+                    psi.FileName = Application.ExecutablePath;
+                    psi.Arguments = MainForm.RestartMode == "edit" ? "--edit" : "--album";
+                    psi.WorkingDirectory = Application.StartupPath;
+                    psi.UseShellExecute = true;
+                    Process.Start(psi);
+                    MainForm.Log("已启动新实例完成缓存迁移");
+                }
+                catch (Exception ex)
+                {
+                    try { MainForm.Log("重启失败: " + ex.Message); } catch { }
+                }
+            }
         }
     }
 
@@ -224,6 +503,62 @@ namespace ImageBatchTool
             path.AddArc(0, Height-radius*2, radius*2, radius*2, 90, 90);
             path.CloseFigure();
             this.Region = new Region(path);
+        }
+    }
+
+    // ============================================================
+    // 缓存迁移进度窗口：跨盘迁移 740MB/18 万文件时，避免用户以为程序没启动
+    // ============================================================
+    public class CacheMigrationForm : Form
+    {
+        public CacheMigrationForm(string targetPath)
+        {
+            Text = "正在迁移缓存";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            StartPosition = FormStartPosition.CenterScreen;
+            Size = new Size(500, 190);
+            ControlBox = false;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ShowInTaskbar = true;
+            TopMost = true;
+            BackColor = Color.FromArgb(43, 43, 43);
+
+            var title = new Label();
+            title.Text = "正在迁移缓存，请稍候…";
+            title.ForeColor = Color.FromArgb(230, 230, 230);
+            title.Font = new Font("Microsoft YaHei UI", 12f, FontStyle.Bold);
+            title.AutoSize = false;
+            title.Size = new Size(460, 30);
+            title.Location = new Point(20, 25);
+
+            var sub = new Label();
+            sub.Text = "缓存文件较多，首次跨盘迁移可能需要几分钟。请勿重复启动程序。";
+            sub.ForeColor = Color.FromArgb(160, 160, 160);
+            sub.Font = new Font("Microsoft YaHei UI", 9f);
+            sub.AutoSize = false;
+            sub.Size = new Size(460, 22);
+            sub.Location = new Point(20, 60);
+
+            var target = new Label();
+            target.Text = "目标：" + targetPath;
+            target.ForeColor = Color.FromArgb(140, 140, 140);
+            target.Font = new Font("Microsoft YaHei UI", 8.5f);
+            target.AutoSize = false;
+            target.AutoEllipsis = true;
+            target.Size = new Size(460, 20);
+            target.Location = new Point(20, 88);
+
+            var bar = new ProgressBar();
+            bar.Style = ProgressBarStyle.Marquee;
+            bar.MarqueeAnimationSpeed = 30;
+            bar.Size = new Size(460, 14);
+            bar.Location = new Point(20, 120);
+
+            Controls.Add(title);
+            Controls.Add(sub);
+            Controls.Add(target);
+            Controls.Add(bar);
         }
     }
 
@@ -1376,6 +1711,9 @@ namespace ImageBatchTool
     // ============================================================
     public class MainForm : Form
     {
+        // 修改缓存位置后，等旧窗口彻底关闭，再由 Program 启动新实例完成迁移。
+        public static bool RestartAfterCacheMove = false;
+        public static string RestartMode = "album";
         WebView2 web;
         public SplashForm Splash;
         public string StartupMode = "album";
@@ -1463,6 +1801,12 @@ namespace ImageBatchTool
 
         public MainForm()
         {
+            try { CacheStore.ApplyPendingMove(); }
+            catch (Exception ex)
+            {
+                try { Log("缓存位置迁移失败: " + ex.Message); } catch { }
+                try { MessageBox.Show("缓存位置迁移失败，仍继续使用原缓存位置：\n" + ex.Message, "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning); } catch { }
+            }
             Text = "图片批处理工具";
             Width = 1400; Height = 900;
             StartPosition = FormStartPosition.CenterScreen;
@@ -1663,6 +2007,7 @@ namespace ImageBatchTool
                         SendState();
                         // 启动模式：相册版只打开相册（页面隐藏修图界面），修图版直接进编辑器
                         LoadAlbRoots();
+                        LoadAiPerf();
                         SendAlbRoots();
                         Send("{\"type\":\"appmode\",\"mode\":" + JsonStr(StartupMode) + "}");
                         break;
@@ -1990,6 +2335,25 @@ namespace ImageBatchTool
                     case "albfacescan":
                         StartFaceScan();
                         break;
+                    case "albaiensure":
+                        {
+                            bool forceAi = parts.Length > 1 && parts[1] == "1";
+                            AiEnsureSearch(forceAi);
+                        }
+                        break;
+                    case "albaiensureidle":
+                        AiScheduleIdleIndex();
+                        break;
+                    case "albperf":
+                        if (parts.Length > 1) ApplyAiPerf(parts[1]);
+                        break;
+                    case "albaisearch":
+                        {
+                            string qAi = msg.Length > action.Length + 1 ? msg.Substring(action.Length + 1) : "";
+                            try { qAi = Uri.UnescapeDataString(qAi); } catch { }
+                            AiSearchQuery(qAi);
+                        }
+                        break;
                     case "albfacesstop":
                         faceStop = true;
                         // 不再直接杀进程：写停止标记，让人脸脚本把当前断点写入状态文件后自行退出。
@@ -2000,6 +2364,11 @@ namespace ImageBatchTool
                         break;
                     case "albclearcache":
                         ClearAlbCache();
+                        break;
+                    case "albchoosecache":
+                        // 文件夹对话框和模态确认都放到消息回调之后，避免 WebView2 重入。
+                        try { Log("收到缓存位置命令"); } catch { }
+                        BeginInvoke((Action)(() => ChooseCacheLocation()));
                         break;
                     case "albpage":
                         if (parts.Length > 2)
@@ -2067,7 +2436,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 2.02\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 2.03\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -3429,6 +3798,31 @@ namespace ImageBatchTool
         volatile bool albRunning = false;
         DateTime albLastCkpt = DateTime.MinValue;
 
+        // ===== AI 语义搜索（Chinese-CLIP 本地索引 + 常驻查询进程）=====
+        // 索引/查询都由安装目录内 python 运行；模型缺失时自动退回原有元数据搜索。
+        Process aiIndexProc, aiQueryProc;
+        StreamWriter aiQueryIn;
+        volatile bool aiIndexRunning = false;
+        volatile bool aiServerStarting = false;
+        volatile bool aiReady = false;
+        volatile bool aiIndexDone = false;
+        volatile int aiIndexTotal = 0;
+        volatile int aiIndexDoneCount = 0;
+        volatile int aiIndexItemCount = 0;
+        volatile bool aiIndexUnavailable = false;
+        volatile bool aiReindexPending = false;
+        string aiIndexDb = null;
+        string aiIndexStop = null;
+        string aiLastQuery = "";
+        // 索引完成并 reload 后，用当前搜索词自动重查一次，避免新索引项不显示。
+        volatile bool aiReloadQueryPending = false;
+        // 扫描完成后不立刻抢占 CPU/GPU，等一小段空闲再增量建索引；打开搜索时立即启动。
+        System.Threading.Timer aiIdleTimer = null;
+        int aiIdleSeq = 0;
+        // 索引性能档：low=省资源，mid=均衡，high=性能拉满。
+        string aiPerfMode = "mid";
+        volatile bool aiShuttingDown = false;
+
         string AlbRootsFile()
         {
             try
@@ -3817,7 +4211,7 @@ namespace ImageBatchTool
             catch { }
         }
 
-        // ---- 统一缓存根目录：严格使用安装目录下 cache，不再回退到 AppData/TEMP ----
+        // ---- 统一缓存根目录：默认安装目录 cache，也可由用户在相册选项里自定义 ----
         static string CacheRoot()
         {
             return CacheStore.Root();
@@ -3861,7 +4255,7 @@ namespace ImageBatchTool
             MergeCacheDir(src, dst);
         }
 
-        // 递归合并旧缓存目录到安装目录 cache，避免升级后旧缩略图继续留在 AppData/TEMP。
+        // 递归合并旧缓存目录到当前缓存根目录，避免升级后旧缩略图继续留在 AppData/TEMP。
         static void MergeCacheDir(string src, string dst)
         {
             try
@@ -3891,7 +4285,7 @@ namespace ImageBatchTool
             catch { }
         }
 
-        // 把旧版本的临时缩略图 / AppData / TEMP 缓存迁移到新的安装目录 cache
+        // 把旧版本的临时缩略图 / AppData / TEMP 缓存迁移到当前缓存根目录
         static void MigrateLegacyCache()
         {
             try
@@ -4099,7 +4493,7 @@ namespace ImageBatchTool
                         var w = new FileSystemWatcher(root);
                         w.IncludeSubdirectories = true;
                         w.NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size;
-                        w.InternalBufferSize = 64 * 1024;
+                        w.InternalBufferSize = 256 * 1024;
                         w.Created += AlbWatcherEvent;
                         w.Deleted += AlbWatcherEvent;
                         w.Renamed += AlbWatcherEvent;
@@ -4540,7 +4934,7 @@ namespace ImageBatchTool
         void SendAlbRoots()
         {
             var sb = new System.Text.StringBuilder();
-            sb.Append("{\"type\":\"albpaths\",\"items\":[");
+            sb.Append("{\"type\":\"albpaths\",\"perf\":").Append(JsonStr(aiPerfMode)).Append(",\"items\":[");
             for (int i = 0; i < albRoots.Count; i++)
             {
                 if (i > 0) sb.Append(",");
@@ -4630,6 +5024,7 @@ namespace ImageBatchTool
         void StartAlbumScan(bool auto, bool full)
         {
             if (albRoots.Count == 0) { if (!auto) Send("{\"type\":\"toast\",\"msg\":\"请先添加相册路径\"}"); return; }
+            AiCancelIdleIndex();
             // GIF/RAW 格式版本首次升级时强制全量枚举一次，避免旧目录缓存漏掉新格式。
             try { if (!File.Exists(AlbFormatFlagFile())) full = true; } catch { }
             // 打开相册时页面可能重复发 albopen；2 秒内的重复手动扫描合并成一次。
@@ -6256,6 +6651,126 @@ namespace ImageBatchTool
             catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("删除失败: " + ex.Message) + "}"); }
         }
 
+        // 相册「选项 → 缓存位置」：选择新的缓存根目录。
+        // 实际迁移在下次启动、WebView2 尚未打开缓存目录时执行，避免运行中移动被锁定的 webview2 文件。
+        void ChooseCacheLocation()
+        {
+            try { Log("打开缓存位置选择对话框"); } catch { }
+            string current = "";
+            try { current = CacheStore.Root(); } catch { }
+            string picked = null;
+            try
+            {
+                using (var d = new FolderBrowserDialog())
+                {
+                    d.Description = "选择新的缓存文件夹（所有缩略图、索引、WebView2 等缓存都会迁移到这里）";
+                    d.ShowNewFolderButton = true;
+                    if (Directory.Exists(current)) d.SelectedPath = current;
+                    if (d.ShowDialog(this) == DialogResult.OK) picked = d.SelectedPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("打开缓存位置选择框失败：\n" + ex.Message, "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (string.IsNullOrEmpty(picked)) return;
+
+            try
+            {
+                string selectedRoot = Path.GetFullPath(picked).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string oldRoot = Path.GetFullPath(current).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(selectedRoot, oldRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("新缓存位置与当前位置相同，无需修改。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                if (string.Equals(selectedRoot, Path.GetFullPath(Application.StartupPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("不能把软件安装目录本身设为缓存目录，请选择其他文件夹。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (File.Exists(selectedRoot))
+                {
+                    MessageBox.Show("选择的位置是一个文件，请选择一个文件夹。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                string driveRoot = null;
+                try { driveRoot = Path.GetPathRoot(selectedRoot); } catch { }
+                if (driveRoot != null &&
+                    string.Equals(selectedRoot, driveRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("不能把磁盘根目录设为缓存目录，请选择磁盘内的一个文件夹。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (!Directory.Exists(selectedRoot)) Directory.CreateDirectory(selectedRoot);
+                bool selectedNonEmpty = Directory.Exists(selectedRoot) &&
+                                        Directory.GetFileSystemEntries(selectedRoot).Length > 0;
+                string newRoot = selectedRoot;
+                string locationNote = "";
+                if (selectedNonEmpty)
+                {
+                    // 用户选中的文件夹可能已经有照片或其他文件。为避免混在一起，
+                    // 自动使用其下的专用子目录，而不是直接向这个文件夹写缓存。
+                    newRoot = Path.Combine(selectedRoot, "ImageBatchToolCache");
+                    if (File.Exists(newRoot))
+                    {
+                        MessageBox.Show("所选文件夹下存在同名文件 ImageBatchToolCache，请换一个文件夹。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    Directory.CreateDirectory(newRoot);
+                    locationNote = "\n\n所选文件夹不是空的，缓存将放在其下的 ImageBatchToolCache 子文件夹。";
+                    if (Directory.GetFileSystemEntries(newRoot).Length > 0)
+                        locationNote += "\n该子文件夹已有内容，将合并旧缓存。";
+                }
+                if (string.Equals(newRoot, oldRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("新缓存位置与当前位置相同，无需修改。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                if (newRoot.StartsWith(oldRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                    oldRoot.StartsWith(newRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("新缓存位置不能位于当前缓存目录内部，也不能包含当前缓存目录。\n请选择其他文件夹。", "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // 先验证目标目录可写，避免重启后才发现迁移不了。
+                try
+                {
+                    Directory.CreateDirectory(newRoot);
+                    string probe = Path.Combine(newRoot, ".ibt_cache_write_test_" + Guid.NewGuid().ToString("N") + ".tmp");
+                    File.WriteAllText(probe, "ok");
+                    File.Delete(probe);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("目标文件夹不可写：\n" + ex.Message, "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var confirm = MessageBox.Show(
+                    "缓存位置将从：\n" + current + "\n\n迁移到：\n" + newRoot + locationNote +
+                    "\n\n缓存位置修改后程序会自动重启，并在启动时移动旧缓存。是否继续？",
+                    "缓存位置", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
+                CacheStore.RequestMove(newRoot);
+                Log("缓存位置已安排迁移: " + current + " -> " + newRoot);
+                MainForm.RestartMode = StartupMode;
+                MainForm.RestartAfterCacheMove = true;
+                // 让用户知道不是崩溃，而是按计划重新启动。
+                try { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("缓存位置已记录，正在重启并迁移缓存…") + "}"); } catch { }
+                Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("设置缓存位置失败：\n" + ex.Message, "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         // 相册「删除缓存」：清掉扫描索引、缩略图与各类临时文件，释放磁盘与内存占用
         void ClearAlbCache()
         {
@@ -6300,6 +6815,18 @@ namespace ImageBatchTool
                 delFile(DupCacheFile());
                 delFile(DupCacheFile() + ".tmp");
                 lock (dupCacheLock) { dupCache.Clear(); dupCacheLoaded = false; }
+                // 1.5) AI 语义搜索索引：先停掉索引/查询进程，再清掉 index.db 与 manifest
+                try { AiCancelIdleIndex(); } catch { }
+                try { AiStopAll(); } catch { }
+                clearDir(Path.Combine(CacheRoot(), "search"));
+                aiReady = false;
+                aiIndexDone = false;
+                aiIndexRunning = false;
+                aiServerStarting = false;
+                aiIndexDb = null;
+                aiIndexStop = null;
+                aiIndexUnavailable = false;
+                aiLastQuery = "";
                 // 2) 缩略图 / 视频封面缓存（安装目录 cache）
                 clearDir(Path.Combine(CacheRoot(), "thumbs"));
                 clearDir(Path.Combine(CacheRoot(), "vthumbs"));
@@ -8133,6 +8660,626 @@ namespace ImageBatchTool
                 if (string.Equals(Path.GetFileNameWithoutExtension(p), name, StringComparison.OrdinalIgnoreCase)) return p;
             }
             return null;
+        }
+
+        // ===== AI 语义搜索 =====
+        string AiModelDir()
+        {
+            return Path.Combine(Application.StartupPath, "ai", "models", "cnclip");
+        }
+
+        string AiYoloDir()
+        {
+            return Path.Combine(Application.StartupPath, "ai", "models", "yolox");
+        }
+
+        string AiSearchDir()
+        {
+            return CacheStore.Sub("search");
+        }
+
+        string AiPythonExe()
+        {
+            string p = Path.Combine(Application.StartupPath, "python", "python.exe");
+            if (File.Exists(p)) return p;
+            return "python.exe";
+        }
+
+        static string AiQ(string s)
+        {
+            return "\"" + (s ?? "").Replace("\"", "\\\"") + "\"";
+        }
+
+        static int AiInt(string s, string key)
+        {
+            try
+            {
+                string pat = "\"" + key + "\":";
+                int i = s.IndexOf(pat, StringComparison.Ordinal);
+                if (i < 0) return 0;
+                i += pat.Length;
+                while (i < s.Length && (s[i] == ' ' || s[i] == '\t')) i++;
+                int start = i;
+                if (i < s.Length && s[i] == '-') i++;
+                while (i < s.Length && s[i] >= '0' && s[i] <= '9') i++;
+                int v;
+                return int.TryParse(s.Substring(start, i - start), out v) ? v : 0;
+            }
+            catch { return 0; }
+        }
+
+        static string AiText(string s, string key)
+        {
+            try
+            {
+                string pat = "\"" + key + "\":\"";
+                int i = s.IndexOf(pat, StringComparison.Ordinal);
+                if (i < 0) return "";
+                i += pat.Length;
+                int j = i;
+                while (j < s.Length && s[j] != '"') j++;
+                return s.Substring(i, j - i);
+            }
+            catch { return ""; }
+        }
+
+        static bool AiBool(string s, string key)
+        {
+            try
+            {
+                string pat = "\"" + key + "\":";
+                int i = s.IndexOf(pat, StringComparison.Ordinal);
+                if (i < 0) return false;
+                i += pat.Length;
+                return i + 4 <= s.Length && s.Substring(i, 4) == "true";
+            }
+            catch { return false; }
+        }
+
+        // 索引性能档：low=省资源，mid=均衡，high=性能拉满。
+        string AiPerfFile()
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "ai_perf.txt");
+            }
+            catch { return Path.Combine(CacheSub("config"), "ai_perf.txt"); }
+        }
+
+        string NormalizeAiPerf(string mode)
+        {
+            mode = (mode ?? "").Trim().ToLowerInvariant();
+            if (mode == "low" || mode == "high" || mode == "mid") return mode;
+            return "mid";
+        }
+
+        void LoadAiPerf()
+        {
+            try
+            {
+                string f = AiPerfFile();
+                if (File.Exists(f)) aiPerfMode = NormalizeAiPerf(File.ReadAllText(f));
+            }
+            catch { aiPerfMode = "mid"; }
+        }
+
+        void SaveAiPerf(string mode)
+        {
+            try { File.WriteAllText(AiPerfFile(), NormalizeAiPerf(mode), new UTF8Encoding(false)); } catch { }
+        }
+
+        int AiPerfThreads()
+        {
+            int cores = Math.Max(1, Environment.ProcessorCount);
+            if (aiPerfMode == "low") return 1;
+            if (aiPerfMode == "high") return cores;
+            return Math.Max(1, Math.Min(4, cores));
+        }
+
+        // 切换档位时如果正在索引：写 stop 让 Python 提交当前事务后退出，
+        // 退出事件会用新档位重新启动，已处理项不会重算。
+        void ApplyAiPerf(string mode)
+        {
+            mode = NormalizeAiPerf(mode);
+            bool changed = !string.Equals(aiPerfMode, mode, StringComparison.Ordinal);
+            aiPerfMode = mode;
+            SaveAiPerf(mode);
+            Send("{\"type\":\"albperf\",\"mode\":" + JsonStr(mode) + "}");
+            if (!changed)
+            {
+                Send("{\"type\":\"toast\",\"msg\":" + JsonStr("索引性能已是" + (mode == "low" ? "低挡" : mode == "high" ? "高挡" : "中挡")) + "}");
+                return;
+            }
+            if (aiIndexRunning)
+            {
+                aiReindexPending = true;
+                bool stopped = false;
+                try
+                {
+                    if (!string.IsNullOrEmpty(aiIndexStop))
+                    {
+                        File.WriteAllText(aiIndexStop, "stop");
+                        stopped = true;
+                    }
+                }
+                catch { }
+                Send("{\"type\":\"toast\",\"msg\":" + JsonStr(stopped
+                    ? "已切换索引性能，当前索引将按新挡位继续"
+                    : "已切换索引性能，下一轮索引生效") + "}");
+            }
+            else
+            {
+                Send("{\"type\":\"toast\",\"msg\":" + JsonStr("索引性能已切换为" + (mode == "low" ? "低挡（省资源）" : mode == "high" ? "高挡（性能拉满）" : "中挡（均衡）")) + "}");
+            }
+        }
+
+        void AiCancelIdleIndex()
+        {
+            try
+            {
+                if (aiIdleTimer != null)
+                {
+                    aiIdleTimer.Dispose();
+                    aiIdleTimer = null;
+                }
+                aiIdleSeq++;
+            }
+            catch { }
+        }
+
+        // 相册扫描/自动更新完成后，延迟 12 秒启动索引；仍在扫描则继续推迟。
+        // 用户打开搜索时会立即调用 AiEnsureSearch，并取消这里等待中的任务。
+        void AiScheduleIdleIndex()
+        {
+            try
+            {
+                if (albItems == null || albItems.Count == 0) return;
+                AiCancelIdleIndex();
+                int seq = aiIdleSeq;
+                aiIdleTimer = new System.Threading.Timer(delegate
+                {
+                    try
+                    {
+                        if (seq != aiIdleSeq) return;
+                        if (albRunning)
+                        {
+                            AiScheduleIdleIndex();
+                            return;
+                        }
+                        AiEnsureSearch(true);
+                    }
+                    catch { }
+                }, null, 12000, System.Threading.Timeout.Infinite);
+            }
+            catch { }
+        }
+
+        // 在「搜索」打开或相册重新扫描完成后调用。force=true 时即使已有索引也重新核对新增/变更文件。
+        void AiEnsureSearch()
+        {
+            AiEnsureSearch(false);
+        }
+
+        void AiEnsureSearch(bool force)
+        {
+            try
+            {
+                AiCancelIdleIndex();
+                if (aiIndexRunning || aiServerStarting)
+                {
+                    if (force) aiReindexPending = true;
+                    return;
+                }
+                if (aiReady && !force) return;
+                if (albItems == null || albItems.Count == 0)
+                {
+                    Send("{\"type\":\"albaiindex\",\"phase\":\"idle\",\"done\":0,\"total\":0}");
+                    return;
+                }
+                if (!File.Exists(Path.Combine(AiModelDir(), "cnclip_vitb16.img.fp32.onnx")) ||
+                    !File.Exists(Path.Combine(AiModelDir(), "cnclip_vitb16.txt.fp32.onnx")))
+                {
+                    aiIndexUnavailable = true;
+                    Send("{\"type\":\"albaiindex\",\"phase\":\"unavailable\",\"reason\":\"model_missing\",\"done\":0,\"total\":0}");
+                    return;
+                }
+                if (aiIndexDone && !force && aiQueryProc == null)
+                {
+                    AiStartServer();
+                    return;
+                }
+                aiIndexRunning = true;
+                Thread t = new Thread(() =>
+                {
+                    try
+                    {
+                        string dir = AiSearchDir();
+                        aiIndexDb = Path.Combine(dir, "index.db");
+                        aiIndexStop = Path.Combine(dir, "index.stop");
+                        try { if (File.Exists(aiIndexStop)) File.Delete(aiIndexStop); } catch { }
+                        string manifest = Path.Combine(dir, "manifest.json");
+                        AiBuildManifest(manifest);
+                        AiStartIndex(manifest, aiIndexDb, aiIndexStop);
+                    }
+                    catch (Exception ex)
+                    {
+                        aiIndexRunning = false;
+                        Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":" + JsonStr(ex.Message) + ",\"done\":0,\"total\":0}");
+                    }
+                });
+                t.IsBackground = true;
+                t.Start();
+            }
+            catch (Exception ex)
+            {
+                aiIndexRunning = false;
+                Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":" + JsonStr(ex.Message) + ",\"done\":0,\"total\":0}");
+            }
+        }
+
+        void AiBuildManifest(string manifestPath)
+        {
+            var items = albItems;
+            var sb = new StringBuilder(Math.Max(1024, (items == null ? 0 : items.Count) * 180));
+            sb.Append("{\"items\":[");
+            int n = 0;
+            if (items != null)
+            {
+                foreach (var it in items)
+                {
+                    if (it == null || string.IsNullOrEmpty(it.path)) continue;
+                    try
+                    {
+                        if (!File.Exists(it.path)) continue;
+                        var fi = new FileInfo(it.path);
+                        string thumb = AlbThumbFileFor(it.path, fi.Length, fi.LastWriteTimeUtc.Ticks);
+                        if (thumb == null || !File.Exists(thumb)) thumb = "";
+                        if (n > 0) sb.Append(',');
+                        sb.Append("{\"p\":").Append(JsonStr(it.path))
+                          .Append(",\"mt\":").Append(fi.LastWriteTimeUtc.Ticks)
+                          .Append(",\"sz\":").Append(fi.Length)
+                          .Append(",\"t\":").Append(JsonStr(it.type ?? ""))
+                          .Append(",\"thumb\":").Append(JsonStr(thumb))
+                          .Append("}");
+                        n++;
+                    }
+                    catch { }
+                }
+            }
+            sb.Append("]}");
+            File.WriteAllText(manifestPath, sb.ToString(), new UTF8Encoding(false));
+        }
+
+        void AiStartIndex(string manifest, string db, string stopFile)
+        {
+            try
+            {
+                string perfMode = NormalizeAiPerf(aiPerfMode);
+                int perfThreads = perfMode == "low" ? 1 : (perfMode == "high" ? Math.Max(1, Environment.ProcessorCount) : Math.Max(1, Math.Min(4, Environment.ProcessorCount)));
+                string script = Path.Combine(Application.StartupPath, "ai", "search_index.py");
+                if (!File.Exists(script)) throw new Exception("search_index.py 不存在");
+                var psi = new ProcessStartInfo();
+                psi.FileName = AiPythonExe();
+                psi.Arguments = "-u " + AiQ(script) + " --manifest " + AiQ(manifest) + " --db " + AiQ(db) +
+                                " --model-dir " + AiQ(AiModelDir()) + " --yolo-dir " + AiQ(AiYoloDir()) + " --stop " + AiQ(stopFile) +
+                                " --perf " + AiQ(perfMode) + " --gpu " + (perfMode == "low" ? "0" : "1");
+                psi.WorkingDirectory = Application.StartupPath;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.StandardOutputEncoding = Encoding.UTF8;
+                psi.StandardErrorEncoding = Encoding.UTF8;
+                try { psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8"; } catch { }
+                try { psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1"; } catch { }
+                try
+                {
+                    string nth = perfThreads.ToString();
+                    psi.EnvironmentVariables["OMP_NUM_THREADS"] = nth;
+                    psi.EnvironmentVariables["OPENBLAS_NUM_THREADS"] = nth;
+                    psi.EnvironmentVariables["MKL_NUM_THREADS"] = nth;
+                }
+                catch { }
+                var p = new Process();
+                p.StartInfo = psi;
+                p.EnableRaisingEvents = true;
+                p.OutputDataReceived += (s, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+                    try
+                    {
+                        string line = e.Data;
+                        string phase = AiText(line, "phase");
+                        int done = AiInt(line, "done");
+                        int total = AiInt(line, "total");
+                        int count = AiInt(line, "count");
+                        int added = AiInt(line, "added");
+                        int ocrAdded = AiInt(line, "ocr_added");
+                        int ocrFlag = AiInt(line, "ocr");
+                        int objAdded = AiInt(line, "obj_added");
+                        int objFlag = AiInt(line, "obj");
+                        if (total > 0) aiIndexTotal = total;
+                        if (done >= 0) aiIndexDoneCount = Math.Min(done, Math.Max(total, done));
+                        if (count > 0) aiIndexItemCount = count;
+                        if (phase == "done")
+                        {
+                            aiIndexDone = true;
+                            aiIndexRunning = false;
+                            aiIndexDoneCount = Math.Max(aiIndexDoneCount, total);
+                        }
+                        if (phase == "stopped" || phase == "unavailable" || phase == "error")
+                        {
+                            aiIndexRunning = false;
+                        }
+                        if (phase == "unavailable" || phase == "error")
+                        {
+                            aiIndexUnavailable = true;
+                        }
+                        Send("{\"type\":\"albaiindex\",\"phase\":" + JsonStr(phase) +
+                             ",\"done\":" + Math.Max(0, done) + ",\"total\":" + Math.Max(0, total) +
+                             ",\"count\":" + Math.Max(0, count) + ",\"added\":" + Math.Max(0, added) +
+                             ",\"ocr_added\":" + Math.Max(0, ocrAdded) +
+                             ",\"obj_added\":" + Math.Max(0, objAdded) +
+                             ",\"ocr\":" + Math.Max(0, ocrFlag) +
+                             ",\"obj\":" + Math.Max(0, objFlag) + "}");
+                        // 第一批图片写完索引后再启动查询进程，避免只加载到空索引。
+                        if (phase == "run" && (added > 0 || ocrAdded > 0 || objAdded > 0) && aiQueryProc == null) AiStartServer();
+                        if (phase == "done")
+                        {
+                            // 查询进程可能是在索引中途启动的，加载的是半成品索引；
+                            // 完成后必须 reload，否则新增照片/新索引项搜不到。
+                            if (aiQueryProc != null)
+                            {
+                                aiReloadQueryPending = !string.IsNullOrEmpty(aiLastQuery);
+                                AiReloadIndex();
+                            }
+                            else
+                            {
+                                aiReloadQueryPending = false;
+                                AiStartServer();
+                            }
+                        }
+                        if (phase == "done" && aiReindexPending)
+                        {
+                            aiReindexPending = false;
+                            AiEnsureSearch(true);
+                        }
+                    }
+                    catch { }
+                };
+                p.ErrorDataReceived += (s, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+                    try { Log("[AI索引] " + e.Data); } catch { }
+                };
+                p.Exited += (s, e) =>
+                {
+                    try
+                    {
+                        aiIndexRunning = false;
+                        bool restartPending = aiReindexPending && !aiIndexUnavailable && !aiShuttingDown;
+                        if (!aiIndexDone && !aiIndexUnavailable && !restartPending)
+                            Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":\"index_process_exit\",\"done\":" + aiIndexDoneCount + ",\"total\":" + aiIndexTotal + "}");
+                        if (restartPending)
+                        {
+                            aiReindexPending = false;
+                            AiEnsureSearch(true);
+                        }
+                        if (aiQueryProc == null) AiStartServer();
+                    }
+                    catch { }
+                };
+                aiIndexProc = p;
+                if (!p.Start()) throw new Exception("AI 索引进程启动失败");
+                try
+                {
+                    p.PriorityClass = perfMode == "high" ? ProcessPriorityClass.High
+                        : perfMode == "low" ? ProcessPriorityClass.BelowNormal
+                        : ProcessPriorityClass.Normal;
+                }
+                catch { }
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+            }
+            catch (Exception ex)
+            {
+                aiIndexRunning = false;
+                aiIndexUnavailable = true;
+                Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":" + JsonStr(ex.Message) + ",\"done\":0,\"total\":0}");
+            }
+        }
+
+        void AiStartServer()
+        {
+            if (aiQueryProc != null || aiServerStarting) return;
+            if (aiIndexDb == null || !File.Exists(aiIndexDb)) return;
+            if (!File.Exists(Path.Combine(AiModelDir(), "cnclip_vitb16.txt.fp32.onnx"))) return;
+            aiServerStarting = true;
+            try
+            {
+                string script = Path.Combine(Application.StartupPath, "ai", "search_server.py");
+                if (!File.Exists(script)) throw new Exception("search_server.py 不存在");
+                var psi = new ProcessStartInfo();
+                psi.FileName = AiPythonExe();
+                psi.Arguments = "-u " + AiQ(script) + " --db " + AiQ(aiIndexDb) + " --model-dir " + AiQ(AiModelDir());
+                psi.WorkingDirectory = Application.StartupPath;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardInput = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.StandardOutputEncoding = Encoding.UTF8;
+                psi.StandardErrorEncoding = Encoding.UTF8;
+                try { psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8"; } catch { }
+                try { psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1"; } catch { }
+                var p = new Process();
+                p.StartInfo = psi;
+                p.EnableRaisingEvents = true;
+                p.OutputDataReceived += (s, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+                    try
+                    {
+                        string line = e.Data;
+                        string type = AiText(line, "type");
+                        if (type == "ready")
+                        {
+                            aiReady = AiBool(line, "ok");
+                            aiServerStarting = false;
+                            int count = AiInt(line, "count");
+                            if (aiReady)
+                            {
+                                aiIndexItemCount = count;
+                                Send("{\"type\":\"albaiindex\",\"phase\":\"ready\",\"done\":" + aiIndexDoneCount + ",\"total\":" + aiIndexTotal + ",\"count\":" + count +
+                                     ",\"ocr\":" + AiInt(line, "ocr") + ",\"obj\":" + AiInt(line, "obj") + "}");
+                                if (aiIndexDone && aiQueryProc != null) AiReloadIndex();
+                                // 索引刚完成时由 reloaded 事件统一重查，避免 ready 和 reloaded 各发一次。
+                                if (!string.IsNullOrEmpty(aiLastQuery) && !aiReloadQueryPending) AiSendQuery(aiLastQuery);
+                                if (aiReindexPending)
+                                {
+                                    aiReindexPending = false;
+                                    AiEnsureSearch(true);
+                                }
+                            }
+                            else
+                            {
+                                Send("{\"type\":\"albaiindex\",\"phase\":\"unavailable\",\"reason\":" + JsonStr(AiText(line, "reason")) + ",\"done\":0,\"total\":" + aiIndexTotal + "}");
+                            }
+                        }
+                        else if (type == "reloaded")
+                        {
+                            aiIndexItemCount = AiInt(line, "count");
+                            Send("{\"type\":\"albaiindex\",\"phase\":\"ready\",\"done\":" + aiIndexDoneCount + ",\"total\":" + aiIndexTotal + ",\"count\":" + aiIndexItemCount +
+                                 ",\"ocr\":" + AiInt(line, "ocr") + ",\"obj\":" + AiInt(line, "obj") + "}");
+                            if (aiReloadQueryPending)
+                            {
+                                aiReloadQueryPending = false;
+                                if (!string.IsNullOrEmpty(aiLastQuery)) AiSendQuery(aiLastQuery);
+                            }
+                        }
+                        else if (type == "result")
+                        {
+                            Send(line.Replace("\"type\":\"result\"", "\"type\":\"albaisearch\""));
+                        }
+                        else if (type == "error")
+                        {
+                            Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":" + JsonStr(AiText(line, "reason")) + "}");
+                        }
+                    }
+                    catch { }
+                };
+                p.ErrorDataReceived += (s, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+                    try { Log("[AI搜索] " + e.Data); } catch { }
+                };
+                p.Exited += (s, e) =>
+                {
+                    try
+                    {
+                        aiReady = false;
+                        aiServerStarting = false;
+                        if (aiQueryProc == null) return;
+                        aiQueryProc = null;
+                        aiQueryIn = null;
+                        Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":\"query_process_exit\"}");
+                    }
+                    catch { }
+                };
+                aiQueryProc = p;
+                if (!p.Start()) throw new Exception("AI 查询进程启动失败");
+                // ProcessStartInfo 在 .NET Framework 没有 StandardInputEncoding；
+                // 用 UTF-8 StreamWriter 包住 stdin，避免中文 query 在 GBK/UTF-8 间被截成乱码。
+                aiQueryIn = new StreamWriter(p.StandardInput.BaseStream, new UTF8Encoding(false));
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+            }
+            catch (Exception ex)
+            {
+                aiServerStarting = false;
+                aiReady = false;
+                Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":" + JsonStr(ex.Message) + "}");
+            }
+        }
+
+        void AiReloadIndex()
+        {
+            try
+            {
+                if (!aiReady || aiQueryIn == null) return;
+                aiQueryIn.WriteLine("{\"cmd\":\"reload\"}");
+                aiQueryIn.Flush();
+            }
+            catch { }
+        }
+
+        void AiSearchQuery(string q)
+        {
+            aiLastQuery = q ?? "";
+            if (string.IsNullOrEmpty(aiLastQuery)) return;
+            if (!aiReady)
+            {
+                AiEnsureSearch();
+                return;
+            }
+            AiSendQuery(aiLastQuery);
+        }
+
+        void AiSendQuery(string q)
+        {
+            try
+            {
+                if (!aiReady || aiQueryIn == null) return;
+                aiQueryIn.WriteLine("{\"cmd\":\"search\",\"q\":" + JsonStr(q) + ",\"limit\":600}");
+                aiQueryIn.Flush();
+            }
+            catch
+            {
+                aiReady = false;
+                AiEnsureSearch();
+            }
+        }
+
+        // 窗口关闭时尽量让 Python 把当前 SQLite 事务提交后退出；超时再结束进程。
+        public void AiStopAll()
+        {
+            try { aiShuttingDown = true; } catch { }
+            try { AiCancelIdleIndex(); } catch { }
+            try
+            {
+                if (!string.IsNullOrEmpty(aiIndexStop))
+                    File.WriteAllText(aiIndexStop, "stop");
+            }
+            catch { }
+            try
+            {
+                if (aiIndexProc != null && !aiIndexProc.HasExited)
+                {
+                    aiIndexProc.WaitForExit(4000);
+                    if (!aiIndexProc.HasExited) aiIndexProc.Kill();
+                }
+            }
+            catch { }
+            try
+            {
+                if (aiQueryIn != null)
+                {
+                    aiQueryIn.WriteLine("{\"cmd\":\"exit\"}");
+                    aiQueryIn.Flush();
+                }
+            }
+            catch { }
+            try
+            {
+                if (aiQueryProc != null && !aiQueryProc.HasExited)
+                {
+                    aiQueryProc.WaitForExit(2000);
+                    if (!aiQueryProc.HasExited) aiQueryProc.Kill();
+                }
+            }
+            catch { }
         }
 
         // 早期「参考图→LUT」直接写进 我的-LUT，升级后统一归到「参考图生成」分组

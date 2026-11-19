@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.02-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.02/image-batch-tool_v2.02_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.03-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.03/image-batch-tool_v2.03_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,9 +8,9 @@
 
 ## 下载安装
 
-直接下载最新安装包（约 676MB，已内置 Python 运行时与 AI 模型）：
+直接下载最新安装包（约 1.1GB，已内置 Python 运行时、Chinese-CLIP 与 PP-OCRv4 模型）：
 
-**[👉 下载 image-batch-tool_v2.02_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.02/image-batch-tool_v2.02_setup.exe)**
+**[👉 下载 image-batch-tool_v2.03_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.03/image-batch-tool_v2.03_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -52,9 +52,26 @@
 - **启动秒开**：扫描结果与 EXIF / 尺寸 / 地理位置持久化到 `alb_index.dat`，缩略图落盘缓存，第二次打开直接用缓存先展示，后台再核对
 - **大目录优化**：枚举阶段只收集图片 / 视频，跳过回收站、系统目录、node_modules 等；界面分页 + 滚动懒加载
 - **删除同步**：相册内删除后自动校准计数与其他视图，不需要手动刷新
-- **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存
+- **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存 / 缓存位置
 
 ![选项菜单](docs/screenshots/album_v2_menu.png)
+
+### v2.03 更新
+- **本地 AI 语义搜索**：相册搜索不再只匹配文件名，可直接输入「猫」「海边日落」「生日蛋糕」「蓝色汽车」这类画面描述；使用 Chinese-CLIP ViT-B/16 ONNX（中文图文特征 512 维），中文 query 直接编码，不经过翻译
+- **本地物体搜索（YOLO）**：新增 YOLOX-Tiny COCO-80 物体检测，扫描时增量记录画面里的猫、狗、人、汽车、手机、电脑、餐桌、椅子、蛋糕等物体，并映射中文别名；输入「狗」「汽车」「手机」可直接命中，模型约 20MB，Apache-2.0，随安装包内置，不上传照片
+- **物体搜索边界**：YOLOX 只覆盖 COCO 80 类常见物体，发票、合同、中文招牌、商品细节等仍主要由 OCR 和 CLIP 语义搜索负责；复杂插画、遮挡、极小物体可能漏检，后续可替换更强检测模型而不用重建整个相册
+- **本地推理，不上传照片**：图像编码走 DirectML（NVIDIA/AMD/Intel 核显均可），没有可用 GPU 时自动回退 CPU；文本编码 CPU 约 45ms/query
+- **图片内文字搜索（OCR）**：已接入 PP-OCRv4 mobile det+rec ONNX，发票、合同、截图、菜单等图片里的中文文字会被识别并写入本地索引；搜索时 OCR 命中优先，再与画面语义结果合并。OCR 模型约 15MB，随安装包内置，首次使用不需要联网下载
+- **增量索引**：扫描完成后延迟 12 秒在后台建立/更新语义与 OCR 索引，按「路径 + 修改时间 + 大小」跳过已索引项，只处理新增、修改和移动过的文件；中途关闭后下次从已有索引继续，已处理项不会重算
+- **索引性能档**：相册「选项 → 索引性能」提供低 / 中 / 高三档；低挡 CPU 单线程并关闭 GPU，中挡 GPU + 最多 4 CPU 线程，高挡 GPU + 全部 CPU 线程 + 高进程优先级。切换档位时若正在索引，会提交当前进度后按新档位继续
+- **边索引边搜**：首批图片索引或 OCR 完成后即可搜索，不必等全部 16 万张跑完；索引结束后自动刷新结果，已索引部分不会重复计算；打开搜索会立即启动索引，不等待延迟
+- **保留原有搜索维度**：日期（今天/本周/昨天…）、类型（照片/视频/实况/GIF/RAW）、有定位、人物分组、文件名/路径/机型/镜头仍走前端元数据匹配；元数据命中时也会合并 OCR/语义命中，避免图片内文字被漏掉
+- **索引缓存**：`cache/search/index.db` + `manifest.json`，随缓存位置设置整体迁移；「删除缓存」会一并清理，下次扫描重新建立
+- **模型说明**：Chinese-CLIP ViT-B/16（图像 347MB + 文本 409MB + 词表 109KB，约 757MB）+ PP-OCRv4 mobile（det 4.5MB + rec 10.4MB + 字典 26KB，约 15MB）+ YOLOX-Tiny（20MB，Apache-2.0），全部内置在安装包；人物命名继续复用现有 YuNet + SFace
+- **自定义缓存位置**：相册「选项 → 缓存位置」可把缩略图、视频封面、WebView2、索引等全部缓存改到任意文件夹
+- **缓存迁移**：修改后程序自动重启，在 WebView2 打开缓存目录前把旧缓存完整迁移到新位置，并继续读取新位置缓存
+- **安全校验**：禁止选择安装目录本身、磁盘根目录或与旧缓存互相包含的路径；所选文件夹非空时自动使用其下的 `ImageBatchToolCache` 子目录，避免和用户文件混在一起
+- **版本统一**：关于界面、安装向导版本改为 2.03；安装包已内置 CLIP + OCR 模型
 
 ### v2.02 更新
 - **缓存统一到安装目录**：缩略图、视频封面、WebView2、人物分析、AI 处理、美颜、证件照、自动挑片等缓存和临时文件统一放到安装目录下的 `cache`
@@ -86,7 +103,7 @@
 - C# / .NET Framework 4.0 / WinForms
 - WebView2（前端 UI）
 - Python 嵌入（onnxruntime + numpy + Pillow + OpenCV）
-- ONNX 模型：SqueezeNet（场景分类）、YuNet（人脸检测）、GFPGAN v1.4（人脸修复）、BiSeNet ResNet18（人脸分割）、MediaPipe FaceMesh 468（关键点）
+- ONNX 模型：SqueezeNet（场景分类）、YuNet（人脸检测）、GFPGAN v1.4（人脸修复）、BiSeNet ResNet18（人脸分割）、MediaPipe FaceMesh 468（关键点）、Chinese-CLIP ViT-B/16（相册语义搜索）、PP-OCRv4 mobile（图片内文字识别）
 
 ## 效果预览
 
@@ -146,6 +163,17 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 ```
 
 > 从源码构建还需 AI 模型：`GFPGANv1.4.onnx`、`model.onnx`、`face_detection_yunet.onnx` 已在仓库（LFS），`bisenet_resnet18.onnx`（人脸分割）与 `face_mesh_468.onnx`（关键点）体积超出仓库直推上限，请从 [Release 资产](https://github.com/lqy072072/image-batch-tool/releases) 下载后放入 `ai/models/`。
+>
+> 相册语义搜索还需 `ai/models/cnclip/` 下的 3 个文件：
+> - `cnclip_vitb16.img.fp32.onnx`（347,613,176 字节）
+> - `cnclip_vitb16.txt.fp32.onnx`（409,536,348 字节）
+> - `cn_vocab.txt`（109,540 字节）
+>
+> 下载地址：
+> `https://github.com/ZHEQIUSHUI/CLIP-ONNX-AX650-CPP/releases/download/cnclip/cnclip_vitb16.img.fp32.onnx`
+> `https://github.com/ZHEQIUSHUI/CLIP-ONNX-AX650-CPP/releases/download/cnclip/cnclip_vitb16.txt.fp32.onnx`
+>
+> DirectML 版 onnxruntime 解包在 `ai/models/cnclip/dml/`（`onnxruntime_directml-1.24.4-cp313-cp313-win_amd64.whl`），缺失时会自动用 CPU 跑，功能不变但索引会慢很多。
 
 ## 目录结构
 
@@ -159,12 +187,18 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 │   ├── ai_process.py       # AI 调色脚本
 │   ├── beauty.py           # GFPGAN 美颜脚本
 │   ├── beauty_pro.py       # 美颜 + 液化主脚本（分割/关键点）
+│   ├── clip_common.py      # Chinese-CLIP 分词/预处理/推理公共模块
+│   ├── ocr_common.py       # PP-OCRv4 检测/识别公共模块
+│   ├── search_index.py     # 相册语义 + OCR 增量索引（SQLite）
+│   ├── search_server.py    # 常驻文本编码、OCR 命中与相似度查询服务
 │   └── models/
 │       ├── model.onnx      # SqueezeNet 场景分类
 │       ├── GFPGANv1.4.onnx
 │       ├── bisenet_resnet18.onnx
 │       ├── face_mesh_468.onnx
-│       └── face_detection_yunet.onnx
+│       ├── face_detection_yunet.onnx
+│       ├── cnclip/         # Chinese-CLIP ViT-B/16 ONNX + 中文词表 + DirectML
+│       └── ocr/            # PP-OCRv4 mobile det/rec + 中文字典
 ├── luts/                  # .cube / .3dl / .lut LUT 文件
 ├── installer/
 │   └── Installer.cs        # 安装包向导（WinForms）源码

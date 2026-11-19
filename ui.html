@@ -368,11 +368,22 @@ body.skin-light .alb-search-cancel { color:#2f6fb8; }
 .alb-tab.on { background:#3a3d42; color:#fff; border-color:#4c5057; }
 .alb-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
 .alb-opt-wrap { position:relative; }
-.alb-opt-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:140px; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; z-index:800; box-shadow:0 12px 28px rgba(0,0,0,.5); }
+.alb-opt-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:190px; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; z-index:800; box-shadow:0 12px 28px rgba(0,0,0,.5); }
 .alb-opt-menu.on { display:block; animation:optIn .16s ease-out both; }
 @keyframes optIn { from { opacity:0; transform:translateY(-6px) scale(.97); } to { opacity:1; transform:none; } }
 .alb-opt-item { padding:8px 11px; font-size:12px; color:#ddd; border-radius:6px; cursor:pointer; white-space:nowrap; }
 .alb-opt-item:hover { background:#3d3e44; color:#fff; }
+.alb-opt-perf { padding:7px 7px 5px; margin:2px 0 3px; border-top:1px solid #414248; border-bottom:1px solid #414248; }
+.alb-opt-perf-title { display:flex; justify-content:space-between; gap:8px; font-size:10px; color:#8f959d; padding:0 3px 6px; }
+.alb-perf-seg { display:flex; gap:4px; }
+.alb-perf-seg span { flex:1; text-align:center; font-size:11px; padding:4px 6px; border:1px solid #45474e; border-radius:5px; color:#cfd3d8; cursor:pointer; user-select:none; }
+.alb-perf-seg span:hover { background:#3d3e44; color:#fff; }
+.alb-perf-seg span.on { background:#3f6fb5; border-color:#5b8bd1; color:#fff; }
+body.skin-light .alb-opt-perf { border-color:#e2e2e8; }
+body.skin-light .alb-opt-perf-title { color:#8a8a90; }
+body.skin-light .alb-perf-seg span { color:#444; border-color:#d6d6dc; }
+body.skin-light .alb-perf-seg span:hover { background:#ececef; color:#1d1d1f; }
+body.skin-light .alb-perf-seg span.on { background:#3f6fb5; border-color:#5b8bd1; color:#fff; }
 body.skin-light .alb-opt-menu { background:#ffffff; border-color:#d1d1d6; box-shadow:0 12px 28px rgba(0,0,0,.16); }
 body.skin-light .alb-opt-item { color:#1d1d1f; }
 body.skin-light .alb-opt-item:hover { background:#ececef; }
@@ -1017,6 +1028,15 @@ window.addEventListener('mouseup', function(e) {
           <div class="alb-opt-item" id="albFaceBtn" onclick="albOptDo('face')">人物分析</div>
           <div class="alb-opt-item" onclick="albOptDo('rescan')">重新扫描</div>
           <div class="alb-opt-item" onclick="albOptDo('cacheclear')">删除缓存</div>
+          <div class="alb-opt-item" onclick="albOptDo('cacheloc')">缓存位置</div>
+          <div class="alb-opt-perf">
+            <div class="alb-opt-perf-title"><span>索引性能</span><span id="albPerfNow">均衡</span></div>
+            <div class="alb-perf-seg" id="albPerfSeg">
+              <span data-perf="low" onclick="albOptDo('perf:low')" title="低：CPU 单线程并关闭 GPU，最省资源">低</span>
+              <span data-perf="mid" onclick="albOptDo('perf:mid')" title="中：GPU 可用，CPU 最多 4 线程，均衡">中</span>
+              <span data-perf="high" onclick="albOptDo('perf:high')" title="高：GPU + 全部 CPU 线程 + 高进程优先级，速度拉满">高</span>
+            </div>
+          </div>
         </div>
       </div>
       <button class="mini-btn" id="albSelBtn" onclick="albToggleSel()">选择</button>
@@ -1027,7 +1047,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="alb-search-row" id="albSearchRow">
       <div class="alb-search-box">
         <span class="mag">⌕</span>
-        <input id="albSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="搜索照片，可输入文件名、日期、机型、GIF/RAW、有定位…" oninput="albSearchInputChanged()" onkeydown="albSearchKey(event)">
+        <input id="albSearchInput" type="text" autocomplete="off" spellcheck="false" placeholder="搜索照片：文件名、日期、机型、画面或图片里的文字/物体（猫、狗、汽车、发票…）" oninput="albSearchInputChanged()" onkeydown="albSearchKey(event)">
         <span class="alb-search-count" id="albSearchCount"></span>
         <span class="alb-search-cancel" onclick="albSearchClose()">取消</span>
       </div>
@@ -1039,6 +1059,12 @@ window.addEventListener('mouseup', function(e) {
         <span onclick="albSearchHint('今天')">今天</span>
         <span onclick="albSearchHint('本周')">本周</span>
         <span onclick="albSearchHint('有定位')">有定位</span>
+        <span onclick="albSearchHint('猫')">猫</span>
+        <span onclick="albSearchHint('狗')">狗</span>
+        <span onclick="albSearchHint('海边日落')">海边日落</span>
+        <span onclick="albSearchHint('生日蛋糕')">生日蛋糕</span>
+        <span onclick="albSearchHint('蓝色汽车')">蓝色汽车</span>
+        <span onclick="albSearchHint('发票')">发票</span>
       </div>
     </div>
   </div>
@@ -2061,6 +2087,53 @@ if (window.chrome && chrome.webview) {
         if (scanned) { A.scanItems = scanned; if (scanned > A.total) A.total = scanned; }
         if (sub) sub.textContent = '已扫描 ' + (A.scanItems || 0) + ' 项 · 文件 ' + done + ' / ' + total;
       }
+      if (m.phase === 'done') post('albaiensureidle');
+    } else if (m.type === 'albaiindex') {
+      const A = window._alb;
+      const phase = m.phase || '';
+      if (typeof m.ocr !== 'undefined') A.aiOcr = !!m.ocr;
+      if (typeof m.obj !== 'undefined') A.aiObj = !!m.obj;
+      if (phase === 'run' || phase === 'start' || phase === 'load') {
+        A.aiIndexing = true;
+        A.aiDone = Number(m.done) || 0;
+        A.aiTotal = Number(m.total) || A.aiTotal || 0;
+        A.aiCount = Number(m.count) || A.aiCount || 0;
+      } else if (phase === 'done') {
+        A.aiIndexing = false;
+        A.aiDone = Number(m.total) || A.aiDone || 0;
+        A.aiTotal = Number(m.total) || A.aiTotal || 0;
+        A.aiCount = Number(m.count) || A.aiCount || 0;
+      } else if (phase === 'ready') {
+        A.aiReady = true;
+        A.aiIndexing = false;
+        A.aiDone = Number(m.done) || A.aiDone || 0;
+        A.aiTotal = Number(m.total) || A.aiTotal || 0;
+        A.aiCount = Number(m.count) || A.aiCount || 0;
+        A.aiError = '';
+      } else if (phase === 'unavailable' || phase === 'error') {
+        A.aiIndexing = false;
+        A.aiPending = false;
+        A.aiError = (m.reason || 'AI 不可用');
+      } else if (phase === 'idle' || phase === 'stopped') {
+        A.aiIndexing = false;
+      }
+      if (A.searchMode) {
+        albSearchUpdateCount();
+        if (A.aiReady && A.aiResultsQ === A.search) { A.vDirty = true; albRender(); }
+      }
+    } else if (m.type === 'albaisearch') {
+      const A = window._alb;
+      A.aiResults = Object.create(null);
+      const paths = m.paths || [];
+      for (let i = 0; i < paths.length; i++) A.aiResults[(paths[i] || '').toLowerCase()] = true;
+      A.aiResultsQ = m.q || '';
+      A.aiPending = false;
+      if (A.searchMode && A.search === A.aiResultsQ) {
+        A.vDirty = true;
+        A.vList = null;
+        albRender();
+        albSearchUpdateCount();
+      }
     } else if (m.type === 'albselectall') {
       const A = window._alb;
       A.allPaths = m.paths || [];
@@ -2069,6 +2142,7 @@ if (window.chrome && chrome.webview) {
     } else if (m.type === 'albpaths') {
       const oldRoots = (window._alb.roots || []).slice();
       window._alb.roots = m.items || [];
+      if (m.perf) { window._alb.aiPerf = m.perf; albUpdatePerfChecks(); }
       // 某个根目录被移除时，前端立即清空旧图片和缩略图，不等后台扫描完成。
       const removedRoot = oldRoots.some(function(r){ return window._alb.roots.indexOf(r) < 0; });
       if (removedRoot) {
@@ -2099,6 +2173,8 @@ if (window.chrome && chrome.webview) {
       albRenderPaths();
     } else if (m.type === 'albaddr') {
       albSetAddr(m.p, m.addr);
+    } else if (m.type === 'albperf') {
+      if(window._alb){ window._alb.aiPerf=m.mode||'mid'; albUpdatePerfChecks(); }
     } else if (m.type === 'appmode') {
       setAppMode(m.mode);
       if (window._appMode === 'album') openAlbum();
@@ -2180,6 +2256,8 @@ if (window.chrome && chrome.webview) {
       A.pageOff = 0;
       albRender();
       post('albpage|0|2000');
+      // 扫描完成后在后台增量建立 AI 语义/OCR 索引；已索引的文件会跳过，只补新增/变更项。
+      post('albaiensureidle');
     } else if (m.type === 'albcount') {
       window._alb.scanDone = 0; window._alb.scanTotal = 0; window._alb.scanItems = 0;
       window._alb.allPaths = null; window._alb.selAllActive = false;
@@ -2729,7 +2807,7 @@ document.addEventListener("keydown",function(e){
   },{passive:false});
 })();
 // ==================== 相册 UI ====================
-window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[]};
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:''};
 
 function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -2773,6 +2851,22 @@ function albCloseOpt(){
   const m=document.getElementById('albOptMenu');
   if(m) m.classList.remove('on');
 }
+function albPerfText(mode){
+  return mode==='low' ? '低 · 省资源' : mode==='high' ? '高 · 性能拉满' : '中 · 均衡';
+}
+function albUpdatePerfChecks(){
+  const A=window._alb||{};
+  const mode=A.aiPerf||'mid';
+  const seg=document.getElementById('albPerfSeg');
+  if(seg){
+    for(let i=0;i<seg.children.length;i++){
+      const el=seg.children[i];
+      el.classList.toggle('on', (el.getAttribute('data-perf')||'')===mode);
+    }
+  }
+  const now=document.getElementById('albPerfNow');
+  if(now) now.textContent = mode==='low' ? '低' : mode==='high' ? '高' : '中';
+}
 function albOptDo(kind){
   albCloseOpt();
   if(kind==='editor') enterEditorFromAlbum();
@@ -2784,6 +2878,13 @@ function albOptDo(kind){
     post('albclearcache');
     const A=window._alb;
     if(A){ A.thumbs={}; }
+  }
+  else if(kind==='cacheloc') post('albchoosecache');
+  else if(kind.indexOf('perf:')===0){
+    const A=window._alb, mode=kind.substring(5);
+    if(A) A.aiPerf=mode;
+    albUpdatePerfChecks();
+    post('albperf|'+mode);
   }
 }
 document.addEventListener('click', function(e){
@@ -2839,6 +2940,7 @@ document.addEventListener('wheel', function(e){
   albZoom(e.deltaY < 0 ? 1 : -1);
 }, { passive: false });
 if(document.getElementById('albGrid')) albApplyZoom();
+if(document.getElementById('albPerfSeg')) albUpdatePerfChecks();
 
 function albRenderPaths(){
   const A=window._alb, box=document.getElementById('albChips');
@@ -2956,6 +3058,7 @@ function albSearchResetState(){
   const A=window._alb;
   if(A.searchTimer){ clearTimeout(A.searchTimer); A.searchTimer=null; }
   A.searchMode=false; A.search=''; A.searchTotal=0;
+  A.aiPending=false; A.aiResults=null; A.aiResultsQ=''; A.aiError='';
   const row=document.getElementById('albSearchRow'); if(row) row.style.display='none';
   const box=document.getElementById('albSearchCount'); if(box) box.textContent='';
 }
@@ -2987,6 +3090,7 @@ function albSearchOpen(){
   const me=document.getElementById('albMap'); if(me) me.style.display='none';
   A.vDirty=true; A.vList=null; A.searchTotal=0;
   albEnsureAllLoaded();
+  post('albaiensure');
   albRender();
   const input=document.getElementById('albSearchInput');
   if(input){ input.value=''; setTimeout(function(){ try{ input.focus(); }catch(e){} },30); }
@@ -3007,22 +3111,46 @@ function albSearchHint(text){
   if(window._alb.searchTimer){ clearTimeout(window._alb.searchTimer); window._alb.searchTimer=null; }
   albSearchDo();
 }
+function albSearchUsesAi(q){
+  q=(q||'').trim();
+  if(!q) return false;
+  const q0=q.toLowerCase();
+  if(albSearchDateRange(q)) return false;
+  if(albSearchFacePaths(q)) return false;
+  if(q0==='有定位'||q0==='带定位'||q0==='gps'||q0==='无定位'||q0==='没有定位') return false;
+  const typeMap={'照片':1,'相片':1,'图片':1,'视频':1,'video':1,'实况':1,'实况照片':1,'live':1,'gif':1,'动图':1,'gif图':1,'raw':1,'ram':1,'原片':1,'raw图':1};
+  if(Object.prototype.hasOwnProperty.call(typeMap,q0)) return false;
+  return true;
+}
 function albSearchDo(){
   const A=window._alb;
   const input=document.getElementById('albSearchInput');
   A.search=(input?input.value:'').trim();
   A.searchMode=true; A.searchTotal=0;
+  A.aiPending=false; A.aiResults=null; A.aiResultsQ=''; A.aiError='';
   A.vDirty=true; A.vList=null;
   albResetScroll();
   albRender();
   albSearchUpdateCount();
+  // 画面语义搜索交给本地 Chinese-CLIP；元数据/日期/类型仍由前端直接过滤。
+  if(A.search && albSearchUsesAi(A.search)){
+    A.aiPending=true;
+    post('albaisearch|'+encodeURIComponent(A.search));
+  }
 }
 function albSearchUpdateCount(){
   const A=window._alb, box=document.getElementById('albSearchCount');
   if(!box) return;
   if(!A.searchMode){ box.textContent=''; return; }
   if(A.scanTotal>0){ box.textContent='扫描中'; return; }
-  box.textContent=(A.searchTotal||0)+' 项'+(A.dataLoaded?'':' · 加载中');
+  if(A.aiError && albSearchUsesAi(A.search)){ box.textContent='AI 暂不可用'; return; }
+  if(A.aiIndexing && albSearchUsesAi(A.search)){
+    var t=(A.aiDone||0).toLocaleString()+'/'+(A.aiTotal||0).toLocaleString();
+    box.textContent='AI 索引中 '+t+(A.aiOcr?' · 含文字':'')+(A.aiObj?' · 含物体':'');
+    return;
+  }
+  if(A.aiPending){ box.textContent='AI 搜索中…'; return; }
+  box.textContent=(A.searchTotal||0)+' 项'+(A.dataLoaded?'':' · 加载中')+(A.aiResultsQ&&A.aiResultsQ===A.search?' · AI':'');
 }
 function albSearchDateRange(q){
   q=(q||'').replace(/\s+/g,'');
@@ -3127,11 +3255,32 @@ function albSearchFilter(all,q){
     return all.filter(function(i){ return t? i.t===t : i.t!=='video'; });
   }
   const tokens=q0.split(/\s+/).filter(Boolean);
-  return all.filter(function(i){
+  const hit=all.filter(function(i){
     const hay=((i.n||'')+' '+(i.p||'')+' '+(i.f||'')+' '+(i.rt||'')+' '+(i.md||'')+' '+(i.mk||'')+' '+(i.ln||'')+' '+(i.addr||'')+' '+(i.t||'')+' '+albTypeName(i.t)).toLowerCase();
     for(let k=0;k<tokens.length;k++){ if(hay.indexOf(tokens[k])<0) return false; }
     return true;
   });
+  if(hit.length) {
+    // 文件名/路径/机型等元数据命中的同时，也合并 AI 命中（OCR 文字 + 画面语义），
+    // 避免照片里的“发票/合同”文字因为没有出现在文件名里而被漏掉。
+    const A=window._alb;
+    if(A.aiResults && A.aiResultsQ===q){
+      const hitSet={};
+      hit.forEach(function(i){ hitSet[(i.p||'').toLowerCase()]=1; });
+      return all.filter(function(i){
+        const k=(i.p||'').toLowerCase();
+        return !!hitSet[k] || !!A.aiResults[k];
+      });
+    }
+    return hit;
+  }
+  // 文本没有命中时，交给本地 Chinese-CLIP + PP-OCR 做画面语义/文字检索。
+  // iOS 相册的“猫 / 海边日落 / 生日蛋糕 / 发票”这类开放描述走这里；图片未索引完时先返回空，索引结束后自动刷新。
+  const A=window._alb;
+  if(A.aiResults && A.aiResultsQ===q){
+    return all.filter(function(i){ return A.aiResults[(i.p||'').toLowerCase()]; });
+  }
+  return [];
 }
 
 function albDayKey(i){

@@ -49,6 +49,7 @@ static class Uninstaller
             "确定卸载「" + AppTitle + "」？\n\n" +
             "将删除：\n" +
             "  • 安装目录内的程序、缓存和缩略图\n" +
+            "  • 自定义缓存位置中的缓存和缩略图\n" +
             "  • 软件配置和扫描索引\n" +
             "  • 桌面快捷方式\n\n" +
             "你的照片文件、视频文件以及相册回收站中尚未彻底删除的文件不会被删除。\n\n" +
@@ -134,6 +135,17 @@ static class Uninstaller
             string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             string startMenu = Path.Combine(appData, @"Microsoft\Windows\Start Menu\Programs");
 
+            // 自定义缓存位置可能不在安装目录，先读配置再清理；只删除缓存子目录，
+            // 避免误删用户在选择缓存目录时放在同一文件夹里的其他文件。
+            string customCache = null;
+            try
+            {
+                string cfg = Path.Combine(appData, "ImageBatchTool", "cache_root.txt");
+                if (File.Exists(cfg)) customCache = File.ReadAllText(cfg).Trim();
+            }
+            catch { }
+            DeleteCustomCache(customCache, installRoot, failed);
+
             DeleteTree(Path.Combine(appData, "ImageBatchTool"), failed);
             DeleteTree(Path.Combine(appData, "图片批处理工具"), failed);
             DeleteTree(Path.Combine(localAppData, "ImageBatchTool"), failed);
@@ -198,6 +210,49 @@ static class Uninstaller
             }
         }
         catch { }
+    }
+
+    static void DeleteCustomCache(string root, string installRoot, List<string> failed)
+    {
+        if (string.IsNullOrEmpty(root)) return;
+        try
+        {
+            string r = Path.GetFullPath(root).TrimEnd('\\');
+            string ir = Path.GetFullPath(installRoot).TrimEnd('\\');
+            if (r.Length <= 3) return; // 不直接清理磁盘根目录
+            if (string.Equals(r, ir, StringComparison.OrdinalIgnoreCase)) return;
+            if (r.StartsWith(ir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return; // 安装目录清理会处理
+            if (!Directory.Exists(r)) return;
+            // 只清理带本程序缓存根标识的目录，避免误删用户其他文件夹中的同名子目录。
+            if (!File.Exists(Path.Combine(r, ".ibt_cache_root"))) return;
+
+            // 只处理程序生成的缓存子目录；用户在缓存目录里放的其他文件保留。
+            string[] known = { "index", "thumbs", "vthumbs", "media", "temp", "webview2", "logs", "config" };
+            bool cacheLike = false;
+            foreach (string n in known)
+            {
+                if (Directory.Exists(Path.Combine(r, n))) { cacheLike = true; break; }
+            }
+            if (!cacheLike)
+            {
+                // 只有标识、没有缓存子目录的目录也可以清掉。
+                DeleteFile(Path.Combine(r, ".ibt_cache_root"), failed);
+                try { if (Directory.Exists(r) && Directory.GetFileSystemEntries(r).Length == 0) Directory.Delete(r); }
+                catch (Exception ex) { failed.Add(r + "（" + ex.Message + "）"); }
+                return;
+            }
+            foreach (string n in known) DeleteTree(Path.Combine(r, n), failed);
+            DeleteFile(Path.Combine(r, ".ibt_cache_root"), failed);
+
+            // 缓存目录已经空了才删除目录本身，避免误删同目录中的用户文件。
+            try
+            {
+                if (Directory.Exists(r) && Directory.GetFileSystemEntries(r).Length == 0)
+                    Directory.Delete(r);
+            }
+            catch (Exception ex) { failed.Add(r + "（" + ex.Message + "）"); }
+        }
+        catch (Exception ex) { failed.Add(root + "（" + ex.Message + "）"); }
     }
 
     static void DeleteTree(string path, List<string> failed)

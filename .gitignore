@@ -65,3 +65,19 @@ luts/_失效文件备份/
 # 本地发布说明草稿
 /.release_body.md
 /.release_id
+
+# 本地 AI 模型目录（随 Release 安装包发布，不入源码仓库）
+/ai/models/cnclip/
+/ai/models/ocr/
+/ai/models/yolox/
+
+# 演示相册与截图缓存（仅本机测试用）
+/docs/_demo_cache/
+/docs/demo_album_ai/
+/docs/screenshots/_demo_*.png
+/docs/screenshots/_topbar.png
+
+# 安装包与安装器产物
+/图片批处理工具_v*.exe
+/安装图片批处理工具.exe
+/*_安装包.exe
