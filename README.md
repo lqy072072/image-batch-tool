@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.01-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.01/image-batch-tool_v2.01_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.02-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.02/image-batch-tool_v2.02_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,9 +8,9 @@
 
 ## 下载安装
 
-直接下载最新安装包（约 720MB，已内置 Python 运行时与 AI 模型）：
+直接下载最新安装包（约 676MB，已内置 Python 运行时与 AI 模型）：
 
-**[👉 下载 image-batch-tool_v2.01_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.01/image-batch-tool_v2.01_setup.exe)**
+**[👉 下载 image-batch-tool_v2.02_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.02/image-batch-tool_v2.02_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -55,6 +55,13 @@
 - **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存
 
 ![选项菜单](docs/screenshots/album_v2_menu.png)
+
+### v2.02 更新
+- **缓存统一到安装目录**：缩略图、视频封面、WebView2、人物分析、AI 处理、美颜、证件照、自动挑片等缓存和临时文件统一放到安装目录下的 `cache`
+- **旧缓存迁移**：启动时迁移旧版 `%TEMP%\ibt_thumbs`、`ibt_vthumbs`、`ImageBatchTool_cache`、`%LOCALAPPDATA%\ImageBatchTool\cache` 和旧索引，尽量保留已有缩略图与扫描进度
+- **覆盖安装保留进度**：安装包不包含 `cache`，覆盖安装不会清掉已有索引、缩略图和扫描断点
+- **卸载程序更新**：卸载器使用新的 iOS 风格图标，并清理旧版外部缓存与临时文件
+- **版本统一**：关于界面、安装向导与安装包版本统一为 2.02
 
 ### v2.01 更新
 - **断点续扫**：扫描过程中每 3 秒或每完成一个目录落盘一次进度，关闭后再启动会跳过已完成目录，从断点继续
