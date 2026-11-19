@@ -13,6 +13,7 @@ import cv2
 from clip_common import set_model_dir, create_session, BertTokenizer, preprocess_image, l2norm
 from ocr_common import OcrEngine
 from yolo_common import YoloDetector, objects_text
+from tag_common import TAG_PROMPTS, build_tags, tags_have_sources
 
 _ROOT_AVAIL_CACHE = {}
 
@@ -28,9 +29,9 @@ def open_db(path):
     conn = sqlite3.connect(path, timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("CREATE TABLE IF NOT EXISTS items(path TEXT PRIMARY KEY, mtime INTEGER, size INTEGER, type TEXT, thumb TEXT, emb BLOB, ocr TEXT, obj TEXT, objects TEXT)")
-    # 兼容旧索引表：逐列在线补齐，不丢已有 CLIP 向量和 OCR 文本。
-    for column in ("ocr", "obj", "objects"):
+    conn.execute("CREATE TABLE IF NOT EXISTS items(path TEXT PRIMARY KEY, mtime INTEGER, size INTEGER, type TEXT, thumb TEXT, emb BLOB, ocr TEXT, obj TEXT, objects TEXT, tags TEXT, tag_text TEXT)")
+    # 兼容旧索引表：逐列在线补齐，不丢已有 CLIP 向量、OCR 文本和物体检测结果。
+    for column in ("ocr", "obj", "objects", "tags", "tag_text"):
         try:
             conn.execute("ALTER TABLE items ADD COLUMN %s TEXT" % column)
         except Exception:
@@ -40,12 +41,46 @@ def open_db(path):
     return conn
 
 
+def load_tag_embeddings(model_dir, gpu=True, threads=4):
+    """加载零样本场景标签的文本向量；模型缺失时返回 None，不影响物体/OCR 标签。"""
+    txt_model = os.path.join(model_dir, "cnclip_vitb16.txt.fp32.onnx")
+    vocab = os.path.join(model_dir, "cn_vocab.txt")
+    if not os.path.isfile(txt_model) or not os.path.isfile(vocab):
+        return None
+    tokenizer = BertTokenizer(vocab)
+    txt_sess, _ = create_session(txt_model, gpu=gpu, threads=threads)
+    ids = np.array([tokenizer.encode(p) for p in TAG_PROMPTS], dtype=np.int64)
+    try:
+        out = txt_sess.run(None, {"texts": ids})[0]
+    except Exception:
+        # 个别 ONNX Runtime 版本对动态 batch 支持不好，退回逐条编码。
+        rows = []
+        for p in TAG_PROMPTS:
+            one = np.array([tokenizer.encode(p)], dtype=np.int64)
+            rows.append(txt_sess.run(None, {"texts": one})[0][0])
+        out = np.stack(rows, axis=0)
+    mat = np.asarray(out, dtype=np.float32)
+    if mat.ndim != 2 or mat.shape[0] != len(TAG_PROMPTS):
+        return None
+    return l2norm(mat)
+
+
 def read_manifest(path):
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict):
         data = data.get("items", [])
     return data or []
+
+
+def read_priority(path):
+    try:
+        if not path or not os.path.isfile(path):
+            return ""
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
 
 
 def first_frame(path):
@@ -116,6 +151,8 @@ def main():
     ap.add_argument("--stop", default="")
     ap.add_argument("--gpu", default="1")
     ap.add_argument("--perf", default="mid", choices=("low", "mid", "high"))
+    ap.add_argument("--partial", default="0")
+    ap.add_argument("--priority", default="")
     args = ap.parse_args()
 
     cpu_count = max(1, int(os.cpu_count() or 1))
@@ -152,9 +189,9 @@ def main():
     conn.commit()
 
     existing = {}
-    for p, mt, sz, emb, ocr_text, obj_text, objects_json in conn.execute(
-            "SELECT path, mtime, size, emb, ocr, obj, objects FROM items"):
-        existing[p] = (mt, sz, emb, ocr_text, obj_text, objects_json)
+    for p, mt, sz, emb, ocr_text, obj_text, objects_json, tags_json, tag_text in conn.execute(
+            "SELECT path, mtime, size, emb, ocr, obj, objects, tags, tag_text FROM items"):
+        existing[p] = (mt, sz, emb, ocr_text, obj_text, objects_json, tags_json, tag_text)
 
     # 续跑进度：manifest 中已经缓存过 CLIP 向量的条目数量。
     # UI 从该数量开始显示，而不是每次重启都从 0/total 开始。
@@ -197,8 +234,20 @@ def main():
         yolo = None
     yolo_ok = bool(yolo is not None and yolo.ok)
 
+    # 多标签场景向量：同一张图可以同时命中多个零样本标签。
+    # 文本模型缺失时只保留 YOLO/OCR 标签，不影响索引继续。
+    tag_emb = None
+    try:
+        # 标签文本模型固定用 CPU：图片/OCR/YOLO 已经占用 DirectML 时，
+        # 再开第二个 DML session 在部分显卡/驱动上会直接崩溃。
+        tag_emb = load_tag_embeddings(args.model_dir, gpu=False, threads=threads)
+    except Exception:
+        tag_emb = None
+    tags_ok = tag_emb is not None
+
     emit({"type": "index", "phase": "start", "total": total, "done": resume_count,
           "providers": providers, "ocr": 1 if ocr_ok else 0, "obj": 1 if yolo_ok else 0,
+          "tags": 1 if tags_ok else 0,
           "perf": perf, "threads": threads, "gpu": 1 if gpu else 0})
 
     added = 0
@@ -208,11 +257,24 @@ def main():
     failed = 0
     last_emit = time.time()
     stop = False
+    priority_path = ""
 
-    for idx, rec in enumerate(items):
+    for idx in range(len(items)):
         if args.stop and os.path.exists(args.stop):
             stop = True
             break
+        rec = items[idx]
+        # 详情页刚点开的图片优先：把它的 manifest 记录提到当前队首。
+        if args.priority:
+            wanted = read_priority(args.priority)
+            if wanted and wanted != priority_path:
+                priority_path = wanted
+                if (rec.get("p") or "") != wanted:
+                    for j in range(idx + 1, len(items)):
+                        if (items[j].get("p") or "") == wanted:
+                            items[idx], items[j] = items[j], items[idx]
+                            rec = items[idx]
+                            break
         p = rec.get("p") or ""
         mt = int(rec.get("mt") or 0)
         sz = int(rec.get("sz") or 0)
@@ -230,7 +292,10 @@ def main():
         # YOLOX 对照片/视频/动图都可用；RAW 交给原有 CLIP/OCR 路径，避免解码失败。
         obj_capable = typ in ("photo", "live", "gif", "video", "")
         need_obj = yolo_ok and obj_capable and (not same or (old is not None and old[4] is None))
-        if same and not need_emb and not need_ocr and not need_obj:
+        # 旧索引没有 tags/tag_text 时补算；旧格式缺少来源标记时也重算一次，
+        # 保证每张图都能区分 YOLO/CLIP/OCR 三套标签。已有完整来源标签的条目不再重复处理。
+        need_tags = (old is None) or (old[6] is None) or (old[7] is None) or (old[6] and not tags_have_sources(old[6]))
+        if same and not need_emb and not need_ocr and not need_obj and not need_tags:
             skipped += 1
         else:
             try:
@@ -246,13 +311,18 @@ def main():
                 if im is None and need_emb and thumb_im is not None:
                     im = thumb_im
 
+                emb_vec = None
                 if need_emb and im is not None:
                     x = preprocess_image_from_bgr(thumb_im if thumb_im is not None else im)
-                    y = sess.run(None, {"image": x})[0]
-                    y = l2norm(y)[0].astype(np.float16).tobytes()
+                    raw = sess.run(None, {"image": x})[0]
+                    emb_vec = l2norm(raw)[0].astype(np.float32)
+                    y = emb_vec.astype(np.float16).tobytes()
                     added += 1
                 elif need_emb:
                     raise RuntimeError("image_unavailable")
+                elif same and old is not None and old[2]:
+                    emb_vec = np.frombuffer(old[2], dtype=np.float16).astype(np.float32)
+                    emb_vec = emb_vec / (np.linalg.norm(emb_vec) + 1e-12)
 
                 if need_ocr:
                     text = clean_ocr_text(ocr.read_bgr(im) if im is not None else "")
@@ -294,9 +364,27 @@ def main():
                     obj_text = None if not yolo_ok else ""
                     objects_json = None if not yolo_ok else "[]"
 
+                if need_tags:
+                    tag_ocr_text = ocr_text if ocr_text is not None else (old[3] if old is not None else "")
+                    tag_obj_text = obj_text if obj_text is not None else (old[4] if old is not None else "")
+                    tag_objects_json = objects_json if objects_json is not None else (old[5] if old is not None else "")
+                    tag_dets = dets if need_obj else None
+                    tags_list, tag_text_value = build_tags(
+                        image_emb=emb_vec,
+                        label_emb=tag_emb,
+                        detections=tag_dets,
+                        objects_json=tag_objects_json,
+                        obj_text=tag_obj_text,
+                        ocr_text=tag_ocr_text,
+                    )
+                    tags_json = json.dumps(tags_list, ensure_ascii=False, separators=(",", ":"))
+                else:
+                    tags_json = old[6] if old is not None else "[]"
+                    tag_text_value = old[7] if old is not None else ""
+
                 conn.execute(
-                    "INSERT OR REPLACE INTO items(path,mtime,size,type,thumb,emb,ocr,obj,objects) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (p, mt, sz, typ, thumb, emb, ocr_text, obj_text, objects_json))
+                    "INSERT OR REPLACE INTO items(path,mtime,size,type,thumb,emb,ocr,obj,objects,tags,tag_text) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (p, mt, sz, typ, thumb, emb, ocr_text, obj_text, objects_json, tags_json, tag_text_value))
             except Exception:
                 failed += 1
             if (idx + 1) % 10 == 0:
@@ -307,13 +395,14 @@ def main():
             emit({"type": "index", "phase": "run", "done": display_done, "total": total,
                   "added": added, "ocr_added": ocr_added, "obj_added": obj_added,
                   "skipped": skipped, "failed": failed,
-                  "ocr": 1 if ocr_ok else 0, "obj": 1 if yolo_ok else 0, "providers": providers})
+                  "ocr": 1 if ocr_ok else 0, "obj": 1 if yolo_ok else 0, "tags": 1 if tags_ok else 0,
+                  "providers": providers})
             last_emit = time.time()
 
     conn.commit()
     # 文件被删除/移走后，旧索引项不再保留，避免搜索返回“幽灵照片”。
-    # 只有完整跑完一轮才清理；中途 stop 不动已有索引。
-    if not stop:
+    # 只有完整跑完一轮才清理；扫描中的部分索引和中途 stop 都不动已有索引。
+    if not stop and args.partial != "1":
         manifest_paths = set()
         for rec in items:
             p0 = rec.get("p") or ""
@@ -337,12 +426,12 @@ def main():
         emit({"type": "index", "phase": "stopped", "done": 0, "total": total, "added": added,
               "ocr_added": ocr_added, "obj_added": obj_added, "skipped": skipped, "failed": failed,
               "count": count, "ocr": 1 if ocr_ok else 0, "obj": 1 if yolo_ok else 0,
-              "providers": providers})
+              "tags": 1 if tags_ok else 0, "providers": providers})
     else:
         emit({"type": "index", "phase": "done", "done": total, "total": total, "added": added,
               "ocr_added": ocr_added, "obj_added": obj_added, "skipped": skipped, "failed": failed,
               "count": count, "ocr": 1 if ocr_ok else 0, "obj": 1 if yolo_ok else 0,
-              "providers": providers})
+              "tags": 1 if tags_ok else 0, "providers": providers})
     conn.close()
     return 0
 

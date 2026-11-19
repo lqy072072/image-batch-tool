@@ -439,10 +439,16 @@ body.skin-light .alb-day-h:hover { background:#eaeaf0; color:#111; }
 .alb-cell.sel .chk { display:block; }
 .alb-cell.checked { box-shadow:0 0 0 2px #2f7dd1 inset; }
 .alb-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#777; font-size:13px; }
-.alb-map { flex:1; display:none; }
-.alb-foot { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px; height:26px; line-height:26px; padding:0 16px; font-size:11px; color:#8a8a8a; border-top:1px solid #2e2e2e; background:#202022; }
-.alb-foot #albSub { color:#9aa0a6; flex-shrink:0; }
-.alb-foot #albFootInfo { color:#8a8a8a; max-width:70%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; }
+.alb-map { flex:1; display:none; position:relative; z-index:1; }
+.alb-foot { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:14px; height:32px; line-height:32px; padding:0 14px; font-size:11px; color:#8b8b92; border-top:1px solid #343438; background:linear-gradient(180deg,#252528,#1c1c1f); box-shadow:0 -1px 0 rgba(255,255,255,.03) inset; }
+.alb-foot #albSub { color:#aeb4bb; flex-shrink:0; max-width:46%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:.2px; }
+.alb-foot #albSub::before { content:""; display:inline-block; width:6px; height:6px; margin-right:7px; border-radius:50%; background:#5aa9e6; vertical-align:1px; box-shadow:0 0 5px rgba(90,169,230,.55); }
+.alb-foot #albFootInfo { display:flex; align-items:center; justify-content:flex-end; gap:10px; max-width:54%; overflow:hidden; color:#8b8b92; white-space:nowrap; text-align:right; font-variant-numeric:tabular-nums; }
+.alb-foot #albFootInfo .stat { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.alb-foot #albFootInfo .stat b { color:#d5d9de; font-weight:600; }
+.alb-foot #albFootInfo .stat.ok b { color:#6fcf8a; }
+.alb-foot #albFootInfo .stat.busy b { color:#e0b35a; }
+.alb-foot #albFootInfo .sep { width:1px; height:12px; flex:none; background:#3a3a3f; }
 .alb-mark { display:flex; align-items:center; justify-content:center; }
 .alb-mark .mk-wrap { position:relative; width:100%; height:100%; }
 .alb-mark img { width:100%; height:100%; object-fit:cover; border-radius:6px; border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.5); display:block; }
@@ -466,9 +472,12 @@ body.skin-light .alb-overlay { background:#f3f3f6; }
 body.skin-light .alb-titlebar { border-bottom-color:#d1d1d6 !important; }
 body.skin-light .mini-btn { background:#f2f2f5; color:#1d1d1f; border-color:#d1d1d6; }
 body.skin-light .mini-btn:hover { background:#e8e8ee; border-color:#b9b9c0; }
-body.skin-light .alb-foot { color:#6e6e73; }
-body.skin-light .alb-foot #albSub { color:#6e6e73; }
+body.skin-light .alb-foot { color:#6e6e73; border-color:#ddd; background:linear-gradient(180deg,#fbfbfd,#f2f2f5); box-shadow:0 1px 0 rgba(0,0,0,.03) inset; }
+body.skin-light .alb-foot #albSub { color:#3c3c43; }
+body.skin-light .alb-foot #albSub::before { background:#0a84ff; box-shadow:0 0 5px rgba(10,132,255,.45); }
 body.skin-light .alb-foot #albFootInfo { color:#6e6e73; }
+body.skin-light .alb-foot #albFootInfo .stat b { color:#1d1d1f; }
+body.skin-light .alb-foot #albFootInfo .sep { background:#d8d8de; }
 body.skin-light .alb-folder-h { color:#6e6e73; border-color:#e2e2e6; }
 body.skin-light .alb-path-empty { color:#8e8e93; }
 body.skin-light .alb-head { background:#fff; border-color:#ddd; }
@@ -547,6 +556,32 @@ body.skin-fade, body.skin-fade * { transition: background-color .28s ease, color
 .alb-vexif .row { display:flex; gap:8px; }
 .alb-vexif .k { color:#777; width:58px; flex-shrink:0; }
 .alb-vexif .v { color:#d0d0d0; word-break:break-all; }
+/* AI 多标签 */
+.alb-vtags { margin-top:10px; padding-top:8px; border-top:1px solid #333; }
+.alb-vtags .ttl { font-size:11px; color:#777; margin-bottom:5px; display:flex; align-items:center; gap:6px; }
+.alb-vtags .ttl .cnt { color:#8f959d; font-size:10px; }
+.alb-vtags .legend { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; font-size:9px; color:#8f959d; }
+.alb-vtags .lg { display:inline-flex; align-items:center; gap:3px; }
+.alb-vtags .lg::before { content:''; width:6px; height:6px; border-radius:50%; background:#6d9fd0; }
+.alb-vtags .lg.clip::before { background:#83c478; }
+.alb-vtags .lg.ocr::before { background:#d9ae63; }
+.alb-vtags .chips { display:flex; flex-wrap:wrap; gap:5px; }
+.alb-vtags .tag { display:inline-flex; align-items:center; gap:3px; max-width:100%; font-size:10px; line-height:1.25; color:#d7e6fb; background:#24384f; border:1px solid #365674; border-radius:10px; padding:3px 7px; }
+.alb-vtags .tag .k { color:#8ab4dd; font-size:9px; }
+.alb-vtags .tag.ocr { color:#ffe2a8; background:#49391f; border-color:#6b5227; }
+.alb-vtags .tag.ocr .k { color:#d9ae63; }
+.alb-vtags .tag.scene { color:#d8f0d2; background:#2c4428; border-color:#466b3f; }
+.alb-vtags .tag.scene .k { color:#93c98a; }
+.alb-vtags .empty { font-size:10px; color:#777; }
+body.skin-light .alb-vtags { border-color:#ddd; }
+body.skin-light .alb-vtags .ttl { color:#8a8a90; }
+body.skin-light .alb-vtags .legend { color:#8a8a90; }
+body.skin-light .alb-vtags .tag { color:#24527e; background:#eaf3fc; border-color:#c9def2; }
+body.skin-light .alb-vtags .tag.ocr { color:#7a5212; background:#fff4dd; border-color:#ecd39d; }
+body.skin-light .alb-vtags .tag.scene { color:#2e5c28; background:#edf8e9; border-color:#c5e1bc; }
+body.skin-light .alb-vtags .tag .k { color:#6b96bd; }
+body.skin-light .alb-vtags .tag.ocr .k { color:#b58a4b; }
+body.skin-light .alb-vtags .tag.scene .k { color:#76a86d; }
 body.skin-light .alb-paths { background:#fff; border-color:#ddd; }
 body.skin-light .alb-chip { background:#f1f2f5; border-color:#d8dae0; color:#333; }
 body.skin-light .alb-person { background:#f3f3f6; }
@@ -999,7 +1034,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="light green" onclick="post('winmax')" title="最大化"></div>
     <div style="margin-left:20px"></div>
     <div class="title-spacer"></div>
-    <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+    <div class="top-right"><span onclick="albOptDo('editor')" title="打开图片编辑"> <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;fill:currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>图片编辑</span><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
   </div>
   <div class="alb-head">
     <div class="alb-tabs" id="albTabs">
@@ -1022,7 +1057,6 @@ window.addEventListener('mouseup', function(e) {
       <div class="alb-opt-wrap">
         <button class="mini-btn" id="albOptBtn" onclick="albToggleOpt(event)" title="更多功能">选项 ▾</button>
         <div class="alb-opt-menu" id="albOptMenu">
-          <div class="alb-opt-item" onclick="albOptDo('editor')">图片编辑</div>
           <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
           <div class="alb-opt-item" onclick="albOptDo('dedup')">去重</div>
           <div class="alb-opt-item" id="albFaceBtn" onclick="albOptDo('face')">人物分析</div>
@@ -1110,6 +1144,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="alb-view-side">
       <div class="alb-vname" id="albVName"></div>
       <div class="alb-vinfo" id="albVInfo"></div>
+      <div class="alb-vtags" id="albVTags"></div>
       <div class="alb-vexif" id="albVExif"></div>
       <div class="alb-vacts">
         <button onclick="albViewStep(-1)">‹ 上一张</button>
@@ -2081,11 +2116,11 @@ if (window.chrome && chrome.webview) {
         if (sub) sub.textContent = '正在统计文件…';
       } else if (m.phase === 'done') {
         A.scanTotal = total; A.scanDone = total; A.scanItems = scanned || total;
-        if (sub) sub.textContent = '扫描完成 ' + (scanned || total) + ' 项';
+        if (sub) sub.textContent = '扫描完成';
       } else {
         A.scanTotal = total; A.scanDone = done;
         if (scanned) { A.scanItems = scanned; if (scanned > A.total) A.total = scanned; }
-        if (sub) sub.textContent = '已扫描 ' + (A.scanItems || 0) + ' 项 · 文件 ' + done + ' / ' + total;
+        if (sub) sub.textContent = '扫描中 · 文件 ' + done + ' / ' + total;
       }
       if (m.phase === 'done') post('albaiensureidle');
     } else if (m.type === 'albaiindex') {
@@ -2187,14 +2222,14 @@ if (window.chrome && chrome.webview) {
         const fb = document.getElementById('albFaceBtn');
         if (fb) { fb.textContent = '停止分析'; fb.style.color = '#ffd479'; }
         const sub = document.getElementById('albSub');
-        if (sub) sub.textContent = '已扫描 ' + (window._alb.total || 0) + ' 项 · 人物分析 ' + (m.done || 0) + ' / ' + (m.total || 0);
+        if (sub) sub.textContent = '人物分析 ' + (m.done || 0) + ' / ' + (m.total || 0);
       } else if (m.phase === 'done') {
         window._alb.faceBusy = false;
         window._alb.faces = { groups: m.groups || [], photos: m.photos || 0, faces: m.faces || 0 };
         const b = document.getElementById('albFaceBtn');
         if (b) { b.textContent = '重新分析'; b.style.color = ''; }
         const sub = document.getElementById('albSub');
-        if (sub) sub.textContent = '已扫描 ' + (window._alb.total || 0) + ' 项 · ' + (m.groups || []).length + ' 个人物';
+        if (sub) sub.textContent = '人物分析完成 · ' + ((m.groups || []).length) + ' 个人物';
         if (window._alb.tab === 'person') albRender();
       } else if (m.phase === 'stop' || m.phase === 'error') {
         window._alb.faceBusy = false;
@@ -2225,9 +2260,10 @@ if (window.chrome && chrome.webview) {
       window._alb.person = -1;
       window._alb.device = '';
       if (m.devices) window._alb.devices = m.devices;
+      A.typeStats={photo:m.photos||0, video:m.videos||0, live:m.lives||0, gif:m.gifs||0, raw:m.raws||0};
       albRenderPaths();
       const sub2 = document.getElementById('albSub');
-      if (sub2) sub2.textContent = '已扫描 ' + m.total + ' 项 · 照片 ' + m.photos + ' · 视频 ' + m.videos + ' · 实况 ' + m.lives + ' · GIF ' + (m.gifs || 0) + ' · RAW ' + (m.raws || 0) + ' · 设备 ' + (m.devices || 0) + (keepAuto ? ' · 已自动更新' : '');
+      if (sub2) sub2.textContent = keepAuto ? '已自动更新' : '扫描完成';
       if (!keepAuto) {
         window._albOverlayShow = true;
         const ov = document.getElementById('albOverlay');
@@ -2263,7 +2299,7 @@ if (window.chrome && chrome.webview) {
       window._alb.allPaths = null; window._alb.selAllActive = false;
       window._alb.total = m.total || window._alb.total;
       const sub3 = document.getElementById('albSub');
-      if (sub3) sub3.textContent = '已扫描 ' + (m.total || 0) + ' 项 · 已自动更新';
+      if (sub3) sub3.textContent = '已自动更新';
     } else if (m.type === 'albpage') {
       const items = m.items || [];
       const added = [];
@@ -2345,8 +2381,8 @@ if (window.chrome && chrome.webview) {
       const subP = document.getElementById('albSub');
       if (subP) {
         const st = A.scanTotal || 0, sd = Math.min(A.scanDone || 0, st || 999999999);
-        subP.textContent = st > 0 ? ('已扫描 ' + (A.scanItems || A.items.length) + ' 项 · 文件 ' + sd + ' / ' + st)
-                                  : ('已载入 ' + A.items.length + ' 项 · 继续扫描中…');
+        subP.textContent = st > 0 ? ('扫描中 · 文件 ' + sd + ' / ' + st)
+                                  : '继续扫描中…';
       }
       const footP = document.getElementById('albFootInfo');
       if (footP) albUpdateFootInfo();
@@ -2365,6 +2401,9 @@ if (window.chrome && chrome.webview) {
       albPumpThumbs();
     } else if (m.type === 'albview') {
       albShowViewer(m);
+    } else if (m.type === 'albtags') {
+      const A = window._alb;
+      if (A.viewerPath === m.p) albRenderTags(m.tags || [], m.status || '');
     } else if (m.type === 'albdeleted') {
       const files = (m.paths && m.paths.length) ? m.paths : (window._albDelList || []);
       window._albDelList = [];
@@ -3007,19 +3046,22 @@ document.addEventListener('click',function(e){
   if(t && t.dataset.tab) albSetTab(t.dataset.tab);
 });
 
+function albIsTakenKnown(i){ return !!i && (i.dt||0)>0 && i.tk!==0; }
+// 统一时间排序：有拍摄时间的按拍摄时间新→旧；未知拍摄时间的永远排最后，按文件创建时间新→旧。
+function albTimeCmp(a,b){
+  const ka=albIsTakenKnown(a), kb=albIsTakenKnown(b);
+  if(ka!==kb) return ka?-1:1;
+  const ta=(a&&a.dt)||0, tb=(b&&b.dt)||0;
+  if(ta!==tb) return tb-ta;
+  return ((a&&a.n)||'').localeCompare((b&&b.n)||'');
+}
+function albSortByTime(list){ return (list||[]).slice().sort(albTimeCmp); }
 function albFiltered(){
   const A=window._alb, tab=A.tab, all=A.items||[];
   if(A.searchMode){
     let sl=albSearchFilter(all, A.search||'');
-    if(A.timeSort){
-      sl=sl.slice().sort(function(a,b){
-        const ta=a.dt||0, tb=b.dt||0;
-        if(ta&&tb) return tb-ta; if(ta) return -1; if(tb) return 1;
-        return (a.n||'').localeCompare(b.n||'');
-      });
-    }
     A.searchTotal=sl.length;
-    return sl;
+    return albSortByTime(sl);
   }
   let list=all;
   if(tab==='photo'||tab==='video'||tab==='live'||tab==='gif'||tab==='raw') list=all.filter(function(i){ return i.t===tab; });
@@ -3032,16 +3074,8 @@ function albFiltered(){
     if(g){ const set={}; (g.faces||[]).forEach(function(f){ set[f.p]=1; }); list=all.filter(function(i){ return set[i.p]; }); }
     else list=[];
   }
-  if((tab==='all'||tab==='photo'||tab==='video'||tab==='live'||tab==='gif'||tab==='raw') && A.timeSort){
-    list=list.slice().sort(function(a,b){
-      const ta=a.dt||0, tb=b.dt||0;
-      if(ta&&tb) return tb-ta;
-      if(ta) return -1;
-      if(tb) return 1;
-      return (a.n||'').localeCompare(b.n||'');
-    });
-  }
-  return list;
+  // 所有分类默认按时间排列；文件夹/设备分组只负责分组，组内仍按时间。
+  return albSortByTime(list);
 }
 function albToggleTimeSort(){
   const A=window._alb; A.timeSort=!A.timeSort;
@@ -3050,7 +3084,7 @@ function albToggleTimeSort(){
   if(b){ b.style.background=A.timeSort?'#0969da':''; b.style.color=A.timeSort?'#fff':''; b.style.borderColor=A.timeSort?'#1f7ae0':''; }
   albResetScroll();
   albRender();
-  toastMsg(A.timeSort?'已按拍摄时间排列，并按天分组':'已恢复正常顺序');
+  toastMsg(A.timeSort?'已按拍摄时间分组显示':'已取消按天分组，仍按时间排列');
 }
 
 // ===== iOS 相册风格搜索（前端全量数据匹配，不联网、不改原文件） =====
@@ -3231,7 +3265,9 @@ function albSearchFacePaths(q){
 }
 function albSearchFilter(all,q){
   q=(q||'').trim();
-  if(!q) return all;
+  // 搜索模式打开但还没输入关键词时，不展示整本相册；只展示真正的搜索结果。
+  // 否则会出现“刚打开搜索却先显示相册最上面几张图”的错觉。
+  if(!q) return [];
   const q0=q.toLowerCase();
   const range=albSearchDateRange(q);
   if(range){
@@ -3284,7 +3320,7 @@ function albSearchFilter(all,q){
 }
 
 function albDayKey(i){
-  if(i && i.dt){ const d=new Date(i.dt*1000); const p=function(n){return n<10?'0'+n:''+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+  if(i && i.dt && i.tk!==0){ const d=new Date(i.dt*1000); const p=function(n){return n<10?'0'+n:''+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
   return 'unknown';
 }
 function albDayLabel(k){
@@ -3376,7 +3412,7 @@ function albCellHtml(i, extraStyle){
     (i.t==='gif'?'<span class="badge gif">GIF</span>':
     (i.t==='raw'?'<span class="badge raw">RAW</span>':'<span class="badge">照片</span>')));
   const dur=i.t==='video'?'<span class="dur">'+albFmtDur(i.d)+'</span>':'';
-  const meta=i.dt?'<div class="meta">'+albFmtTime(i.dt)+'</div>':'';
+  const meta=i.dt?('<div class="meta">'+(i.tk===0?'创建 ':'')+albFmtTime(i.dt)+'</div>'):'';
   const st=extraStyle?' style="'+extraStyle.replace(/"/g,'&quot;')+'"':'';
   return '<div class="alb-cell'+selCls+(window._alb.selSet[i.p]?' checked':'')+'"'+st+' data-p="'+escAttr(i.p)+'" onclick="albCellClick(event,this)">'+
     img+badge+dur+meta+
@@ -3435,17 +3471,45 @@ function albRebuildCellMap(){
   if(A) A.cellMap=map;
   return map;
 }
+function albFmtCount(n){ n=Number(n)||0; try{ return n.toLocaleString('zh-CN'); }catch(e){ return ''+n; } }
 function albUpdateFootInfo(){
   const A=window._alb;
   const foot=document.getElementById('albFootInfo');
   if(!foot || !A) return;
+  const total=Number(A.total)||0;
+  const loaded=(A.items||[]).length;
   const shown=(A.vList && !A.vDirty) ? A.vList.length : albFiltered().length;
-  let s=(A.roots||[]).join('  |  ')+'　·　已扫描 '+(A.total||0)+' 项 · 当前显示 '+shown+' 项';
-  if(A.searchMode) s+=' · 搜索“'+(A.search||'')+'”';
-  if(A.dataLoaded) s+=' · 已加载全部 '+(A.items||[]).length+' 项';
-  else if(A.autoPreload) s+=' · 自动加载中…';
-  else if((A.items||[]).length < (A.total||0)) s+=' · 滚动继续加载';
-  foot.textContent=s; foot.title=s;
+  const roots=A.roots||[];
+  const parts=[];
+  parts.push('<span class="stat">共 <b>'+albFmtCount(total)+'</b> 项</span>');
+  if(A.searchMode){
+    parts.push('<span class="sep"></span>');
+    parts.push('<span class="stat">搜索 “'+escHtml(A.search||'')+'”</span>');
+    parts.push('<span class="stat">命中 <b>'+albFmtCount(shown)+'</b></span>');
+  } else {
+    parts.push('<span class="sep"></span>');
+    parts.push('<span class="stat">当前 <b>'+albFmtCount(shown)+'</b> 项</span>');
+  }
+  if(roots.length){
+    parts.push('<span class="sep"></span>');
+    parts.push('<span class="stat">'+roots.length+' 个目录</span>');
+  }
+  parts.push('<span class="sep"></span>');
+  if(A.dataLoaded || (total>0 && loaded>=total)){
+    parts.push('<span class="stat ok">全部已加载</span>');
+  } else if(A.autoPreload || A.fullLoading){
+    parts.push('<span class="stat busy">自动加载中…</span>');
+  } else if(total>0){
+    parts.push('<span class="stat">已加载 <b>'+albFmtCount(loaded)+'</b> / '+albFmtCount(total)+'</span>');
+  } else {
+    parts.push('<span class="stat">等待扫描</span>');
+  }
+  foot.innerHTML=parts.join('');
+  let tip=(roots.length?roots.join('\n')+'\n':'')+'共 '+albFmtCount(total)+' 项 · 已加载 '+albFmtCount(loaded)+' 项 · 当前显示 '+albFmtCount(shown)+' 项';
+  const ts=A.typeStats;
+  if(ts) tip+='\n照片 '+albFmtCount(ts.photo)+' · 视频 '+albFmtCount(ts.video)+' · 实况 '+albFmtCount(ts.live)+' · GIF '+albFmtCount(ts.gif)+' · RAW '+albFmtCount(ts.raw);
+  if(A.searchMode) tip+='\n搜索：'+(A.search||'');
+  foot.title=tip;
 }
 function albStopAutoPreload(){
   const A=window._alb;
@@ -3649,12 +3713,7 @@ function albRender(){
     grid.innerHTML='';
     window._alb.cellMap={};
     if(empty){ empty.style.display='flex'; empty.textContent=window._alb.loading?'正在扫描相册…':(window._alb.roots && window._alb.roots.length ? '这个分类里还没有内容' : '还没有相册路径，点右上「＋ 添加文件夹」选择文件夹'); }
-    const foot0=document.getElementById('albFootInfo');
-    if(foot0){
-      const rt=(window._alb.roots||[]).join('  |  ');
-      foot0.textContent=(rt?rt+'　·　':'')+'已扫描 '+((window._alb.total)||0)+' 项 · 当前显示 0 项';
-      foot0.title=foot0.textContent;
-    }
+    albUpdateFootInfo();
     albSyncSelAllBtn();
     return;
   }
@@ -4179,6 +4238,39 @@ function albOpenLiveWith(){
 }
 
 function albOpenPathEl(el){ const p=el.getAttribute('data-p'); if(p) albOpenPath(p); }
+function albTagsHtml(tags,status){
+  const arr=Array.isArray(tags)?tags:[];
+  const srcName={yolo:'YOLO',clip:'CLIP',ocr:'OCR'};
+  const srcClass={yolo:'object',clip:'scene',ocr:'ocr'};
+  const srcKind={yolo:'YOLO 物体',clip:'CLIP 画面',ocr:'OCR 文字'};
+  let head='<div class="ttl">AI 索引标签 · 三模型'+(arr.length?'<span class="cnt">'+arr.length+' 个</span>':'')+'</div>'
+    +'<div class="legend"><span class="lg yolo">YOLO 物体</span><span class="lg clip">CLIP 画面</span><span class="lg ocr">OCR 文字</span></div>';
+  if(!arr.length){
+    const msg=status==='loading'?'AI 标签加载中…':status==='indexing'?'索引生成中，稍后重新打开详情即可查看':(status==='error'?'AI 标签暂不可用':'暂无 AI 标签（图片可能尚未建立索引）');
+    return head+'<div class="empty">'+escHtml(msg)+'</div>';
+  }
+  let chips='';
+  for(let i=0;i<arr.length && i<80;i++){
+    const it=arr[i]||{};
+    const t=typeof it==='string'?it:(it.t||'');
+    if(!t) continue;
+    const k=typeof it==='string'?'tag':(it.k||'tag');
+    const src=typeof it==='object' ? (it.src || (k==='object'?'yolo':k==='scene'?'clip':k==='ocr'?'ocr':'tag')) : 'tag';
+    const cls=srcClass[src]||'';
+    const name=srcName[src]||'标签';
+    const tip=(typeof it==='object' && it.s)?(' score='+it.s):'';
+    chips+='<span class="tag '+cls+'" title="'+escHtml((srcKind[src]||name)+tip)+'"><span class="k">'+name+'</span>'+escHtml(t)+'</span>';
+  }
+  return head+'<div class="chips">'+chips+'</div>';
+}
+function albRenderTags(tags,status){
+  const box=document.getElementById('albVTags');
+  if(box) box.innerHTML=albTagsHtml(tags||[],status||'');
+}
+function albRequestTags(p){
+  if(!p) return;
+  post('albtags|'+encodeURIComponent(p));
+}
 function albOpenPath(p){
   window._alb.viewerPath=p;
   window._alb.viewerData=null;
@@ -4207,7 +4299,7 @@ function albExifHtml(m){
   function add(k,v){ if(v!==undefined && v!==null && String(v).length && String(v)!=='0') rows.push([k,v]); }
   add('文件名', m.n);
   add('类型', albTypeName(m.t));
-  add('拍摄时间', m.dt?albFmtTime(m.dt):'');
+  add(m.tk===0?'创建时间':'拍摄时间', m.dt?albFmtTime(m.dt):'');
   add('尺寸', (m.w&&m.h)?(m.w+' × '+m.h):'');
   add('文件大小', m.s?fmtSize(m.s):'');
   add('品牌', m.mk);
@@ -4263,6 +4355,8 @@ function albShowViewer(m){
   window._alb.viewerPath=m.p;
   window._alb.viewerData=m;
   window._alb.viewerLivePlaying=false;
+  albRenderTags([], 'loading');
+  albRequestTags(m.p);
   if(liveBtn){ liveBtn.textContent='▶ 播放实况'; liveBtn.style.display='none'; }
   if(liveSys) liveSys.style.display='none';
   if(hint) hint.textContent='';

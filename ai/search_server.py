@@ -111,6 +111,86 @@ def obj_search(conn, q, limit):
         return []
 
 
+def tag_search(conn, q, limit):
+    """搜索多标签索引。tags 是 JSON，tag_text 是为了 LIKE 检索保存的扁平文本。"""
+    if conn is None:
+        return []
+    try:
+        tokens = [t for t in (q or "").split() if t]
+        if not tokens:
+            return []
+        sql = "SELECT path FROM items WHERE tag_text IS NOT NULL AND tag_text != ''"
+        params = []
+        for t in tokens[:4]:
+            sql += " AND tag_text LIKE ? ESCAPE '\\'"
+            params.append("%" + escape_like(t) + "%")
+        fetch = max(1, min(4000, int(limit) * 4))
+        sql += " LIMIT " + str(fetch)
+        rows = conn.execute(sql, params).fetchall()
+        return [r[0] for r in rows if r and r[0] and path_alive(r[0])]
+    except Exception:
+        return []
+
+
+def parse_tag_list(raw):
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, list):
+            return []
+        out = []
+        for item in data:
+            if isinstance(item, dict):
+                t = str(item.get("t") or "").strip()
+                if t:
+                    out.append({"t": t, "k": str(item.get("k") or "tag"),
+                                "src": str(item.get("src") or ""),
+                                "s": float(item.get("s") or 0.0)})
+            elif isinstance(item, str):
+                t = item.strip()
+                if t:
+                    out.append({"t": t, "k": "tag", "s": 0.0})
+        return out
+    except Exception:
+        return []
+
+
+def item_tags(conn, path):
+    if conn is None or not path:
+        return []
+    try:
+        row = conn.execute("SELECT tags, obj, ocr, objects FROM items WHERE path=?", (path,)).fetchone()
+        if not row:
+            return []
+        tags = parse_tag_list(row[0])
+        if tags:
+            return tags
+        # 兼容旧索引：没有 tags 列内容时从 obj/objects/ocr 现场拼出可展示标签。
+        out = []
+        seen = set()
+        try:
+            for d in json.loads(row[3] or "[]"):
+                if isinstance(d, dict) and d.get("l"):
+                    label = str(d["l"]).strip()
+                    if label and label not in seen:
+                        seen.add(label)
+                        out.append({"t": label, "k": "object", "s": float(d.get("c") or 0.0)})
+        except Exception:
+            pass
+        for token in (row[1] or "").split():
+            token = token.strip()
+            if token and token not in seen:
+                seen.add(token)
+                out.append({"t": token, "k": "object", "s": 0.0})
+        text = str(row[2] or "").strip()
+        if text:
+            out.append({"t": text[:40], "k": "ocr", "s": 1.0})
+        return out[:40]
+    except Exception:
+        return []
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
@@ -138,8 +218,9 @@ def main():
     except Exception:
         obj_cols = []
     obj_ready = 1 if "obj" in obj_cols else 0
+    tag_ready = 1 if "tags" in obj_cols and "tag_text" in obj_cols else 0
     emit({"type": "ready", "ok": True, "count": len(paths), "dim": int(mat.shape[1]) if mat.size else 0,
-          "providers": providers, "ocr": 1 if text_conn is not None else 0, "obj": obj_ready})
+          "providers": providers, "ocr": 1 if text_conn is not None else 0, "obj": obj_ready, "tags": tag_ready})
 
     query_cache = {}
     max_cache = 32
@@ -161,18 +242,27 @@ def main():
                 text_conn = open_text_db(args.db)
                 query_cache.clear()
                 obj_ready = 0
+                tag_ready = 0
                 try:
-                    obj_ready = 1 if text_conn and "obj" in [r[1] for r in text_conn.execute("PRAGMA table_info(items)").fetchall()] else 0
+                    obj_cols = [r[1] for r in text_conn.execute("PRAGMA table_info(items)").fetchall()] if text_conn else []
+                    obj_ready = 1 if "obj" in obj_cols else 0
+                    tag_ready = 1 if "tags" in obj_cols and "tag_text" in obj_cols else 0
                 except Exception:
                     obj_ready = 0
+                    tag_ready = 0
                 emit({"type": "reloaded", "count": len(paths), "dim": int(mat.shape[1]) if mat.size else 0,
-                      "ocr": 1 if text_conn is not None else 0, "obj": obj_ready})
+                      "ocr": 1 if text_conn is not None else 0, "obj": obj_ready, "tags": tag_ready})
             except Exception as e:
                 emit({"type": "error", "reason": "reload_failed:" + str(e)})
             continue
         if cmd == "status":
             emit({"type": "status", "count": len(paths), "dim": int(mat.shape[1]) if mat.size else 0,
-                  "ocr": 1 if text_conn is not None else 0, "obj": obj_ready})
+                  "ocr": 1 if text_conn is not None else 0, "obj": obj_ready, "tags": tag_ready})
+            continue
+        if cmd == "detail":
+            p = msg.get("p") or ""
+            tags = item_tags(text_conn, p)
+            emit({"type": "tags", "p": p, "tags": tags})
             continue
         if cmd != "search":
             emit({"type": "error", "reason": "unknown_cmd"})
@@ -191,30 +281,39 @@ def main():
                     if path_alive(p):
                         cached_paths.append(p)
                         cached_scores.append(cached[1][i])
-                query_cache[q] = (cached_paths, cached_scores, cached[2], cached[3], cached[4])
+                query_cache[q] = (cached_paths, cached_scores, cached[2], cached[3], cached[4], cached[5])
                 emit({"type": "result", "q": q, "paths": cached_paths, "scores": cached_scores,
-                      "count": cached[2], "ocr_count": cached[3], "obj_count": cached[4]})
+                      "count": cached[2], "ocr_count": cached[3], "tag_count": cached[4], "obj_count": cached[5]})
                 continue
             ids = np.array([tokenizer.encode(q)], dtype=np.int64)
             z = sess.run(None, {"texts": ids})[0]
             z = l2norm(z)[0]
             ocr_paths = ocr_search(text_conn, q, limit)
+            tag_paths = tag_search(text_conn, q, limit)
             obj_paths = obj_search(text_conn, q, limit)
             out_paths = []
             out_scores = []
             seen = set()
-            # OCR 文字精确命中优先，其次是 YOLO 物体标签，最后接 CLIP 语义相似结果。
+            # OCR 文字精确命中优先，其次多标签索引 / YOLO 物体标签，最后接 CLIP 语义相似结果。
             for p in ocr_paths:
                 if p and p not in seen and path_alive(p):
                     seen.add(p)
                     out_paths.append(p)
                     out_scores.append(1.0)
+            for p in tag_paths:
+                if p and p not in seen and path_alive(p):
+                    seen.add(p)
+                    out_paths.append(p)
+                    out_scores.append(0.98)
             for p in obj_paths:
                 if p and p not in seen and path_alive(p):
                     seen.add(p)
                     out_paths.append(p)
                     out_scores.append(0.95)
-            if len(out_paths) < limit and len(paths) > 0:
+            # 只要 OCR/多标签/物体有精确命中，就只返回这些精确结果；
+            # 不再用 CLIP 相似度把整本相册里“看起来有点像”的图片塞进搜索结果。
+            # 只有完全没有精确命中时，才退回 CLIP 语义搜索处理自然语言描述。
+            if not out_paths and len(paths) > 0:
                 scores = mat @ z
                 # 先取比目标更多的候选；如果过滤掉已删除文件后不足 limit，
                 # 再扩大候选范围补齐，避免返回结果无故变少。
@@ -237,14 +336,14 @@ def main():
                     if len(out_paths) >= limit or n >= len(paths):
                         break
                     take = min(len(paths), n * 2)
-            # 限制返回数量，OCR/物体命中已经放在最前。
+            # 限制返回数量；精确命中已经全部在最前。
             out_paths = out_paths[:limit]
             out_scores = out_scores[:limit]
             if len(query_cache) >= max_cache:
                 query_cache.pop(next(iter(query_cache)))
-            query_cache[q] = (out_paths, out_scores, len(paths), len(ocr_paths), len(obj_paths))
+            query_cache[q] = (out_paths, out_scores, len(paths), len(ocr_paths), len(tag_paths), len(obj_paths))
             emit({"type": "result", "q": q, "paths": out_paths, "scores": out_scores,
-                  "count": len(paths), "ocr_count": len(ocr_paths), "obj_count": len(obj_paths)})
+                  "count": len(paths), "ocr_count": len(ocr_paths), "tag_count": len(tag_paths), "obj_count": len(obj_paths)})
         except Exception as e:
             emit({"type": "error", "reason": "search_failed:" + str(e)})
     return 0

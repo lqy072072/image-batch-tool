@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // 图片批处理工具 - WebView2 桌面应用
 // 作者：純潔の工口君
 // ------------------------------------------------------------
@@ -2395,6 +2395,13 @@ namespace ImageBatchTool
                     case "albview":
                         if (parts.Length > 1) SendAlbView(parts[1]);
                         break;
+                    case "albtags":
+                        {
+                            string pTag = msg.Length > action.Length + 1 ? msg.Substring(action.Length + 1) : "";
+                            try { pTag = Uri.UnescapeDataString(pTag); } catch { }
+                            AiQueryTags(pTag);
+                        }
+                        break;
                     case "albdelete":
                         if (parts.Length > 1) AlbumDelete(parts[1].Split('\n'));
                         break;
@@ -2436,7 +2443,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 2.03\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 2.07\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -3789,6 +3796,7 @@ namespace ImageBatchTool
             public double fnum, exposure, focal;
             public int iso;
             public long size, taken;
+            public bool takenKnown;
             public int w, h;
             public double dur, lat, lon;
         }
@@ -3803,6 +3811,7 @@ namespace ImageBatchTool
         Process aiIndexProc, aiQueryProc;
         StreamWriter aiQueryIn;
         volatile bool aiIndexRunning = false;
+        readonly object aiIndexGate = new object();
         volatile bool aiServerStarting = false;
         volatile bool aiReady = false;
         volatile bool aiIndexDone = false;
@@ -3814,6 +3823,12 @@ namespace ImageBatchTool
         string aiIndexDb = null;
         string aiIndexStop = null;
         string aiLastQuery = "";
+        // 正在进行的相册扫描。AI 索引在扫描阶段读取这份实时清单，边扫边建索引。
+        volatile AlbScanCtx albLiveScanCtx = null;
+        // 扫描阶段已经通知过 AI 的条目数，避免每两秒都重复启动索引。
+        int aiScanKickCount = 0;
+        // 详情页打开时如果查询进程尚未就绪，把路径排队，ready 后自动补查一次。
+        string aiPendingTagPath = "";
         // 索引完成并 reload 后，用当前搜索词自动重查一次，避免新索引项不显示。
         volatile bool aiReloadQueryPending = false;
         // 扫描完成后不立刻抢占 CPU/GPU，等一小段空闲再增量建索引；打开搜索时立即启动。
@@ -3859,6 +3874,7 @@ namespace ImageBatchTool
         class AlbCacheEnt
         {
             public long size, mtime, taken;
+            public bool takenKnown;
             public string type;
             public string realPath;
             public int w, h;
@@ -4078,6 +4094,14 @@ namespace ImageBatchTool
                     e.w = Int(p[5]); e.h = Int(p[6]); e.lat = Dbl(p[7]); e.lon = Dbl(p[8]); e.dur = Dbl(p[9]);
                     e.make = DecS(p[10]); e.model = DecS(p[11]); e.lens = DecS(p[12]);
                     e.fnum = Dbl(p[13]); e.exposure = Dbl(p[14]); e.focal = Dbl(p[15]); e.iso = Int(p[16]);
+                    // 新版缓存第 18 列记录“拍摄时间是否真实来自 EXIF/视频元数据”。
+                    // 旧缓存没有该列时用 mtime 反推，避免升级后把所有 EXIF 时间都当成未知。
+                    if (p.Length >= 18) e.takenKnown = p[17] == "1";
+                    else
+                    {
+                        long mtSec = e.mtime > 0 ? (long)((e.mtime - 621355968000000000L) / 10000000L) : 0;
+                        e.takenKnown = e.taken > 0 && e.taken != mtSec;
+                    }
                     e.realPath = DecS(p[0]);
                     if (e.realPath.Length == 0) continue;
                     albIndex[e.realPath.ToLowerInvariant()] = e;
@@ -4110,7 +4134,7 @@ namespace ImageBatchTool
                       .Append(e.fnum.ToString("0.##", CultureInfo.InvariantCulture)).Append('\t')
                       .Append(e.exposure.ToString("0.########", CultureInfo.InvariantCulture)).Append('\t')
                       .Append(e.focal.ToString("0.#", CultureInfo.InvariantCulture)).Append('\t')
-                      .Append(e.iso).AppendLine();
+                      .Append(e.iso).Append('\t').Append(e.takenKnown ? "1" : "0").AppendLine();
                 }
                 string f = AlbIndexFile(), tmp = f + ".tmp";
                 File.WriteAllText(tmp, sb.ToString(), System.Text.Encoding.UTF8);
@@ -4177,7 +4201,7 @@ namespace ImageBatchTool
                     it.folder = Path.GetDirectoryName(rel);
                     if (string.IsNullOrEmpty(it.folder)) it.folder = ".";
                     it.type = e.type;
-                    it.size = e.size; it.taken = e.taken; it.w = e.w; it.h = e.h;
+                    it.size = e.size; it.taken = e.taken; it.takenKnown = e.takenKnown; it.w = e.w; it.h = e.h;
                     it.lat = e.lat; it.lon = e.lon; it.dur = e.dur;
                     it.make = e.make; it.model = e.model; it.lens = e.lens;
                     it.fnum = e.fnum; it.exposure = e.exposure; it.focal = e.focal; it.iso = e.iso;
@@ -4185,6 +4209,8 @@ namespace ImageBatchTool
                 }
                 if (items.Count == 0) return;
                 items.Sort(delegate(AlbItem a, AlbItem b) {
+                    // 有拍摄时间的永远排在未知时间前面；未知项再按文件创建/修改时间排。
+                    if (a.takenKnown != b.takenKnown) return a.takenKnown ? -1 : 1;
                     if (a.taken != b.taken) return b.taken.CompareTo(a.taken);
                     return string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase);
                 });
@@ -4444,7 +4470,7 @@ namespace ImageBatchTool
         List<FileSystemWatcher> albWatchers = new List<FileSystemWatcher>();
         System.Threading.Timer albWatchTimer;
         static readonly string[] AlbIgnoredDirNames = {
-            "$RECYCLE.BIN", "$WinREAgent", "System Volume Information", "node_modules", ".git",
+            "$RECYCLE.BIN", "$WinREAgent", "System Volume Information",
             "Windows", "Program Files", "Program Files (x86)", "ProgramData"
         };
 
@@ -5070,7 +5096,7 @@ namespace ImageBatchTool
             it.folder = Path.GetDirectoryName(rel);
             if (string.IsNullOrEmpty(it.folder)) it.folder = ".";
             it.type = ce.type;
-            it.size = ce.size; it.taken = ce.taken; it.w = ce.w; it.h = ce.h;
+            it.size = ce.size; it.taken = ce.taken; it.takenKnown = ce.takenKnown; it.w = ce.w; it.h = ce.h;
             it.lat = ce.lat; it.lon = ce.lon; it.dur = ce.dur;
             it.make = ce.make; it.model = ce.model; it.lens = ce.lens;
             it.fnum = ce.fnum; it.exposure = ce.exposure; it.focal = ce.focal; it.iso = ce.iso;
@@ -5087,6 +5113,7 @@ namespace ImageBatchTool
               .Append(",\"w\":").Append(it.w)
               .Append(",\"h\":").Append(it.h)
               .Append(",\"dt\":").Append(it.taken)
+              .Append(",\"tk\":").Append(it.takenKnown ? 1 : 0)
               .Append(",\"d\":").Append((long)it.dur)
               .Append(",\"la\":").Append(it.lat.ToString("0.######", CultureInfo.InvariantCulture))
               .Append(",\"lo\":").Append(it.lon.ToString("0.######", CultureInfo.InvariantCulture))
@@ -5262,8 +5289,8 @@ namespace ImageBatchTool
                         bool isImg = IsAlbImage(f);
                         string bn = Path.GetFileNameWithoutExtension(f);
                         if (!isImg && imgBase.ContainsKey(bn)) continue;
-                        long fsize = 0, mt = 0;
-                        try { fsize = fi.Length; mt = fi.LastWriteTimeUtc.Ticks; } catch { }
+                        long fsize = 0, mt = 0, ctTicks = 0;
+                        try { fsize = fi.Length; mt = fi.LastWriteTimeUtc.Ticks; ctTicks = fi.CreationTimeUtc.Ticks; } catch { }
                         string lk = f.ToLowerInvariant();
                         AlbCacheEnt ce;
                         albIndex.TryGetValue(lk, out ce);
@@ -5279,7 +5306,7 @@ namespace ImageBatchTool
 
                         if (hit)
                         {
-                            it.taken = ce.taken; it.w = ce.w; it.h = ce.h;
+                            it.taken = ce.taken; it.takenKnown = ce.takenKnown; it.w = ce.w; it.h = ce.h;
                             it.lat = ce.lat; it.lon = ce.lon; it.dur = ce.dur;
                             it.make = ce.make; it.model = ce.model; it.lens = ce.lens;
                             it.fnum = ce.fnum; it.exposure = ce.exposure; it.focal = ce.focal; it.iso = ce.iso;
@@ -5287,13 +5314,17 @@ namespace ImageBatchTool
                         else
                         {
                             ctx.changed = true;
-                            it.taken = mt > 0 ? (long)((mt - 621355968000000000L) / 10000000L) : 0;
+                            // 没有 EXIF/视频元数据时，用文件创建时间兜底，并标记为“未知拍摄时间”。
+                            // 这样排序时未知项永远排在已拍摄项之后，而不是混进拍摄时间序列里。
+                            it.taken = ctTicks > 0 ? (long)((ctTicks - 621355968000000000L) / 10000000L)
+                                : (mt > 0 ? (long)((mt - 621355968000000000L) / 10000000L) : 0);
+                            it.takenKnown = false;
                             if (isImg)
                             {
                                 ExifMeta meta;
                                 if (ExifDetail(f, out meta))
                                 {
-                                    if (meta.taken > 0) it.taken = meta.taken;
+                                    if (meta.taken > 0) { it.taken = meta.taken; it.takenKnown = true; }
                                     it.lat = meta.lat; it.lon = meta.lon;
                                     it.make = meta.make; it.model = meta.model; it.lens = meta.lens;
                                     it.fnum = meta.fnum; it.exposure = meta.exposure; it.focal = meta.focal; it.iso = meta.iso;
@@ -5307,11 +5338,11 @@ namespace ImageBatchTool
                             else
                             {
                                 double du = 0; long ct = 0;
-                                if (Mp4Info(f, out du, out ct)) { it.dur = du; if (ct > 0) it.taken = ct; }
+                                if (Mp4Info(f, out du, out ct)) { it.dur = du; if (ct > 0) { it.taken = ct; it.takenKnown = true; } }
                             }
                             ce = new AlbCacheEnt();
                             ce.realPath = f; ce.size = fsize; ce.mtime = mt; ce.type = it.type;
-                            ce.taken = it.taken; ce.w = it.w; ce.h = it.h; ce.lat = it.lat; ce.lon = it.lon; ce.dur = it.dur;
+                            ce.taken = it.taken; ce.takenKnown = it.takenKnown; ce.w = it.w; ce.h = it.h; ce.lat = it.lat; ce.lon = it.lon; ce.dur = it.dur;
                             ce.make = it.make; ce.model = it.model; ce.lens = it.lens;
                             ce.fnum = it.fnum; ce.exposure = it.exposure; ce.focal = it.focal; ce.iso = it.iso;
                         }
@@ -5406,7 +5437,7 @@ namespace ImageBatchTool
                 long scanStarted = DateTime.UtcNow.Ticks;
 
                 var skipDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-                    "$RECYCLE.BIN", "System Volume Information", "$WinREAgent", "node_modules", ".git",
+                    "$RECYCLE.BIN", "System Volume Information", "$WinREAgent",
                     "Windows", "Program Files", "Program Files (x86)", "ProgramData"
                 };
 
@@ -5468,6 +5499,8 @@ namespace ImageBatchTool
 
                 long total = totalBox[0];
                 var ctx = new AlbScanCtx();
+                albLiveScanCtx = ctx;
+                aiScanKickCount = 0;
                 Send("{\"type\":\"albscan\",\"phase\":\"scan\",\"done\":0,\"total\":" + total + "}");
                 // 图片解码/磁盘读取并行度控制在 3，避免和缩略图、人物分析抢满 CPU 和磁盘队列。
                 int scanParallel = Math.Max(2, Math.Min(3, Environment.ProcessorCount));
@@ -5483,6 +5516,7 @@ namespace ImageBatchTool
                     if (scanTask.Wait(2000)) break;
                     AlbScanSendProgress(ctx, total);
                     AlbScanCheckpointNow(ctx);
+                    AiKickScanIndex(ctx);
                 }
                 scanTask.Wait();
                 AlbScanFlush(ctx, total, true);
@@ -5515,12 +5549,15 @@ namespace ImageBatchTool
                 bool changed2 = ctx.changed || items.Count != albItems.Count;
 
                 items.Sort(delegate(AlbItem a, AlbItem b) {
+                    if (a.takenKnown != b.takenKnown) return a.takenKnown ? -1 : 1;
                     if (a.taken != b.taken) return b.taken.CompareTo(a.taken);
                     return string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase);
                 });
 
                 bool autoUpdate = albScanAuto || albItems.Count > 0;
                 albItems = items;
+                if (albLiveScanCtx == ctx) albLiveScanCtx = null;
+                aiScanKickCount = 0;
                 albIndex = newIndex;
                 SaveAlbIndex(newIndex);
                 SaveAlbDirStamps(newStamps);
@@ -5587,6 +5624,8 @@ namespace ImageBatchTool
             catch (Exception ex) { Log("相册扫描异常: " + ex); Send("{\"type\":\"toast\",\"msg\":" + JsonStr("相册扫描失败: " + ex.Message) + "}"); }
             finally
             {
+                albLiveScanCtx = null;
+                aiScanKickCount = 0;
                 bool rescan = false;
                 bool rescanFull = false;
                 lock (albScanStateGate)
@@ -5871,8 +5910,8 @@ namespace ImageBatchTool
                 foreach (var it in albItems) if (string.Equals(it.path, path, StringComparison.OrdinalIgnoreCase)) { hit = it; break; }
                 string typ = hit != null ? hit.type :
                     (IsAlbVideo(path) ? "video" : (IsAlbGif(path) ? "gif" : (IsAlbRaw(path) ? "raw" : "photo")));
-                int w = 0, h = 0; long sz = 0; long dt = 0; double du = 0, la = 0, lo = 0;
-                if (hit != null) { sz = hit.size; dt = hit.taken; du = hit.dur; la = hit.lat; lo = hit.lon; }
+                int w = 0, h = 0; long sz = 0; long dt = 0; double du = 0, la = 0, lo = 0; bool tk = false;
+                if (hit != null) { sz = hit.size; dt = hit.taken; tk = hit.takenKnown; du = hit.dur; la = hit.lat; lo = hit.lon; }
                 string b64 = null;
                 try
                 {
@@ -5955,7 +5994,7 @@ namespace ImageBatchTool
                 string gifUrl = typ == "gif" ? AlbPrepareMedia(path) : "";
                 Send("{\"type\":\"albview\",\"p\":" + JsonStr(path) + ",\"n\":" + JsonStr(Path.GetFileName(path)) +
                      ",\"t\":" + JsonStr(typ) + ",\"s\":" + sz + ",\"w\":" + w + ",\"h\":" + h +
-                     ",\"dt\":" + dt + ",\"d\":" + (long)du +
+                     ",\"dt\":" + dt + ",\"tk\":" + (tk ? 1 : 0) + ",\"d\":" + (long)du +
                      ",\"la\":" + la.ToString("0.######", CultureInfo.InvariantCulture) +
                      ",\"lo\":" + lo.ToString("0.######", CultureInfo.InvariantCulture) +
                      ",\"c\":" + JsonStr(comps) +
@@ -8856,6 +8895,74 @@ namespace ImageBatchTool
             catch { }
         }
 
+        // 用一个门闩保证同一时刻只启动一个索引进程，避免扫描线程/详情页/定时器并发打进来。
+        bool AiTryBeginIndex()
+        {
+            lock (aiIndexGate)
+            {
+                if (aiIndexRunning || aiServerStarting) return false;
+                aiReindexPending = false;
+                aiIndexRunning = true;
+                return true;
+            }
+        }
+
+        // 扫描主循环每隔 2 秒调用：有第一批结果就开始建索引；索引正在跑则把后续新增项排队。
+        void AiKickScanIndex(AlbScanCtx ctx)
+        {
+            try
+            {
+                if (ctx == null || aiIndexUnavailable) return;
+                int count;
+                lock (ctx.gate) count = ctx.items.Count;
+                if (count <= 0) return;
+                if (aiIndexRunning || aiServerStarting)
+                {
+                    if (count - aiScanKickCount >= 100)
+                    {
+                        aiScanKickCount = count;
+                        aiReindexPending = true;
+                    }
+                    return;
+                }
+                aiScanKickCount = count;
+                AiEnsureSearch(true);
+            }
+            catch { }
+        }
+
+        // 查看详情时把当前图片写成优先项，索引脚本会在下一张前把它提到队首。
+        void AiMarkPriority(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path)) return;
+                string dir = AiSearchDir();
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "priority.txt"), path, new UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        // 详情页点击后：如果索引还没完成，或库里条目少于当前相册条目，就立即启动/续跑索引。
+        void AiEnsureViewerPriority(string path)
+        {
+            try
+            {
+                AiMarkPriority(path);
+                if (aiIndexRunning || aiServerStarting)
+                {
+                    // 扫描期间索引脚本拿到的 manifest 可能还不完整；当前图片的
+                    // 优先级先写入，等这一轮结束后再用完整清单续跑一次。
+                    if (albLiveScanCtx != null) aiReindexPending = true;
+                    return;
+                }
+                int count = AiCurrentItemCount();
+                if (count > 0 && (!aiIndexDone || aiIndexItemCount < count)) AiEnsureSearch(true);
+            }
+            catch { }
+        }
+
         // 在「搜索」打开或相册重新扫描完成后调用。force=true 时即使已有索引也重新核对新增/变更文件。
         void AiEnsureSearch()
         {
@@ -8873,7 +8980,7 @@ namespace ImageBatchTool
                     return;
                 }
                 if (aiReady && !force) return;
-                if (albItems == null || albItems.Count == 0)
+                if (AiCurrentItemCount() == 0)
                 {
                     Send("{\"type\":\"albaiindex\",\"phase\":\"idle\",\"done\":0,\"total\":0}");
                     return;
@@ -8890,7 +8997,14 @@ namespace ImageBatchTool
                     AiStartServer();
                     return;
                 }
-                aiIndexRunning = true;
+                // 相册仍在扫描时使用“部分索引”模式：只增量写入当前已扫到的条目，
+                // 不删除旧索引；扫描结束后的完整索引再统一清理幽灵项。
+                bool partialIndex = albLiveScanCtx != null;
+                if (!AiTryBeginIndex())
+                {
+                    if (force) aiReindexPending = true;
+                    return;
+                }
                 Thread t = new Thread(() =>
                 {
                     try
@@ -8898,10 +9012,11 @@ namespace ImageBatchTool
                         string dir = AiSearchDir();
                         aiIndexDb = Path.Combine(dir, "index.db");
                         aiIndexStop = Path.Combine(dir, "index.stop");
+                        string priorityFile = Path.Combine(dir, "priority.txt");
                         try { if (File.Exists(aiIndexStop)) File.Delete(aiIndexStop); } catch { }
                         string manifest = Path.Combine(dir, "manifest.json");
                         AiBuildManifest(manifest);
-                        AiStartIndex(manifest, aiIndexDb, aiIndexStop);
+                        AiStartIndex(manifest, aiIndexDb, aiIndexStop, partialIndex, priorityFile);
                     }
                     catch (Exception ex)
                     {
@@ -8919,9 +9034,30 @@ namespace ImageBatchTool
             }
         }
 
+        // 扫描期间优先使用实时扫描清单；扫描结束后再用完整 albItems。
+        List<AlbItem> AiManifestItems()
+        {
+            var live = albLiveScanCtx;
+            if (live != null)
+            {
+                lock (live.gate) return new List<AlbItem>(live.items);
+            }
+            return albItems;
+        }
+
+        int AiCurrentItemCount()
+        {
+            var live = albLiveScanCtx;
+            if (live != null)
+            {
+                lock (live.gate) return live.items.Count;
+            }
+            return albItems == null ? 0 : albItems.Count;
+        }
+
         void AiBuildManifest(string manifestPath)
         {
-            var items = albItems;
+            var items = AiManifestItems();
             var sb = new StringBuilder(Math.Max(1024, (items == null ? 0 : items.Count) * 180));
             sb.Append("{\"items\":[");
             int n = 0;
@@ -8952,7 +9088,7 @@ namespace ImageBatchTool
             File.WriteAllText(manifestPath, sb.ToString(), new UTF8Encoding(false));
         }
 
-        void AiStartIndex(string manifest, string db, string stopFile)
+        void AiStartIndex(string manifest, string db, string stopFile, bool partial, string priorityFile)
         {
             try
             {
@@ -8964,7 +9100,8 @@ namespace ImageBatchTool
                 psi.FileName = AiPythonExe();
                 psi.Arguments = "-u " + AiQ(script) + " --manifest " + AiQ(manifest) + " --db " + AiQ(db) +
                                 " --model-dir " + AiQ(AiModelDir()) + " --yolo-dir " + AiQ(AiYoloDir()) + " --stop " + AiQ(stopFile) +
-                                " --perf " + AiQ(perfMode) + " --gpu " + (perfMode == "low" ? "0" : "1");
+                                " --perf " + AiQ(perfMode) + " --gpu " + (perfMode == "low" ? "0" : "1") +
+                                " --partial " + (partial ? "1" : "0") + " --priority " + AiQ(priorityFile);
                 psi.WorkingDirectory = Application.StartupPath;
                 psi.UseShellExecute = false;
                 psi.CreateNoWindow = true;
@@ -9006,8 +9143,8 @@ namespace ImageBatchTool
                         if (phase == "done")
                         {
                             aiIndexDone = true;
-                            aiIndexRunning = false;
                             aiIndexDoneCount = Math.Max(aiIndexDoneCount, total);
+                            if (!string.IsNullOrEmpty(aiPendingTagPath)) AiStartServer();
                         }
                         if (phase == "stopped" || phase == "unavailable" || phase == "error")
                         {
@@ -9137,6 +9274,12 @@ namespace ImageBatchTool
                                 if (aiIndexDone && aiQueryProc != null) AiReloadIndex();
                                 // 索引刚完成时由 reloaded 事件统一重查，避免 ready 和 reloaded 各发一次。
                                 if (!string.IsNullOrEmpty(aiLastQuery) && !aiReloadQueryPending) AiSendQuery(aiLastQuery);
+                                if (!string.IsNullOrEmpty(aiPendingTagPath))
+                                {
+                                    string pendingTag = aiPendingTagPath;
+                                    aiPendingTagPath = "";
+                                    AiSendTagQuery(pendingTag);
+                                }
                                 if (aiReindexPending)
                                 {
                                     aiReindexPending = false;
@@ -9162,6 +9305,10 @@ namespace ImageBatchTool
                         else if (type == "result")
                         {
                             Send(line.Replace("\"type\":\"result\"", "\"type\":\"albaisearch\""));
+                        }
+                        else if (type == "tags")
+                        {
+                            Send(line.Replace("\"type\":\"tags\"", "\"type\":\"albtags\""));
                         }
                         else if (type == "error")
                         {
@@ -9225,6 +9372,37 @@ namespace ImageBatchTool
                 return;
             }
             AiSendQuery(aiLastQuery);
+        }
+
+        // 详情页按路径向常驻查询进程索取这张图的全部 AI 标签。
+        void AiQueryTags(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            AiEnsureViewerPriority(path);
+            if (!aiReady || aiQueryIn == null)
+            {
+                aiPendingTagPath = path;
+                Send("{\"type\":\"albtags\",\"p\":" + JsonStr(path) + ",\"tags\":[],\"status\":\"indexing\"}");
+                if (aiIndexDone) AiStartServer();
+                else AiEnsureSearch();
+                return;
+            }
+            AiSendTagQuery(path);
+        }
+
+        void AiSendTagQuery(string path)
+        {
+            try
+            {
+                if (aiQueryIn == null) return;
+                aiQueryIn.WriteLine("{\"cmd\":\"detail\",\"p\":" + JsonStr(path) + "}");
+                aiQueryIn.Flush();
+            }
+            catch
+            {
+                aiReady = false;
+                Send("{\"type\":\"albtags\",\"p\":" + JsonStr(path) + ",\"tags\":[],\"status\":\"error\"}");
+            }
         }
 
         void AiSendQuery(string q)
