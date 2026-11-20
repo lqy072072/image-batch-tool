@@ -272,6 +272,13 @@ def main():
         if not q:
             emit({"type": "result", "q": q, "paths": [], "scores": []})
             continue
+        # 详情页标签点击：只查多标签索引，不做 CLIP 语义扩展。
+        if q.lower().startswith("tag:"):
+            tag = q[4:].strip()
+            paths = tag_search(text_conn, tag, limit)
+            emit({"type": "result", "q": tag, "paths": paths, "scores": [1.0] * len(paths),
+                  "count": len(paths), "ocr_count": 0, "tag_count": len(paths), "obj_count": 0})
+            continue
         try:
             if q in query_cache:
                 cached = query_cache[q]

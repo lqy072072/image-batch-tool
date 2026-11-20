@@ -566,7 +566,8 @@ body.skin-fade, body.skin-fade * { transition: background-color .28s ease, color
 .alb-vtags .lg.clip::before { background:#83c478; }
 .alb-vtags .lg.ocr::before { background:#d9ae63; }
 .alb-vtags .chips { display:flex; flex-wrap:wrap; gap:5px; }
-.alb-vtags .tag { display:inline-flex; align-items:center; gap:3px; max-width:100%; font-size:10px; line-height:1.25; color:#d7e6fb; background:#24384f; border:1px solid #365674; border-radius:10px; padding:3px 7px; }
+.alb-vtags .tag { display:inline-flex; align-items:center; gap:3px; max-width:100%; font-size:10px; line-height:1.25; color:#d7e6fb; background:#24384f; border:1px solid #365674; border-radius:10px; padding:3px 7px; cursor:pointer; transition:background .15s,border-color .15s,filter .15s; }
+.alb-vtags .tag:hover { border-color:#4ea1ff; filter:brightness(1.15); }
 .alb-vtags .tag .k { color:#8ab4dd; font-size:9px; }
 .alb-vtags .tag.ocr { color:#ffe2a8; background:#49391f; border-color:#6b5227; }
 .alb-vtags .tag.ocr .k { color:#d9ae63; }
@@ -777,10 +778,18 @@ window.addEventListener('mouseup', function(e) {
         <div class="crop-overlay" id="cropOverlay">
           <div class="crop-rect" id="cropRect" style="display:none"></div>
         </div>
-        <div id="wipeLayer" style="display:none;position:absolute;inset:0;overflow:hidden;z-index:12">
-          <img id="wipeImg" draggable="false" style="max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);-webkit-user-drag:none;user-select:none;clip-path:inset(0 50% 0 0)">
-          <div id="wipeLine" style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:#4ea1ff;box-shadow:0 0 6px rgba(78,161,255,.8)"></div>
-          <div id="wipeTag" style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);color:#ddd;font-size:11px;padding:2px 6px;border-radius:4px">原图</div>
+        <div id="wipeLayer" style="display:none;position:absolute;left:0;top:0;overflow:hidden;z-index:12;pointer-events:none">
+          <img id="wipeImg" draggable="false" style="position:absolute;left:0;top:0;width:100%;height:100%;object-fit:fill;-webkit-user-drag:none;user-select:none;clip-path:inset(0 50% 0 0)">
+          <div id="wipeLine" style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:#4ea1ff;box-shadow:0 0 6px rgba(78,161,255,.8);pointer-events:none"></div>
+          <div id="wipeHit" style="position:absolute;top:0;bottom:0;left:50%;width:20px;transform:translateX(-50%);cursor:ew-resize;pointer-events:auto"></div>
+          <div id="wipeHandle" style="position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#4ea1ff;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);cursor:ew-resize;pointer-events:auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">⇔</div>
+          <div id="wipeTag" style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.62);color:#fff;font-size:11px;padding:2px 7px;border-radius:4px;pointer-events:none">原图</div>
+          <div id="wipeTagR" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.62);color:#fff;font-size:11px;padding:2px 7px;border-radius:4px;pointer-events:none">修改后</div>
+        </div>
+        <div id="wipeBar" style="display:none;position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:min(360px,72%);z-index:15;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.18);border-radius:18px;padding:6px 12px;align-items:center;gap:8px;color:#ddd;font-size:11px;user-select:none">
+          <span style="white-space:nowrap">原图</span>
+          <input id="wipeRange" type="range" min="0" max="100" step="1" value="50" oninput="wipeRangeInput(this)" style="flex:1;min-width:80px;accent-color:#4ea1ff;cursor:ew-resize">
+          <span style="white-space:nowrap">修改后</span>
         </div>
       </div>
     </div>
@@ -1440,32 +1449,69 @@ function toggleWipe() {
 }
 function renderWipe() {
   const layer = document.getElementById('wipeLayer');
+  const bar = document.getElementById('wipeBar');
   if (!layer) return;
-  if (!_wipeOn || !_origSrc) { layer.style.display = 'none'; return; }
+  if (!_wipeOn || !_origSrc) { layer.style.display = 'none'; if (bar) bar.style.display = 'none'; return; }
+  const box = imageRect();
+  if (!box || !box.width || !box.height) { layer.style.display = 'none'; if (bar) bar.style.display = 'none'; return; }
   const img = document.getElementById('wipeImg');
   if (img.getAttribute('src') !== _origSrc) img.src = _origSrc;
+  // 对比层精确贴住当前图片（跟随缩放/平移），这样左右两侧看到的是同一块画面。
   layer.style.display = 'block';
+  layer.style.left = box.left + 'px';
+  layer.style.top = box.top + 'px';
+  layer.style.width = box.width + 'px';
+  layer.style.height = box.height + 'px';
   img.style.clipPath = 'inset(0 ' + (100 - _wipePos) + '% 0 0)';
-  document.getElementById('wipeLine').style.left = _wipePos + '%';
+  const line = document.getElementById('wipeLine');
+  const hit = document.getElementById('wipeHit');
+  const handle = document.getElementById('wipeHandle');
+  if (line) line.style.left = _wipePos + '%';
+  if (hit) hit.style.left = _wipePos + '%';
+  if (handle) handle.style.left = _wipePos + '%';
+  if (bar) {
+    bar.style.display = 'flex';
+    const range = document.getElementById('wipeRange');
+    if (range) range.value = String(Math.round(_wipePos));
+  }
+}
+function wipeRangeInput(el) {
+  if (!el) return;
+  _wipePos = Math.max(0, Math.min(100, Number(el.value) || 0));
+  if (!_wipeOn) {
+    _wipeOn = true;
+    const btn = document.getElementById('wipeBtn');
+    if (btn) btn.classList.add('on');
+    if (!_origSrc) post('getorig');
+  }
+  renderWipe();
 }
 (function bindWipe() {
   const prev = document.getElementById('preview');
   if (!prev) return;
-  prev.addEventListener('mousedown', e => {
+  function setPos(clientX) {
+    const box = imageRect();
+    if (!box || !box.width) return;
+    _wipePos = Math.max(0, Math.min(100, (clientX - box.left) / box.width * 100));
+    renderWipe();
+  }
+  function start(e) {
     if (!_wipeOn) return;
     _wipeDragging = true;
-    const r = prev.getBoundingClientRect();
-    _wipePos = Math.max(2, Math.min(98, (e.clientX - r.left) / r.width * 100));
-    renderWipe();
+    setPos(e.clientX);
     e.preventDefault();
+    e.stopPropagation();
+  }
+  ['wipeHit', 'wipeHandle'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('mousedown', start);
   });
   window.addEventListener('mousemove', e => {
     if (!_wipeDragging) return;
-    const r = prev.getBoundingClientRect();
-    _wipePos = Math.max(2, Math.min(98, (e.clientX - r.left) / r.width * 100));
-    renderWipe();
+    setPos(e.clientX);
   });
   window.addEventListener('mouseup', () => { _wipeDragging = false; });
+  window.addEventListener('resize', () => { if (_wipeOn) renderWipe(); });
 })();
 
 // ---- 预设 ----
@@ -1639,6 +1685,7 @@ function applyZoom() {
     img.style.maxHeight = 'none';
     document.getElementById('zoomLabel').textContent = Math.round(sc*100)+'%';
   }
+  if (typeof renderWipe === 'function') renderWipe();
 }
 function zoomIn() { _zoom = _zoom === 0 ? 1.25 : Math.min(_zoom*1.25, 100); applyZoom(); }
 function zoomOut() { _zoom = _zoom <= 0.1 ? 0.1 : Math.max(_zoom/1.25, 0.1); applyZoom(); }
@@ -2452,9 +2499,14 @@ if (window.chrome && chrome.webview) {
       const prev = document.getElementById('preview');
       const guide = document.getElementById('tsGuide');
       const overlay = document.getElementById('cropOverlay');
+      const wipe = document.getElementById('wipeLayer');
+      const wipeBar = document.getElementById('wipeBar');
+      // 清空预览时保留辅助线、裁切层和对比拉帘，避免再次添加照片后对比功能失效。
       prev.innerHTML = '<div class="preview-empty"><div class="icon">🖼</div><div>添加照片开始处理</div></div>';
       if (guide) prev.appendChild(guide);
       if (overlay) prev.appendChild(overlay);
+      if (wipe) prev.appendChild(wipe);
+      if (wipeBar) prev.appendChild(wipeBar);
       document.getElementById('outInfo').textContent = '未选择图片';
       document.getElementById('renderName').textContent = '';
       document.getElementById('pbar').style.width = '0%';
@@ -2467,34 +2519,43 @@ if (window.chrome && chrome.webview) {
       const prevId = document.getElementById('preview');
       const guideId = document.getElementById('tsGuide');
       const overlayId = document.getElementById('cropOverlay');
+      const wipeId = document.getElementById('wipeLayer');
+      const wipeBarId = document.getElementById('wipeBar');
       const imgId = document.createElement('img');
       imgId.draggable = false;
       imgId.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
-      imgId.onload = function(){ updateGuide(); };
+      imgId.onload = function(){ updateGuide(); renderWipe(); };
       imgId.src = m.data;
       prevId.innerHTML = '';
       prevId.appendChild(imgId);
       if (guideId) prevId.appendChild(guideId);
       if (overlayId) prevId.appendChild(overlayId);
+      if (wipeId) prevId.appendChild(wipeId);
+      if (wipeBarId) prevId.appendChild(wipeBarId);
       applyZoom();
       updateGuide();
+      renderWipe();
     } else if (m.type === 'preview') {
       const sb2 = document.getElementById('statusBox');
       sb2.textContent = '✓ 预览已刷新';
       sb2.style.color = '#9fff9f';
       const prev = document.getElementById('preview');
-      // 保留辅助线和裁切层
+      // 保留辅助线、裁切层和对比拉帘，刷新预览时不能把它们一起清掉
       const guide = document.getElementById('tsGuide');
       const overlay = document.getElementById('cropOverlay');
+      const wipe = document.getElementById('wipeLayer');
+      const wipeBar = document.getElementById('wipeBar');
       const newImg = document.createElement('img');
       newImg.draggable = false;
       newImg.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
-      newImg.onload = function() { updateGuide(); };
+      newImg.onload = function() { updateGuide(); renderWipe(); };
       newImg.src = m.data;
       prev.innerHTML = '';
       prev.appendChild(newImg);
       if (guide) prev.appendChild(guide);
       if (overlay) prev.appendChild(overlay);
+      if (wipe) prev.appendChild(wipe);
+      if (wipeBar) prev.appendChild(wipeBar);
       window._lastHist = m.hist;
       drawHist(m.hist);
       applyZoom();
@@ -2765,10 +2826,8 @@ function dupSelectAll(v){
   renderDupGroups();
 }
 function showDupPanel(){
-  iosShow(document.getElementById("dupOverlay"), "flex");
-  if(!window._dupGroups||!window._dupGroups.length) post("dupshow");
-  renderDupGroups();
-  dupQueueThumbs();
+  // 去重改为独立的原生窗口，可拖到相册窗口之外；旧页面内浮层仅保留作兜底，不再主动显示。
+  post('dupwindow');
 }
 function closeDupPanel(){ iosHide(document.getElementById("dupOverlay")); }
 function dupToggleMin(){
@@ -2846,7 +2905,7 @@ document.addEventListener("keydown",function(e){
   },{passive:false});
 })();
 // ==================== 相册 UI ====================
-window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:''};
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:''};
 
 function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -3091,7 +3150,7 @@ function albToggleTimeSort(){
 function albSearchResetState(){
   const A=window._alb;
   if(A.searchTimer){ clearTimeout(A.searchTimer); A.searchTimer=null; }
-  A.searchMode=false; A.search=''; A.searchTotal=0;
+  A.searchMode=false; A.search=''; A.searchTotal=0; A.searchTagOnly='';
   A.aiPending=false; A.aiResults=null; A.aiResultsQ=''; A.aiError='';
   const row=document.getElementById('albSearchRow'); if(row) row.style.display='none';
   const box=document.getElementById('albSearchCount'); if(box) box.textContent='';
@@ -3132,6 +3191,7 @@ function albSearchOpen(){
 }
 function albSearchInputChanged(){
   const A=window._alb;
+  A.searchTagOnly='';
   if(A.searchTimer) clearTimeout(A.searchTimer);
   A.searchTimer=setTimeout(function(){ A.searchTimer=null; albSearchDo(); },160);
 }
@@ -3160,16 +3220,17 @@ function albSearchDo(){
   const A=window._alb;
   const input=document.getElementById('albSearchInput');
   A.search=(input?input.value:'').trim();
+  const tagOnly=!!(A.searchTagOnly && A.search===A.searchTagOnly);
   A.searchMode=true; A.searchTotal=0;
   A.aiPending=false; A.aiResults=null; A.aiResultsQ=''; A.aiError='';
   A.vDirty=true; A.vList=null;
   albResetScroll();
   albRender();
   albSearchUpdateCount();
-  // 画面语义搜索交给本地 Chinese-CLIP；元数据/日期/类型仍由前端直接过滤。
-  if(A.search && albSearchUsesAi(A.search)){
+  // 画面语义搜索交给本地 Chinese-CLIP；点击详情页标签时只查多标签索引，避免混入语义相近但不是同标签的图片。
+  if(A.search && (tagOnly || albSearchUsesAi(A.search))){
     A.aiPending=true;
-    post('albaisearch|'+encodeURIComponent(A.search));
+    post('albaisearch|'+encodeURIComponent((tagOnly?'tag:':'')+A.search));
   }
 }
 function albSearchUpdateCount(){
@@ -3184,7 +3245,8 @@ function albSearchUpdateCount(){
     return;
   }
   if(A.aiPending){ box.textContent='AI 搜索中…'; return; }
-  box.textContent=(A.searchTotal||0)+' 项'+(A.dataLoaded?'':' · 加载中')+(A.aiResultsQ&&A.aiResultsQ===A.search?' · AI':'');
+  const tagOnly=!!(A.searchTagOnly && A.searchTagOnly===A.search);
+  box.textContent=(A.searchTotal||0)+' 项'+(A.dataLoaded?'':' · 加载中')+(tagOnly?' · 标签':(A.aiResultsQ&&A.aiResultsQ===A.search?' · AI':''));
 }
 function albSearchDateRange(q){
   q=(q||'').replace(/\s+/g,'');
@@ -3268,6 +3330,12 @@ function albSearchFilter(all,q){
   // 搜索模式打开但还没输入关键词时，不展示整本相册；只展示真正的搜索结果。
   // 否则会出现“刚打开搜索却先显示相册最上面几张图”的错觉。
   if(!q) return [];
+  const tagA=window._alb;
+  // 详情页标签点击走精确标签检索：只展示确实带有该标签的图片，不混入 CLIP 语义相近结果。
+  if(tagA.searchTagOnly && tagA.searchTagOnly===q){
+    if(tagA.aiResults && tagA.aiResultsQ===q) return all.filter(function(i){ return tagA.aiResults[(i.p||'').toLowerCase()]; });
+    return [];
+  }
   const q0=q.toLowerCase();
   const range=albSearchDateRange(q);
   if(range){
@@ -4259,13 +4327,24 @@ function albTagsHtml(tags,status){
     const cls=srcClass[src]||'';
     const name=srcName[src]||'标签';
     const tip=(typeof it==='object' && it.s)?(' score='+it.s):'';
-    chips+='<span class="tag '+cls+'" title="'+escHtml((srcKind[src]||name)+tip)+'"><span class="k">'+name+'</span>'+escHtml(t)+'</span>';
+    chips+='<span class="tag '+cls+'" data-tag="'+escAttr(t)+'" onclick="albTagSearch(this,event)" title="点击搜索同标签 · '+escAttr((srcKind[src]||name)+tip)+'"><span class="k">'+name+'</span>'+escHtml(t)+'</span>';
   }
   return head+'<div class="chips">'+chips+'</div>';
 }
 function albRenderTags(tags,status){
   const box=document.getElementById('albVTags');
   if(box) box.innerHTML=albTagsHtml(tags||[],status||'');
+}
+function albTagSearch(el,ev){
+  if(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} }
+  const t=el&&el.getAttribute?el.getAttribute('data-tag'):'';
+  if(!t) return;
+  try{ closeAlbView(); }catch(e){}
+  window._alb.searchTagOnly=t;
+  albSearchOpen();
+  albSearchHint(t);
+  const input=document.getElementById('albSearchInput');
+  if(input){ input.value=t; try{ input.focus(); }catch(e){} }
 }
 function albRequestTags(p){
   if(!p) return;

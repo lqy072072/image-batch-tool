@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.07-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.07/image-batch-tool_v2.07_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.08-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.08/image-batch-tool_v2.08_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 1.1GB，已内置 Python 运行时、Chinese-CLIP 与 PP-OCRv4 模型）：
 
-**[👉 下载 image-batch-tool_v2.07_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.07/image-batch-tool_v2.07_setup.exe)**
+**[👉 下载 image-batch-tool_v2.08_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.08/image-batch-tool_v2.08_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -55,6 +55,11 @@
 - **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存 / 缓存位置
 
 ![选项菜单](docs/screenshots/album_v2_menu.png)
+
+### v2.08 更新
+- **标签点击即搜索**：相册详情页的 AI 索引标签可直接点击，标签会自动填入搜索框并只检索相同标签的图片（走本地多标签索引，不混入 CLIP 语义相近结果）；保留原有三模型颜色区分和详情页其他操作
+- **图片编辑对比滑杆**：预览区新增「原图 ↔ 修改后」左右对比滑杆，拖动底部滑块或蓝色分割线即可查看完全未处理的原图与当前修改效果；对比层会跟随缩放/平移和预览刷新，不影响原有对比开关与其他编辑功能
+- **去重独立窗口**：相册「去重」改为独立原生窗口，可自由移动到相册窗口之外、缩放和最小化，不再被相册窗口边界限制；扫描文件夹、分组、缩略图、放大对比和移入回收站等原有去重功能保留
 
 ### v2.07 更新
 - **三模型各自标签**：YOLO 物体、CLIP 画面、OCR 文字不再跨模型去重，同一张图会保留三套模型各自给出的索引标签；详情页用蓝 / 绿 / 橙三色和 `YOLO` / `CLIP` / `OCR` 前缀区分来源

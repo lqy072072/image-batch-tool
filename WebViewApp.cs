@@ -1715,6 +1715,9 @@ namespace ImageBatchTool
         public static bool RestartAfterCacheMove = false;
         public static string RestartMode = "album";
         WebView2 web;
+        WebView2 dedupWeb;
+        Form dedupForm;
+        CoreWebView2Environment webEnv;
         public SplashForm Splash;
         public string StartupMode = "album";
         readonly List<string> files = new List<string>();
@@ -1859,6 +1862,7 @@ namespace ImageBatchTool
 
             this.Load += (s, e) => ApplyRoundedCorner();
             this.Resize += (s, e) => ApplyRoundedCorner();
+            this.FormClosed += (s, e) => CloseDupWindow();
         }
 
         void ApplyRoundedCorner()
@@ -1894,6 +1898,7 @@ namespace ImageBatchTool
                 {
                     Log("WebView2 环境创建失败: " + ex.Message);
                 }
+                webEnv = env;
                 if (env != null) await web.EnsureCoreWebView2Async(env);
                 else await web.EnsureCoreWebView2Async(null);
                 int tries = 0;
@@ -1953,12 +1958,155 @@ namespace ImageBatchTool
 
         void Send(string json)
         {
+            PostToWeb(web, json);
+            // 去重独立窗口只接收去重相关消息，避免预览等大消息重复传输。
+            if (json != null && json.StartsWith("{\"type\":\"dup", StringComparison.Ordinal))
+                PostToWeb(dedupWeb, json);
+        }
+
+        static void PostToWeb(WebView2 target, string json)
+        {
+            if (target == null || json == null) return;
             try {
-                if (web.InvokeRequired)
-                    web.Invoke((Action)(() => { try { web.CoreWebView2.PostWebMessageAsJson(json); } catch {} }));
-                else
-                    web.CoreWebView2.PostWebMessageAsJson(json);
+                if (target.InvokeRequired)
+                    target.Invoke((Action)(() => { try { if (target.CoreWebView2 != null) target.CoreWebView2.PostWebMessageAsJson(json); } catch {} }));
+                else if (target.CoreWebView2 != null)
+                    target.CoreWebView2.PostWebMessageAsJson(json);
             } catch {}
+        }
+
+        void OpenDupWindow()
+        {
+            try
+            {
+                if (dedupForm != null && !dedupForm.IsDisposed)
+                {
+                    if (dedupForm.WindowState == FormWindowState.Minimized) dedupForm.WindowState = FormWindowState.Normal;
+                    dedupForm.Show();
+                    dedupForm.Activate();
+                    return;
+                }
+                var f = new Form
+                {
+                    Text = "照片去重",
+                    Width = 1000,
+                    Height = 720,
+                    MinimumSize = new Size(760, 520),
+                    StartPosition = FormStartPosition.CenterScreen,
+                    BackColor = Color.FromArgb(32, 32, 36),
+                    ShowInTaskbar = true,
+                    Icon = this.Icon
+                };
+                var w = new WebView2 { Dock = DockStyle.Fill };
+                f.Controls.Add(w);
+                dedupForm = f;
+                dedupWeb = w;
+                f.FormClosed += (s, e) =>
+                {
+                    if (dedupWeb == w) dedupWeb = null;
+                    if (dedupForm == f) dedupForm = null;
+                };
+                f.Show();
+                InitDupWeb(w);
+            }
+            catch (Exception ex)
+            {
+                Log("打开去重窗口失败: " + ex.Message);
+            }
+        }
+
+        async void InitDupWeb(WebView2 w)
+        {
+            try
+            {
+                Log("去重窗口 InitDupWeb 开始");
+                if (webEnv != null) await w.EnsureCoreWebView2Async(webEnv);
+                else await w.EnsureCoreWebView2Async(null);
+                Log("去重窗口 EnsureCoreWebView2 完成 core=" + (w.CoreWebView2 != null));
+                int tries = 0;
+                while (w.CoreWebView2 == null && tries < 20) { await Task.Delay(100); tries++; }
+                if (w.CoreWebView2 == null) { Log("去重窗口 WebView2 初始化超时"); return; }
+                w.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "app.local", Application.StartupPath, CoreWebView2HostResourceAccessKind.Allow);
+                w.CoreWebView2.WebMessageReceived += DupWeb_Message;
+                w.CoreWebView2.NavigationCompleted += (s, e) => Log("去重窗口页面加载完成 success=" + e.IsSuccess + " url=" + w.Source);
+                string skinFile = Path.Combine(Application.StartupPath, "skin.txt");
+                string skin = "dark";
+                try { if (File.Exists(skinFile)) skin = File.ReadAllText(skinFile).Trim().ToLower(); } catch { }
+                Log("去重窗口开始导航");
+                w.CoreWebView2.Navigate("http://app.local/dedup.html?skin=" + skin + "&v=" + DateTime.Now.Ticks);
+            }
+            catch (Exception ex)
+            {
+                Log("去重窗口 WebView2 初始化失败: " + ex.Message);
+                try { MessageBox.Show("去重窗口初始化失败：\n" + ex.Message, "照片去重", MessageBoxButtons.OK, MessageBoxIcon.Warning); } catch { }
+            }
+        }
+
+        void CloseDupWindow()
+        {
+            try { if (dedupForm != null && !dedupForm.IsDisposed) dedupForm.Close(); } catch { }
+        }
+
+        void DupWeb_Message(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                string msg = e.TryGetWebMessageAsString();
+                if (string.IsNullOrEmpty(msg)) return;
+                string[] parts = msg.Split('|');
+                switch (parts[0])
+                {
+                    case "dupshow":
+                        Send(dupLastGroupsJson);
+                        SendDupState();
+                        break;
+                    case "dupsrc":
+                        dupUseAlbum = false;
+                        if (parts.Length > 1 && Directory.Exists(parts[1])) dupSrc = parts[1];
+                        else InvokeUi(() => {
+                            using (var d = new FolderBrowserDialog()) {
+                                d.Description = "选择要去重的照片文件夹（会扫描全部子目录）";
+                                if (d.ShowDialog() == DialogResult.OK) dupSrc = d.SelectedPath;
+                            }
+                        });
+                        dupDst = BinDir();
+                        SendDupState();
+                        break;
+                    case "dupalbum":
+                        dupUseAlbum = true; dupSrc = "";
+                        dupDst = BinDir();
+                        SendDupState();
+                        break;
+                    case "dupdst":
+                        BinChooseDir();
+                        break;
+                    case "dupscan":
+                        StartDupScan();
+                        break;
+                    case "duppause":
+                        dupPaused = !dupPaused;
+                        SendDupState();
+                        Send("{\"type\":\"dup\",\"phase\":\"pause\",\"done\":" + dupDone + ",\"total\":" + dupTotal + "}");
+                        break;
+                    case "dupcancel":
+                        dupCancel = true; dupPaused = false;
+                        break;
+                    case "duppreview":
+                        if (parts.Length > 1) DupPreview(parts[1]);
+                        break;
+                    case "dupthumb":
+                        if (parts.Length > 1) QueueDupThumb(parts[1]);
+                        break;
+                    case "dupmove":
+                        if (parts.Length > 1) DupMove(parts[1].Split('\n'));
+                        break;
+                    case "dupclose":
+                        CloseDupWindow();
+                        break;
+                }
+            }
+            catch (Exception ex) { Log("去重窗口消息处理异常: " + ex.Message); }
         }
 
         static bool IsImageFile(string f)
@@ -2244,6 +2392,9 @@ namespace ImageBatchTool
                         Send(dupLastGroupsJson);
                         SendDupState();
                         break;
+                    case "dupwindow":
+                        OpenDupWindow();
+                        break;
                     case "duppreview":
                         if (parts.Length > 1) DupPreview(parts[1]);
                         break;
@@ -2443,7 +2594,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 2.07\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 2.08\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {

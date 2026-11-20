@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>照片去重</title>
+<style>
+  * { box-sizing:border-box; }
+  html,body { width:100%; height:100%; margin:0; overflow:hidden; }
+  body { background:#1f1f22; color:#ddd; font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .dup-panel { width:100%; height:100%; background:#232323; display:flex; flex-direction:column; overflow:hidden; position:relative; }
+  .dup-head { padding:12px 16px; border-bottom:1px solid #333; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; user-select:none; cursor:default; }
+  .dup-head .ops { display:flex; align-items:center; gap:4px; }
+  .dup-head .t { font-size:14px; color:#eee; font-weight:600; }
+  .dup-head .s { font-size:11px; color:#888; margin-left:10px; font-weight:400; }
+  .dup-head .x { cursor:pointer; color:#999; font-size:16px; padding:2px 9px; border-radius:4px; }
+  .dup-head .x:hover { background:#3a3a3a; color:#fff; }
+  .dup-tools { padding:8px 16px; display:flex; gap:8px; border-bottom:1px solid #2e2e2e; align-items:center; flex-shrink:0; flex-wrap:wrap; }
+  .mini-btn { background:#2a2a2a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:11px; padding:4px 8px; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+  .mini-btn:hover { background:#383838; }
+  .dup-path { font-size:10px; color:#888; margin:0 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dup-bar { height:5px; background:#1f1f1f; border-radius:3px; overflow:hidden; margin:8px 0 4px; }
+  .dup-bar > div { height:100%; width:0; background:#0969da; transition:width .15s; }
+  .dup-stat { font-size:10px; color:#999; min-height:13px; }
+  .dup-list { flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+  .dup-group { background:#2a2a2a; border:1px solid #3a3a3a; border-radius:8px; padding:10px; }
+  .dup-group-h { font-size:11px; color:#9a9a9a; display:flex; justify-content:space-between; margin-bottom:8px; }
+  .dup-cells { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; }
+  .dup-cell { width:152px; flex-shrink:0; background:#242424; border-radius:6px; padding:6px; border:1px solid #3a3a3a; }
+  .dup-cell.keep { border-color:#2f7d4f; }
+  .dup-cell.out { border-color:#a33; }
+  .dup-cell img, .dup-cell .ph { width:100%; height:104px; object-fit:cover; border-radius:4px; display:block; background:#1a1a1a; cursor:zoom-in; }
+  .dup-cell .ph { display:flex; align-items:center; justify-content:center; color:#555; font-size:10px; cursor:pointer; }
+  .dup-cell .nm { font-size:10px; color:#ddd; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dup-cell .mt { font-size:9px; color:#888; margin-top:2px; }
+  .dup-cell label { display:flex; align-items:center; gap:4px; font-size:10px; color:#bbb; margin-top:4px; cursor:pointer; }
+  .dup-empty { color:#777; font-size:12px; text-align:center; padding:40px; }
+  .dup-light { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; display:none; align-items:center; justify-content:center; }
+  .dup-light img { max-width:86vw; max-height:80vh; object-fit:contain; box-shadow:0 10px 40px rgba(0,0,0,.7); }
+  .dup-light-info { position:absolute; left:24px; top:16px; color:#ddd; font-size:12px; line-height:1.65; }
+  .dup-light-nav { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); display:flex; gap:10px; align-items:center; }
+  .dup-light-nav button { background:#333; color:#ddd; border:1px solid #555; border-radius:5px; padding:6px 14px; cursor:pointer; font-size:12px; }
+  .dup-light-nav button:hover { background:#444; }
+  body.skin-light { background:#ececf0; color:#1d1d1f; }
+  body.skin-light .dup-panel { background:#f7f7fa; }
+  body.skin-light .dup-head { border-color:#ddd; }
+  body.skin-light .dup-head .t { color:#111; }
+  body.skin-light .dup-head .s { color:#777; }
+  body.skin-light .dup-tools { border-color:#ddd; }
+  body.skin-light .mini-btn { background:#f2f2f5; color:#1d1d1f; border-color:#d1d1d6; }
+  body.skin-light .mini-btn:hover { background:#e8e8ee; border-color:#b9b9c0; }
+  body.skin-light .dup-bar { background:#dcdce2; }
+  body.skin-light .dup-stat, body.skin-light .dup-path { color:#777; }
+  body.skin-light .dup-group { background:#fff; border-color:#dcdce2; }
+  body.skin-light .dup-group-h { color:#666; }
+  body.skin-light .dup-cell { background:#f2f2f5; border-color:#dcdce2; }
+  body.skin-light .dup-cell .nm { color:#222; }
+  body.skin-light .dup-cell .mt { color:#777; }
+  body.skin-light .dup-cell label { color:#444; }
+  body.skin-light .dup-list { background:#f7f7fa; }
+</style>
+</head>
+<body>
+<div class="dup-panel">
+  <div class="dup-head">
+    <div><span class="t">照片去重</span><span class="s" id="dupHeadSub"></span></div>
+    <div class="ops"><span class="x" onclick="post('dupclose')" title="关闭去重窗口">✕</span></div>
+  </div>
+  <div class="dup-tools">
+    <button class="mini-btn" onclick="post('dupsrc')">扫描文件夹</button>
+    <button class="mini-btn" onclick="post('dupscan')">开始扫描</button>
+    <button class="mini-btn" id="dupPauseBtn" onclick="post('duppause')">暂停</button>
+    <button class="mini-btn" onclick="post('dupdst')">回收站目录</button>
+    <span style="font-size:11px;color:#9a9a9a" id="dupDstPath">移入：软件回收站</span>
+    <div class="dup-bar" style="flex:0 0 120px;margin:0"><div id="dupBarFill"></div></div>
+    <span style="font-size:11px;color:#9a9a9a;min-width:52px" id="dupStat">未扫描</span>
+    <span style="flex:1"></span>
+    <button class="mini-btn" onclick="dupSelectAll(true)">全选多余</button>
+    <button class="mini-btn" onclick="dupSelectAll(false)">全不选</button>
+    <span style="font-size:11px;color:#9a9a9a" id="dupSelInfo">已选 0 张</span>
+    <button class="mini-btn" style="background:#b33;color:#fff;border-color:#c44" onclick="dupMoveSelected()">移入回收站</button>
+  </div>
+  <div class="dup-path" id="dupSrcPath" title="">扫描：未选择文件夹</div>
+  <div class="dup-list" id="dupList"><div class="dup-empty">还没有扫描结果，点上方「扫描文件夹」或直接「开始扫描」。</div></div>
+</div>
+<div class="dup-light" id="dupLight">
+  <div class="dup-light-info" id="dupLightInfo"></div>
+  <img id="dupLightImg" src="" alt="">
+  <div class="dup-light-nav">
+    <button onclick="dupLightStep(-1)">‹ 上一张</button>
+    <button onclick="dupLightStep(1)">下一张 ›</button>
+    <button onclick="closeDupLight()">关闭</button>
+  </div>
+</div>
+<script>
+function post(m){ try{ if(window.chrome&&chrome.webview) chrome.webview.postMessage(m); }catch(e){} }
+function fmtSize(n){ if(!n) return "0 B"; const u=["B","KB","MB","GB"]; let i=0,v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i===0? v : v.toFixed(1))+" "+u[i]; }
+function escHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+window._dupGroups=[]; window._dupSel={}; window._dupThumbs={}; window._dupMoveList=[]; window._dupSrc=""; window._dupDst=""; window._dupRunning=false; window._dupPaused=false;
+let _dupLightG=null,_dupLightK=0;
+function dupUpdateSelInfo(){
+  const n=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];}).length;
+  const el=document.getElementById("dupSelInfo"); if(el) el.textContent="已选 "+n+" 张";
+}
+function renderDupGroups(){
+  const list=document.getElementById("dupList"); if(!list) return;
+  const gs=window._dupGroups||[];
+  if(!gs.length){ list.innerHTML='<div class="dup-empty">没有发现重复照片</div>'; dupUpdateSelInfo(); return; }
+  let html="";
+  for(let gi=0;gi<gs.length;gi++){
+    const g=gs[gi].items||[];
+    html+='<div class="dup-group"><div class="dup-group-h"><span>第 '+(gi+1)+' 组 · '+g.length+' 张</span><span>组内按分辨率排序，第 1 张默认保留</span></div><div class="dup-cells">';
+    for(let k=0;k<g.length;k++){
+      const it=g[k]; const ck=!!window._dupSel[it.p];
+      const dt=window._dupThumbs&&window._dupThumbs[it.p];
+      html+='<div class="dup-cell '+(k===0?"keep":"")+(ck?" out":"")+'" data-dp="'+escHtml(it.p)+'">'
+        + (dt?'<img src="'+dt+'" onclick="dupOpenLight('+gi+','+k+')" title="点击放大对比">':'<div class="ph" onclick="dupOpenLight('+gi+','+k+')">载入中…</div>')
+        + '<div class="nm" title="'+escHtml(it.n)+'">'+escHtml(it.n)+'</div>'
+        + '<div class="mt">'+(it.w?it.w+"×"+it.h:"—")+' · '+fmtSize(it.s)+'</div>'
+        + ((it.c&&it.c.length)?'<div class="mt" style="color:#7fb0ff" title="'+escHtml(it.c.join(", "))+'">实况：'+escHtml(it.c.join(", "))+'</div>':'')
+        + (it.d===0?'<div class="mt" style="color:#c9a227">无解码器 · 仅精确判重</div>':'')
+        + '<label><input type="checkbox" data-p="'+escHtml(it.p)+'" '+(ck?"checked":"")+' onchange="dupToggle(this)"> 移入回收站'+(k===0?'（保留项）':'')+'</label>'
+        + '</div>';
+    }
+    html+="</div></div>";
+  }
+  list.innerHTML=html; dupUpdateSelInfo();
+  window._dupThumbReq={};
+  list._dupThumbCursor=0;
+  if(!list._thumbScroll){ list._thumbScroll=true; list.addEventListener('scroll', function(){ if((Date.now()-(list._thumbT||0))>120){ list._thumbT=Date.now(); dupQueueThumbs(); } }); }
+  dupQueueThumbs();
+}
+function dupQueueThumbs(){
+  const list=document.getElementById("dupList"); if(!list) return;
+  window._dupThumbReq=window._dupThumbReq||{};
+  const cells=list.querySelectorAll(".dup-cell");
+  let start=list._dupThumbCursor||0, sent=0;
+  for(let i=start;i<cells.length && sent<120;i++){
+    const p=cells[i].getAttribute("data-dp");
+    list._dupThumbCursor=i+1;
+    if(!p || window._dupThumbReq[p]) continue;
+    if(cells[i].querySelector("img")) continue;
+    window._dupThumbReq[p]=1; post("dupthumb|"+p); sent++;
+  }
+}
+function dupFillThumb(path,data){
+  const list=document.getElementById("dupList"); if(!list||!data) return;
+  const cells=list.querySelectorAll(".dup-cell");
+  for(let i=0;i<cells.length;i++){
+    if(cells[i].getAttribute("data-dp")!==path) continue;
+    const ph=cells[i].querySelector(".ph");
+    if(ph && !cells[i].querySelector("img")){
+      const im=document.createElement("img"); im.src=data; im.alt=""; im.title="点击放大对比";
+      im.onclick=(function(pp){ return function(){ dupOpenLightByPath(pp); }; })(path);
+      cells[i].insertBefore(im, cells[i].firstChild);
+      ph.remove();
+    }
+    return;
+  }
+}
+function dupToggle(cb){
+  const p=cb.getAttribute("data-p");
+  window._dupSel[p]=cb.checked;
+  cb.parentNode.parentNode.classList.toggle("out",cb.checked);
+  dupUpdateSelInfo();
+}
+function dupSelectAll(v){
+  const gs=window._dupGroups||[];
+  window._dupSel={};
+  for(let gi=0;gi<gs.length;gi++){ const g=gs[gi].items||[]; for(let k=0;k<g.length;k++) if(v&&k>0) window._dupSel[g[k].p]=true; }
+  renderDupGroups();
+}
+function dupOpenLightByPath(path){
+  const gs=window._dupGroups||[];
+  for(let gi=0;gi<gs.length;gi++){
+    const g=gs[gi].items||[];
+    for(let k=0;k<g.length;k++) if(g[k].p===path){ dupOpenLight(gi,k); return; }
+  }
+}
+function dupMoveSelected(){
+  const sel=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];});
+  if(!sel.length){ alert("还没有勾选要移出的照片。"); return; }
+  const dst=window._dupDst||"软件回收站";
+  if(!confirm("将把 "+sel.length+" 张照片移入回收站：\n"+dst+"\n\n不会直接删除文件，可在相册「回收站」里还原或彻底删除。")) return;
+  window._dupMoveList=sel.slice();
+  post("dupmove|"+sel.join("\n"));
+}
+function dupOpenLight(gi,k){
+  _dupLightG=gi; _dupLightK=k;
+  document.getElementById("dupLight").style.display="flex";
+  dupLoadLight();
+}
+function dupLoadLight(){
+  const g=(window._dupGroups||[])[_dupLightG]; if(!g) return;
+  const g2=g.items||[]; const it=g2[_dupLightK]; if(!it) return;
+  post("duppreview|"+it.p);
+  const info=document.getElementById("dupLightInfo");
+  if(info) info.textContent="第 "+(_dupLightG+1)+" 组 · "+( _dupLightK+1)+" / "+g2.length+"　"+it.w+"×"+it.h+" · "+fmtSize(it.s);
+}
+function dupLightStep(d){
+  const g=(window._dupGroups||[])[_dupLightG]; if(!g) return;
+  const n=(g.items||[]).length;
+  _dupLightK=(_dupLightK+d+n)%n;
+  document.getElementById("dupLightImg").src="";
+  dupLoadLight();
+}
+function closeDupLight(){ document.getElementById("dupLight").style.display="none"; document.getElementById("dupLightImg").src=""; }
+document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ const l=document.getElementById("dupLight"); if(l&&l.style.display==="flex") closeDupLight(); } });
+function handleMessage(m){
+  if(!m||!m.type) return;
+  if(m.type==='dupstate'){
+    window._dupSrc=m.src||''; window._dupDst=m.dst||'';
+    const sp=document.getElementById('dupSrcPath'), dp=document.getElementById('dupDstPath');
+    if(sp) sp.textContent='扫描：'+(m.src?m.src:'未选择文件夹');
+    if(dp) dp.textContent='移入：'+(m.dst?'回收站 '+m.dst:'软件回收站');
+    if(sp) sp.title=m.src||''; if(dp) dp.title=m.dst||'';
+    window._dupRunning=!!m.running; window._dupPaused=!!m.paused;
+    const pb=document.getElementById('dupPauseBtn'); if(pb) pb.textContent=m.paused?'继续':'暂停';
+  } else if(m.type==='dup'){
+    const bar=document.getElementById('dupBarFill'), st=document.getElementById('dupStat');
+    if(m.phase==='pause'){ if(st) st.textContent='已暂停 '+m.done+' / '+m.total; }
+    else if(m.phase==='done'){ if(bar) bar.style.width='100%'; if(st) st.textContent='扫描完成：'+(m.groups||0)+' 组重复，共处理 '+m.total+' 张'; }
+    else if(m.phase==='error'){ if(st) st.textContent='扫描出错：'+(m.msg||''); }
+    else { const pct=m.total?Math.round(m.done/m.total*100):0; if(bar) bar.style.width=pct+'%'; if(st) st.textContent=(m.phase==='enum'?'正在枚举文件…':(m.phase==='compare'?'正在比对相似度…':'扫描中 '+m.done+' / '+m.total)); }
+  } else if(m.type==='dupgroups'){
+    window._dupGroups=m.items||[]; window._dupSel={};
+    for(let gi=0;gi<window._dupGroups.length;gi++){ const g=window._dupGroups[gi].items||[]; for(let k=1;k<g.length;k++) window._dupSel[g[k].p]=true; }
+    const sub=document.getElementById('dupHeadSub');
+    if(sub) sub.textContent=(m.total||0)+' 组 · 已分析 '+(m.files||0)+' 张';
+    renderDupGroups();
+  } else if(m.type==='dupbig'){
+    const li=document.getElementById('dupLightImg'), info=document.getElementById('dupLightInfo');
+    if(li) li.src=m.data;
+    if(info) info.innerHTML='<b>'+escHtml(m.n)+'</b><br>'+m.w+' × '+m.h+'　'+fmtSize(m.s)+'<br><span style="color:#888">'+escHtml(m.p)+'</span>';
+  } else if(m.type==='dupthumb'){
+    if(m.t){ window._dupThumbs=window._dupThumbs||{}; window._dupThumbs[m.p]=m.t; }
+    dupFillThumb(m.p,m.t);
+  } else if(m.type==='dupwarm'){
+    const st=document.getElementById('dupStat');
+    if(st && !window._dupRunning && m.total) st.textContent='后台预分析 '+m.done+' / '+m.total+(m.finished?' · 已完成':'');
+  } else if(m.type==='dupdone'){
+    const st=document.getElementById('dupStat');
+    if(st) st.textContent='已移入回收站 '+(m.moved||0)+' 张'+(m.comps?'（含 '+m.comps+' 个伴生文件）':'')+(m.failed?'，失败 '+m.failed:'')+'，可在相册「回收站」还原';
+    const moved=window._dupMoveList||[];
+    for(let i=0;i<moved.length;i++) delete window._dupSel[moved[i]];
+    window._dupGroups=(window._dupGroups||[]).filter(function(g){ const kept=(g.items||[]).filter(function(it){ return !moved.includes(it.p); }); g.items=kept; return kept.length>=2; });
+    window._dupMoveList=[]; renderDupGroups();
+  }
+}
+try{
+  const qs=new URLSearchParams(location.search);
+  if(qs.get('skin')==='light') document.body.classList.add('skin-light');
+}catch(e){}
+if(window.chrome&&chrome.webview){
+  chrome.webview.addEventListener('message', function(e){ handleMessage(e.data); });
+  window.addEventListener('load', function(){ setTimeout(function(){ post('dupshow'); }, 120); });
+  setTimeout(function(){ post('dupshow'); }, 500);
+}
+</script>
+</body>
+</html>
