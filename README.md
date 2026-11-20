@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.09-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.09/image-batch-tool_v2.09_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.10-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.10/image-batch-tool_v2.10_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 1.1GB，已内置 Python 运行时、Chinese-CLIP 与 PP-OCRv4 模型）：
 
-**[👉 下载 image-batch-tool_v2.09_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.09/image-batch-tool_v2.09_setup.exe)**
+**[👉 下载 image-batch-tool_v2.10_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.10/image-batch-tool_v2.10_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -46,17 +46,25 @@
 
 独立「相册」入口（`相册.lnk --album`），与图片编辑分开启动，支持多根目录、全部 / 照片 / 视频 / 实况 / 文件夹 / 设备 / 人物 / 地图 八个视图。
 
-![相册主界面](docs/screenshots/album_v2_main.png)
+![相册主界面](docs/screenshots/album_v210_top.png)
 
 - **自动刷新**：监听相册目录，新增 / 删除 / 改名图片或视频后约 2 秒自动增量刷新，保留当前分类与滚动位置
 - **启动秒开**：扫描结果与 EXIF / 尺寸 / 地理位置持久化到 `alb_index.dat`，缩略图落盘缓存，第二次打开直接用缓存先展示，后台再核对
 - **大目录优化**：枚举阶段只收集图片 / 视频，跳过回收站、系统目录、node_modules 等；界面分页 + 滚动懒加载
 - **删除同步**：相册内删除后自动校准计数与其他视图，不需要手动刷新
-- **选项菜单**：扫描控制、标签索引 AI、回收站、缓存与索引性能分区；去重已移到相册顶栏，人物识别控制条只出现在人物分类
+- **设置菜单**：扫描控制、标签索引 AI（含索引性能）、照片管理、缓存分区；去重已移到相册顶栏，人物识别控制条只出现在人物分类
 
-![选项菜单](docs/screenshots/album_v209_menu.png)
+![设置菜单](docs/screenshots/album_v210_menu.png)
 
-![人物分类](docs/screenshots/album_v209_person.png)
+![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.10 更新
+- **去重窗口修正**：去掉去重窗口内容区重复的关闭按钮，只保留系统标题栏关闭；打开去重窗口时自动置顶并切到前台，不再被相册主窗口压在后面
+- **顶栏重排**：去重、搜索移到分类标签右侧，与「设置 / 选择」等功能按钮分开；搜索按钮改为蓝色渐变胶囊并带放大镜图标，搜索展开时显示激活态
+- **设置菜单**：原「选项」改名为「设置」；索引性能移到「标签索引 AI」四键下方，缓存分区只保留删除缓存和缓存位置
+- **选择按钮**：点击「选择」直接进入选择模式并展开下拉，再点一次退出并收起；菜单只保留全选 / 编辑选中 / 删除选中，按钮在选择模式下显示蓝色开关态
+- **四键状态反馈**：扫描、标签索引、人物识别的重新 / 开始 / 暂停 / 继续按钮会根据当前运行、暂停或空闲状态高亮对应按钮
+- **人物重新分析**：修复从某个人物分组详情里点「重新」后，重聚类结束仍停留在旧分组、看起来没有结果的问题；分析完成或进度变化会刷新人物页空状态
 
 ### v2.09 更新
 - **扫描四键控制**：选项菜单的「扫描」支持重新 / 开始 / 暂停 / 继续；暂停在枚举、缓存核对和逐文件读取阶段都会生效，继续从当前文件接着扫，不丢进度

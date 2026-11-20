@@ -366,9 +366,22 @@ body.skin-light .alb-search-cancel { color:#2f6fb8; }
 .alb-tab { font-size:12px; color:#bbb; padding:4px 12px; border-radius:14px; cursor:pointer; border:1px solid transparent; user-select:none; }
 .alb-tab:hover { background:#333; }
 .alb-tab.on { background:#3a3d42; color:#fff; border-color:#4c5057; }
+.alb-quick { display:flex; align-items:center; gap:7px; margin-left:2px; }
+.alb-quick .mini-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; height:26px; padding:0 12px; border-radius:13px; font-size:11px; line-height:1; transition:background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .12s ease; }
+.alb-quick .mini-btn svg { width:12px; height:12px; flex:none; }
+.alb-quick .mini-btn:active { transform:scale(.96); }
+.alb-dedup-btn { background:linear-gradient(180deg,#3a3d43,#2f3238); color:#e4e8ed; border-color:#4b5058; }
+.alb-dedup-btn:hover { background:linear-gradient(180deg,#474b53,#383c43); color:#fff; border-color:#616873; }
+.alb-search-btn { background:linear-gradient(180deg,#338ae8,#2774d2); color:#fff; border-color:#4c9cf2; box-shadow:0 2px 8px rgba(39,116,210,.28),inset 0 1px 0 rgba(255,255,255,.16); }
+.alb-search-btn:hover { background:linear-gradient(180deg,#4198f2,#2f80dd); border-color:#76b6f8; color:#fff; box-shadow:0 3px 12px rgba(39,116,210,.38),inset 0 1px 0 rgba(255,255,255,.22); }
+.alb-search-btn.on { background:linear-gradient(180deg,#2573c9,#1c5eae); border-color:#8ec6ff; box-shadow:0 0 0 3px rgba(72,150,235,.2),inset 0 1px 0 rgba(255,255,255,.1); }
 .alb-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
 .alb-opt-wrap { position:relative; }
 .alb-sel-wrap { position:relative; }
+.alb-sel-wrap #albSelBtn { height:26px; padding:0 12px; border-radius:13px; transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .12s ease; }
+.alb-sel-wrap #albSelBtn:active { transform:scale(.96); }
+.alb-sel-wrap #albSelBtn.on { background:linear-gradient(180deg,#4b97df,#337bc2); color:#fff; border-color:#75b9f3; box-shadow:0 0 0 3px rgba(75,151,223,.18),inset 0 1px 0 rgba(255,255,255,.16); }
+.alb-sel-wrap #albSelBtn.on:hover { background:linear-gradient(180deg,#58a4eb,#3c86cf); }
 .alb-opt-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:230px; max-height:calc(100vh - 120px); overflow-y:auto; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; z-index:800; box-shadow:0 12px 28px rgba(0,0,0,.5); }
 .alb-opt-menu.on { display:block; animation:optIn .16s ease-out both; }
 @keyframes optIn { from { opacity:0; transform:translateY(-6px) scale(.97); } to { opacity:1; transform:none; } }
@@ -377,9 +390,15 @@ body.skin-light .alb-search-cancel { color:#2f6fb8; }
 .alb-opt-sec-title { display:flex; align-items:center; gap:6px; padding:2px 7px 6px; color:#8f959d; font-size:10px; letter-spacing:.3px; }
 .alb-opt-note { color:#76a9df; font-size:9px; border:1px solid #3f5d7e; border-radius:8px; padding:0 5px; line-height:14px; }
 .alb-ctl-row { display:flex; gap:4px; padding:0 5px; }
-.alb-ctl { flex:1; min-width:0; padding:5px 2px; border:1px solid #4a4c53; border-radius:5px; background:#383a3f; color:#d8dce1; font-size:11px; line-height:18px; cursor:pointer; user-select:none; }
+.alb-ctl { flex:1; min-width:0; padding:5px 2px; border:1px solid #4a4c53; border-radius:5px; background:#383a3f; color:#d8dce1; font-size:11px; line-height:18px; cursor:pointer; user-select:none; transition:background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease; }
 .alb-ctl:hover { background:#474a51; color:#fff; border-color:#5c6068; }
 .alb-ctl:active { background:#3f6fb5; border-color:#5b8bd1; }
+.alb-ctl.on { background:linear-gradient(180deg,#3e8ee2,#2d77c8); border-color:#69b0f2; color:#fff; box-shadow:0 0 0 2px rgba(72,150,235,.2),inset 0 1px 0 rgba(255,255,255,.14); }
+.alb-ctl.on::before { content:""; display:inline-block; width:5px; height:5px; margin-right:4px; border-radius:50%; background:#b9e0ff; box-shadow:0 0 5px rgba(185,224,255,.9); vertical-align:1px; }
+.alb-ctl.on.warn { background:linear-gradient(180deg,#c58a32,#a06c23); border-color:#e2b15f; box-shadow:0 0 0 2px rgba(205,145,51,.2),inset 0 1px 0 rgba(255,255,255,.14); }
+.alb-ctl.on.warn::before { background:#ffe2a8; box-shadow:0 0 5px rgba(255,226,168,.9); }
+.alb-ctl.on.idle { background:linear-gradient(180deg,#408d67,#2f6d4e); border-color:#68b78b; box-shadow:0 0 0 2px rgba(64,141,103,.18),inset 0 1px 0 rgba(255,255,255,.12); }
+.alb-ctl.on.idle::before { background:#b9f0cf; box-shadow:0 0 5px rgba(185,240,207,.85); }
 .alb-sel-menu { right:0; min-width:178px; }
 .alb-opt-item { padding:8px 11px; font-size:12px; color:#ddd; border-radius:6px; cursor:pointer; white-space:nowrap; }
 .alb-sel-item.dis, .alb-opt-item.dis { color:#6b6d72; cursor:default; pointer-events:none; }
@@ -388,6 +407,7 @@ body.skin-light .alb-search-cancel { color:#2f6fb8; }
 .alb-opt-item.danger.dis { color:#755f5f; }
 .alb-opt-item:hover { background:#3d3e44; color:#fff; }
 .alb-opt-perf { padding:7px 7px 5px; margin:2px 0 3px; border-top:0; border-bottom:0; }
+.alb-opt-perf.alb-opt-perf-inline { padding:8px 7px 3px; margin:0 0 2px; }
 .alb-opt-perf-title { display:flex; justify-content:space-between; gap:8px; font-size:10px; color:#8f959d; padding:0 3px 6px; }
 .alb-perf-seg { display:flex; gap:4px; }
 .alb-perf-seg span { flex:1; text-align:center; font-size:11px; padding:4px 6px; border:1px solid #45474e; border-radius:5px; color:#cfd3d8; cursor:pointer; user-select:none; }
@@ -403,6 +423,10 @@ body.skin-light .alb-opt-sec { border-color:#e6e6ec; }
 body.skin-light .alb-opt-sec-title { color:#85858c; }
 body.skin-light .alb-ctl { background:#f4f4f7; color:#333; border-color:#d6d6dc; }
 body.skin-light .alb-ctl:hover { background:#ececef; color:#111; border-color:#c9c9d1; }
+body.skin-light .alb-ctl.on { background:linear-gradient(180deg,#3b8ee6,#2c77c9); color:#fff; border-color:#5da6eb; box-shadow:0 0 0 2px rgba(43,127,224,.14),inset 0 1px 0 rgba(255,255,255,.2); }
+body.skin-light .alb-ctl.on.warn { background:linear-gradient(180deg,#c78c35,#a56f24); border-color:#dca64f; color:#fff; }
+body.skin-light .alb-ctl.on.idle { background:linear-gradient(180deg,#438f69,#326f51); border-color:#5ca77d; color:#fff; }
+body.skin-light .alb-sel-wrap #albSelBtn.on { background:linear-gradient(180deg,#3f8fdc,#2e78bf); color:#fff; border-color:#66acf0; box-shadow:0 0 0 3px rgba(63,143,220,.14),inset 0 1px 0 rgba(255,255,255,.2); }
 body.skin-light .alb-opt-item { color:#1d1d1f; }
 body.skin-light .alb-opt-item:hover { background:#ececef; }
 body.skin-light .alb-opt-item.danger { color:#c0392b; }
@@ -503,6 +527,12 @@ body.skin-light .alb-path-empty { color:#8e8e93; }
 body.skin-light .alb-head { background:#fff; border-color:#ddd; }
 body.skin-light .alb-tab { color:#555; }
 body.skin-light .alb-tab.on { background:#e8eaf0; color:#111; border-color:#c9ced8; }
+body.skin-light .alb-quick .mini-btn { box-shadow:none; }
+body.skin-light .alb-dedup-btn { background:#f4f5f8; color:#333; border-color:#d3d5dc; }
+body.skin-light .alb-dedup-btn:hover { background:#e9ebf1; color:#111; border-color:#bfc4cf; }
+body.skin-light .alb-search-btn { background:linear-gradient(180deg,#2e86e6,#226fc9); color:#fff; border-color:#3d90ea; box-shadow:0 2px 8px rgba(34,111,201,.22),inset 0 1px 0 rgba(255,255,255,.18); }
+body.skin-light .alb-search-btn:hover { background:linear-gradient(180deg,#3b95f0,#2a7bd8); border-color:#63aaf0; }
+body.skin-light .alb-search-btn.on { background:linear-gradient(180deg,#2573c9,#1c5eae); box-shadow:0 0 0 3px rgba(43,127,224,.16),inset 0 1px 0 rgba(255,255,255,.14); }
 body.skin-light .alb-cell { background:#fff; border-color:#ddd; }
 body.skin-light .alb-foot { background:#fafafb; border-color:#ddd; color:#777; }
 body.skin-light .alb-view-side { background:#fff; border-color:#ddd; }
@@ -1085,42 +1115,35 @@ window.addEventListener('mouseup', function(e) {
       <span class="alb-tab" data-tab="person">人物</span>
       <span class="alb-tab" data-tab="map">地图</span>
     </div>
+    <div class="alb-quick">
+      <button class="mini-btn alb-dedup-btn" id="albDedupBtn" onclick="albDedup()" title="查找重复照片，确认后移入回收站"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 4h8a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 9h6M9 12h6M9 15h4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>去重</button>
+      <button class="mini-btn alb-search-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.2 15.2l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>搜索</button>
+    </div>
     <div class="alb-right">
-      <button class="mini-btn" id="albDedupBtn" onclick="albDedup()" title="查找重复照片，确认后移入回收站">去重</button>
-      <button class="mini-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置">搜索</button>
       <button class="mini-btn" id="albTimeBtn" onclick="albToggleTimeSort()" title="按拍摄时间排列，并按天分组">按时间</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(-1)" title="缩小缩略图（Ctrl+滚轮也可缩放）">−</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(1)" title="放大缩略图（Ctrl+滚轮也可缩放）">＋</button>
       <div class="alb-opt-wrap">
-        <button class="mini-btn" id="albOptBtn" onclick="albToggleOpt(event)" title="更多功能">选项 ▾</button>
+        <button class="mini-btn" id="albOptBtn" onclick="albToggleOpt(event)" title="更多功能">设置 ▾</button>
         <div class="alb-opt-menu" id="albOptMenu">
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">扫描</div>
             <div class="alb-ctl-row">
-              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('restart')" title="重新完整扫描相册">重新</button>
-              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('start')" title="开始扫描相册">开始</button>
-              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('pause')" title="暂停当前相册扫描">暂停</button>
-              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('resume')" title="继续暂停的相册扫描">继续</button>
+              <button class="alb-ctl" id="albScanRestartBtn" onclick="event.stopPropagation();albScanCtl('restart')" title="重新完整扫描相册">重新</button>
+              <button class="alb-ctl" id="albScanStartBtn" onclick="event.stopPropagation();albScanCtl('start')" title="开始扫描相册">开始</button>
+              <button class="alb-ctl" id="albScanPauseBtn" onclick="event.stopPropagation();albScanCtl('pause')" title="暂停当前相册扫描">暂停</button>
+              <button class="alb-ctl" id="albScanResumeBtn" onclick="event.stopPropagation();albScanCtl('resume')" title="继续暂停的相册扫描">继续</button>
             </div>
           </div>
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">标签索引 <span class="alb-opt-note">AI</span></div>
             <div class="alb-ctl-row">
-              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('restart')" title="重新启动 AI 标签索引">重新</button>
-              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('start')" title="立即开始 AI 标签索引">开始</button>
-              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('pause')" title="暂停 AI 标签索引">暂停</button>
-              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('resume')" title="继续 AI 标签索引">继续</button>
+              <button class="alb-ctl" id="albAiRestartBtn" onclick="event.stopPropagation();albAiCtl('restart')" title="重新启动 AI 标签索引">重新</button>
+              <button class="alb-ctl" id="albAiStartBtn" onclick="event.stopPropagation();albAiCtl('start')" title="立即开始 AI 标签索引">开始</button>
+              <button class="alb-ctl" id="albAiPauseBtn" onclick="event.stopPropagation();albAiCtl('pause')" title="暂停 AI 标签索引">暂停</button>
+              <button class="alb-ctl" id="albAiResumeBtn" onclick="event.stopPropagation();albAiCtl('resume')" title="继续 AI 标签索引">继续</button>
             </div>
-          </div>
-          <div class="alb-opt-sec">
-            <div class="alb-opt-sec-title">照片管理</div>
-            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
-          </div>
-          <div class="alb-opt-sec">
-            <div class="alb-opt-sec-title">缓存与索引性能</div>
-            <div class="alb-opt-item" onclick="albOptDo('cacheclear')">删除缓存</div>
-            <div class="alb-opt-item" onclick="albOptDo('cacheloc')">缓存位置</div>
-            <div class="alb-opt-perf">
+            <div class="alb-opt-perf alb-opt-perf-inline">
               <div class="alb-opt-perf-title"><span>索引性能</span><span id="albPerfNow">均衡</span></div>
               <div class="alb-perf-seg" id="albPerfSeg">
                 <span data-perf="low" onclick="albOptDo('perf:low')" title="低：CPU 单线程并关闭 GPU，最省资源">低</span>
@@ -1129,12 +1152,20 @@ window.addEventListener('mouseup', function(e) {
               </div>
             </div>
           </div>
+          <div class="alb-opt-sec">
+            <div class="alb-opt-sec-title">照片管理</div>
+            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
+          </div>
+          <div class="alb-opt-sec">
+            <div class="alb-opt-sec-title">缓存</div>
+            <div class="alb-opt-item" onclick="albOptDo('cacheclear')">删除缓存</div>
+            <div class="alb-opt-item" onclick="albOptDo('cacheloc')">缓存位置</div>
+          </div>
         </div>
       </div>
       <div class="alb-sel-wrap">
         <button class="mini-btn" id="albSelBtn" onclick="albToggleSelMenu(event)">选择 ▾</button>
         <div class="alb-opt-menu alb-sel-menu" id="albSelMenu">
-          <div class="alb-opt-item" id="albSelModeItem" onclick="albSelMenuMode()">进入选择模式</div>
           <div class="alb-opt-item alb-sel-item" id="albSelAllBtn" onclick="albSelMenuAll()">全选</div>
           <div class="alb-opt-item alb-sel-item" id="albEditBtn" onclick="albSelMenuEdit()">编辑选中</div>
           <div class="alb-opt-item alb-sel-item danger" id="albDelSelBtn" onclick="albSelMenuDelete()">删除选中</div>
@@ -1158,11 +1189,11 @@ window.addEventListener('mouseup', function(e) {
   </div>
   <div class="alb-person-ctl" id="albPersonCtl" style="display:none">
     <span class="ttl">人物识别</span>
-    <div class="alb-ctl-row">
-      <button class="alb-ctl" onclick="albFaceCtl('restart')" title="清除人物分组缓存并从头分析">重新</button>
-      <button class="alb-ctl" onclick="albFaceCtl('start')" title="开始或继续未完成的人物分析">开始</button>
-      <button class="alb-ctl" onclick="albFaceCtl('pause')" title="暂停人物分析，保留当前进度">暂停</button>
-      <button class="alb-ctl" onclick="albFaceCtl('resume')" title="继续暂停的人物分析">继续</button>
+    <div class="alb-ctl-row" id="albFaceCtlRow">
+      <button class="alb-ctl" id="albFaceRestartBtn" onclick="albFaceCtl('restart')" title="清除人物分组缓存并从头分析">重新</button>
+      <button class="alb-ctl" id="albFaceStartBtn" onclick="albFaceCtl('start')" title="开始或继续未完成的人物分析">开始</button>
+      <button class="alb-ctl" id="albFacePauseBtn" onclick="albFaceCtl('pause')" title="暂停人物分析，保留当前进度">暂停</button>
+      <button class="alb-ctl" id="albFaceResumeBtn" onclick="albFaceCtl('resume')" title="继续暂停的人物分析">继续</button>
     </div>
     <span class="stat" id="albFaceStat">未开始</span>
   </div>
@@ -2222,18 +2253,19 @@ if (window.chrome && chrome.webview) {
       const total = Number(m.total) || 0, done = Math.min(Number(m.done) || 0, total || 999999999);
       const scanned = Number(m.items) || 0;
       if (m.phase === 'enum') {
-        A.scanPaused = false; A.scanTotal = 0; A.scanDone = 0; A.scanItems = 0;
+        A.scanPaused = false; A.scanRunning = true; A.scanTotal = 0; A.scanDone = 0; A.scanItems = 0;
         if (sub) sub.textContent = '正在统计文件…';
       } else if (m.phase === 'pause') {
-        A.scanPaused = true;
+        A.scanPaused = true; A.scanRunning = true;
         if (sub) sub.textContent = '扫描已暂停 · 文件 ' + (A.scanDone||0) + ' / ' + (A.scanTotal||0);
       } else if (m.phase === 'resume') {
-        A.scanPaused = false;
+        A.scanPaused = false; A.scanRunning = true;
         if (sub) sub.textContent = '继续扫描 · 文件 ' + (A.scanDone||0) + ' / ' + (A.scanTotal||0);
       } else if (m.phase === 'done') {
-        A.scanPaused = false; A.scanTotal = total; A.scanDone = total; A.scanItems = scanned || total;
+        A.scanPaused = false; A.scanRunning = false; A.scanTotal = total; A.scanDone = total; A.scanItems = scanned || total;
         if (sub) sub.textContent = '扫描完成';
       } else {
+        A.scanRunning = true;
         if (!A.scanPaused) {
           A.scanTotal = total; A.scanDone = done;
           if (scanned) { A.scanItems = scanned; if (scanned > A.total) A.total = scanned; }
@@ -2241,6 +2273,7 @@ if (window.chrome && chrome.webview) {
         }
       }
       if (m.phase === 'done') post('albaiensureidle');
+      albUpdateRunBtns();
     } else if (m.type === 'albaiindex') {
       const A = window._alb;
       const phase = m.phase || '';
@@ -2284,6 +2317,7 @@ if (window.chrome && chrome.webview) {
         albSearchUpdateCount();
         if (A.aiReady && A.aiResultsQ === A.search) { A.vDirty = true; albRender(); }
       }
+      albUpdateRunBtns();
     } else if (m.type === 'albaisearch') {
       const A = window._alb;
       A.aiResults = Object.create(null);
@@ -2354,6 +2388,7 @@ if (window.chrome && chrome.webview) {
         const sub = document.getElementById('albSub');
         if (sub) sub.textContent = m.phase === 'pausing' ? '人物分析正在暂停…' : (m.phase === 'restarting' ? '正在重新开始人物分析…' : '人物分析 ' + (A.faceDone) + ' / ' + (A.faceTotal));
         albUpdateFaceStatus();
+        if (A.tab === 'person' && !A.faces) albRender();
       } else if (m.phase === 'pause') {
         A.faceBusy = false;
         A.facePaused = true;
@@ -2364,6 +2399,7 @@ if (window.chrome && chrome.webview) {
         A.faceBusy = false;
         A.facePaused = false;
         A.faces = { groups: m.groups || [], photos: m.photos || 0, faces: m.faces || 0 };
+        if(A.person>=0 && !(A.faces.groups||[]).some(function(g){ return g.id===A.person; })) A.person=-1;
         A.faceDone = Number(m.photos) || 0;
         A.faceTotal = Number(m.photos) || 0;
         const sub = document.getElementById('albSub');
@@ -2376,9 +2412,10 @@ if (window.chrome && chrome.webview) {
         albUpdateFaceStatus();
         toastMsg(m.phase === 'stop' ? '已停止人物分析' : ('人物分析失败：' + (m.msg || '')));
       }
+      albUpdateRunBtns();
     } else if (m.type === 'albstats') {
       const A = window._alb;
-      A.scanDone = 0; A.scanTotal = 0; A.scanItems = 0;
+      A.scanDone = 0; A.scanTotal = 0; A.scanItems = 0; A.scanRunning = false;
       A.allPaths = null; A.selAllActive = false; A.selAllWant = false; A.selAllPending = false;
       const keepAuto = !!m.auto;
       const keepTab = A.tab, keepScroll = (document.getElementById('albGrid')||{}).scrollTop || 0;
@@ -2434,7 +2471,7 @@ if (window.chrome && chrome.webview) {
       // 扫描完成后在后台增量建立 AI 语义/OCR 索引；已索引的文件会跳过，只补新增/变更项。
       post('albaiensureidle');
     } else if (m.type === 'albcount') {
-      window._alb.scanDone = 0; window._alb.scanTotal = 0; window._alb.scanItems = 0;
+      window._alb.scanDone = 0; window._alb.scanTotal = 0; window._alb.scanItems = 0; window._alb.scanRunning = false;
       window._alb.allPaths = null; window._alb.selAllActive = false;
       window._alb.total = m.total || window._alb.total;
       const sub3 = document.getElementById('albSub');
@@ -2997,7 +3034,7 @@ document.addEventListener("keydown",function(e){
   },{passive:false});
 })();
 // ==================== 相册 UI ====================
-window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,scanPaused:false,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,facePaused:false,faceDone:0,faceTotal:0,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiPaused:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:''};
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,scanPaused:false,scanRunning:false,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,facePaused:false,faceDone:0,faceTotal:0,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiPaused:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:''};
 
 function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -3037,6 +3074,7 @@ function albToggleOpt(e){
   const sm=document.getElementById('albSelMenu'); if(sm) sm.classList.remove('on');
   const on=m.classList.contains('on');
   m.classList.toggle('on', !on);
+  if(!on) albUpdateRunBtns();
 }
 function albCloseOpt(){
   const m=document.getElementById('albOptMenu');
@@ -3089,22 +3127,23 @@ function albScanCtl(action){
   if(!(A.roots||[]).length){ toastMsg('请先添加相册路径'); return; }
   if(action==='restart'){
     if(!confirm('重新扫描会重新读取全部相册目录，不会删除照片。继续？')) return;
-    A.scanPaused=false;
+    A.scanPaused=false; A.scanRunning=true;
     post('albscanrestart');
     toastMsg('已请求重新扫描相册');
   } else if(action==='start'){
-    A.scanPaused=false;
+    A.scanPaused=false; A.scanRunning=true;
     post('albscanstart');
   } else if(action==='pause'){
-    if(!(A.scanTotal>0) && !A.loading){ toastMsg('当前没有正在进行的相册扫描'); return; }
+    if(!(A.scanTotal>0) && !A.loading && !A.scanRunning){ toastMsg('当前没有正在进行的相册扫描'); return; }
     A.scanPaused=true;
     post('albscanpause');
     const sub=document.getElementById('albSub'); if(sub) sub.textContent=albScanStatusText();
   } else if(action==='resume'){
     if(!A.scanPaused){ toastMsg('当前没有暂停的相册扫描'); return; }
-    A.scanPaused=false;
+    A.scanPaused=false; A.scanRunning=true;
     post('albscanresume');
   }
+  albUpdateRunBtns();
 }
 function albAiCtl(action){
   const A=window._alb;
@@ -3112,21 +3151,22 @@ function albAiCtl(action){
   if(!(A.items||[]).length){ toastMsg('相册里还没有照片'); return; }
   if(action==='restart'){
     if(!confirm('重新启动 AI 标签索引？已建立的索引会保留，只重新检查新增/变更照片。')) return;
-    A.aiPaused=false;
+    A.aiPaused=false; A.aiIndexing=true;
     post('albaiindexrestart');
     toastMsg('已请求重新启动标签索引');
   } else if(action==='start'){
-    A.aiPaused=false;
+    A.aiPaused=false; A.aiIndexing=true;
     post('albaiindexstart');
   } else if(action==='pause'){
     A.aiPaused=true;
     post('albaiindexpause');
     toastMsg('正在暂停标签索引…');
   } else if(action==='resume'){
-    A.aiPaused=false;
+    A.aiPaused=false; A.aiIndexing=true;
     post('albaiindexresume');
     toastMsg('正在继续标签索引…');
   }
+  albUpdateRunBtns();
 }
 function albFaceStatusText(){
   const A=window._alb;
@@ -3139,13 +3179,41 @@ function albUpdateFaceStatus(){
   const el=document.getElementById('albFaceStat');
   if(el) el.textContent=albFaceStatusText();
 }
+function albCtlMark(id, mode){
+  const b=document.getElementById(id);
+  if(!b) return;
+  b.classList.remove('on','warn','idle');
+  if(mode==='run') b.classList.add('on');
+  else if(mode==='warn') b.classList.add('on','warn');
+  else if(mode==='idle') b.classList.add('on','idle');
+}
+// 让「扫描 / 标签索引 / 人物」四键组里当前状态对应的按钮亮起：
+// 运行中高亮「暂停」，暂停高亮「继续」，未开始高亮「开始」。
+function albUpdateRunBtns(){
+  const A=window._alb;
+  if(!A) return;
+  ['albScanRestartBtn','albScanStartBtn','albScanPauseBtn','albScanResumeBtn'].forEach(function(id){ albCtlMark(id, ''); });
+  if(A.scanPaused) albCtlMark('albScanResumeBtn','warn');
+  else if(A.scanRunning) albCtlMark('albScanPauseBtn','run');
+  else if(!A.scanDone) albCtlMark('albScanStartBtn','idle');
+
+  ['albAiRestartBtn','albAiStartBtn','albAiPauseBtn','albAiResumeBtn'].forEach(function(id){ albCtlMark(id, ''); });
+  if(A.aiPaused) albCtlMark('albAiResumeBtn','warn');
+  else if(A.aiIndexing) albCtlMark('albAiPauseBtn','run');
+  else if(!A.aiReady) albCtlMark('albAiStartBtn','idle');
+
+  ['albFaceRestartBtn','albFaceStartBtn','albFacePauseBtn','albFaceResumeBtn'].forEach(function(id){ albCtlMark(id, ''); });
+  if(A.facePaused) albCtlMark('albFaceResumeBtn','warn');
+  else if(A.faceBusy) albCtlMark('albFacePauseBtn','run');
+  else if(!A.faces) albCtlMark('albFaceStartBtn','idle');
+}
 function albFaceCtl(action){
   const A=window._alb;
   if(!A) return;
   if(!(A.items||[]).length){ toastMsg('相册里还没有照片'); return; }
   if(action==='restart'){
     if(!confirm('重新分析会清除当前人物分组缓存，并从第一张照片重新识别，不会修改原图。继续？')) return;
-    A.faces=null; A.faceBusy=true; A.facePaused=false; A.faceDone=0; A.faceTotal=0;
+    A.faces=null; A.faceBusy=true; A.facePaused=false; A.faceDone=0; A.faceTotal=0; A.person=-1;
     post('albfacesrestart');
   } else if(action==='start'){
     if(A.faceBusy && !A.facePaused){ toastMsg('人物分析正在进行'); return; }
@@ -3158,6 +3226,7 @@ function albFaceCtl(action){
     else { A.faceBusy=true; A.facePaused=false; post('albfacesstart'); }
   }
   albUpdateFaceStatus();
+  albUpdateRunBtns();
   if(A.tab==='person') albRender();
 }
 document.addEventListener('click', function(e){
@@ -3171,11 +3240,22 @@ document.addEventListener('click', function(e){
 document.addEventListener('click', function(e){
   const sm=document.getElementById('albSelMenu'), sb=document.getElementById('albSelBtn');
   if(!sm || !sm.classList.contains('on')) return;
+  if(window._alb && window._alb.sel) return;
   if(sm.contains(e.target)) return;
   if(sb && sb.contains(e.target)) return;
   sm.classList.remove('on');
 });
-document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ albCloseOpt(); const sm=document.getElementById('albSelMenu'); if(sm) sm.classList.remove('on'); } });
+document.addEventListener('keydown', function(e){
+  if(e.key!=='Escape') return;
+  const sm=document.getElementById('albSelMenu');
+  if(window._alb && window._alb.sel){
+    if(sm) sm.classList.remove('on');
+    albToggleSel();
+    return;
+  }
+  albCloseOpt();
+  if(sm) sm.classList.remove('on');
+});
 // iOS 风格显隐（fade + 轻微缩放）
 function iosShow(el, disp){
   if(!el) return;
@@ -3223,6 +3303,7 @@ if(document.getElementById('albGrid')) albApplyZoom();
 if(document.getElementById('albPerfSeg')) albUpdatePerfChecks();
 if(document.getElementById('albSelBtn')) albUpdateSelBtn();
 if(document.getElementById('albFaceStat')) albUpdateFaceStatus();
+if(window._alb) albUpdateRunBtns();
 
 function albRenderPaths(){
   const A=window._alb, box=document.getElementById('albChips');
@@ -3331,6 +3412,7 @@ function albSearchResetState(){
   A.aiPending=false; A.aiResults=null; A.aiResultsQ=''; A.aiError='';
   const row=document.getElementById('albSearchRow'); if(row) row.style.display='none';
   const box=document.getElementById('albSearchCount'); if(box) box.textContent='';
+  const sb=document.getElementById('albSearchBtn'); if(sb) sb.classList.remove('on');
 }
 function albSearchClose(){
   albSearchResetState();
@@ -3355,6 +3437,7 @@ function albSearchOpen(){
   const A=window._alb;
   const row=document.getElementById('albSearchRow');
   if(row) row.style.display='flex';
+  const sb=document.getElementById('albSearchBtn'); if(sb) sb.classList.add('on');
   A.searchMode=true;
   if(A.tab==='map'||A.tab==='person'){ A.tab='all'; document.querySelectorAll('.alb-tab').forEach(function(x){ x.classList.toggle('on', x.dataset.tab==='all'); }); }
   const me=document.getElementById('albMap'); if(me) me.style.display='none';
@@ -3631,7 +3714,12 @@ function albRenderPeople(){
   if(!A.faces){
     pbox.innerHTML='';
     const e=document.getElementById('albEmpty');
-    if(e){ e.style.display='flex'; e.textContent='还没有人物分组，点上方「人物识别 · 开始」开始扫描'; }
+    if(e){
+      e.style.display='flex';
+      if(A.faceBusy && !A.facePaused) e.textContent='正在分析人物'+(A.faceTotal?' · '+A.faceDone+' / '+A.faceTotal:'…');
+      else if(A.facePaused) e.textContent='人物分析已暂停'+(A.faceTotal?' · '+A.faceDone+' / '+A.faceTotal:'');
+      else e.textContent='还没有人物分组，点上方「人物识别 · 开始」开始扫描';
+    }
     return;
   }
   const e=document.getElementById('albEmpty'); if(e) e.style.display='none';
@@ -4183,7 +4271,14 @@ function albToggleSelMenu(e){
   const sm=document.getElementById('albSelMenu');
   if(!sm) return;
   const m=document.getElementById('albOptMenu'); if(m) m.classList.remove('on');
-  sm.classList.toggle('on');
+  const A=window._alb;
+  if(A.sel){
+    albToggleSel();
+    sm.classList.remove('on');
+    return;
+  }
+  albToggleSel();
+  sm.classList.add('on');
 }
 function albCloseSelMenu(){ const sm=document.getElementById('albSelMenu'); if(sm) sm.classList.remove('on'); }
 function albSelMenuEnsureSel(){
@@ -4192,10 +4287,9 @@ function albSelMenuEnsureSel(){
   A.sel=true; A.selSet={}; A.dragMode=null;
   albUpdateSelBtn(); albRender();
 }
-function albSelMenuMode(){ albToggleSel(); albCloseSelMenu(); }
-function albSelMenuAll(){ albSelMenuEnsureSel(); albSelAllToggle(); albCloseSelMenu(); }
-function albSelMenuEdit(){ albSelMenuEnsureSel(); albCloseSelMenu(); albToEdit(); }
-function albSelMenuDelete(){ albSelMenuEnsureSel(); albCloseSelMenu(); albDeleteSelected(); }
+function albSelMenuAll(){ albSelMenuEnsureSel(); albSelAllToggle(); }
+function albSelMenuEdit(){ albSelMenuEnsureSel(); albToEdit(); }
+function albSelMenuDelete(){ albSelMenuEnsureSel(); albDeleteSelected(); }
 function albToggleSel(){
   window._alb.sel=!window._alb.sel;
   window._alb.selSet={};
@@ -4205,8 +4299,8 @@ function albToggleSel(){
 }
 function albUpdateSelBtn(){
   const A=window._alb, n=Object.keys(A.selSet||{}).length;
-  const sb=document.getElementById('albSelBtn'); if(sb) sb.textContent=(A.sel?'选择中':'选择')+' ▾';
-  const sm=document.getElementById('albSelModeItem'); if(sm) sm.textContent=A.sel?'退出选择模式':'进入选择模式';
+  const sb=document.getElementById('albSelBtn');
+  if(sb){ sb.textContent=(A.sel?'选择中':'选择')+' ▾'; sb.classList.toggle('on', !!A.sel); sb.setAttribute('aria-expanded', A.sel?'true':'false'); }
   const b=document.getElementById('albDelSelBtn');
   if(b){
     b.classList.toggle('dis', !A.sel || n<=0);

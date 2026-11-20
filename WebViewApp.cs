@@ -2025,7 +2025,9 @@ namespace ImageBatchTool
                 if (dedupForm != null && !dedupForm.IsDisposed)
                 {
                     if (dedupForm.WindowState == FormWindowState.Minimized) dedupForm.WindowState = FormWindowState.Normal;
+                    dedupForm.TopMost = true;
                     dedupForm.Show();
+                    dedupForm.BringToFront();
                     dedupForm.Activate();
                     return;
                 }
@@ -2038,6 +2040,7 @@ namespace ImageBatchTool
                     StartPosition = FormStartPosition.CenterScreen,
                     BackColor = Color.FromArgb(32, 32, 36),
                     ShowInTaskbar = true,
+                    TopMost = true,
                     Icon = this.Icon
                 };
                 var w = new WebView2 { Dock = DockStyle.Fill };
@@ -2673,7 +2676,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 2.09\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 2.10\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -6496,6 +6499,7 @@ namespace ImageBatchTool
         void FacePause()
         {
             if (!faceRunning) { Send("{\"type\":\"toast\",\"msg\":\"人物分析当前没有运行\"}"); return; }
+            Log("人物分析: 暂停请求");
             facePaused = true;
             faceStop = true;
             try { if (!string.IsNullOrEmpty(faceStopFile)) File.WriteAllText(faceStopFile, "stop"); } catch { }
@@ -6504,6 +6508,7 @@ namespace ImageBatchTool
 
         void FaceResume()
         {
+            Log("人物分析: 继续请求 running=" + faceRunning + " paused=" + facePaused);
             if (faceRunning && facePaused)
             {
                 faceResumePending = true;
@@ -6516,6 +6521,7 @@ namespace ImageBatchTool
 
         void FaceRestart()
         {
+            Log("人物分析: 重新请求 running=" + faceRunning + " paused=" + facePaused);
             facePaused = false;
             faceResumePending = false;
             if (faceRunning)
@@ -6534,12 +6540,15 @@ namespace ImageBatchTool
         {
             if (faceRunning) { if (auto) faceAgain = true; else Send("{\"type\":\"toast\",\"msg\":\"人脸分析正在进行\"}"); return; }
             if (albItems.Count == 0) { if (!auto) Send("{\"type\":\"toast\",\"msg\":\"相册还没有照片\"}"); return; }
-            if (TryLoadFaceResult())
+            bool cached = TryLoadFaceResult();
+            if (cached)
             {
+                Log("人物分析: 使用缓存结果");
                 Send(faceLastJson);
                 if (!auto) Send("{\"type\":\"toast\",\"msg\":\"人物分组已是最新\"}");
                 return;
             }
+            Log("人物分析: 启动新扫描 items=" + albItems.Count + " auto=" + auto);
             faceRunning = true; faceStop = false; facePaused = false;
             faceStopFile = FaceStateFile() + ".stop";
             try { if (File.Exists(faceStopFile)) File.Delete(faceStopFile); } catch { }
@@ -6560,6 +6569,7 @@ namespace ImageBatchTool
                 if (!File.Exists(py)) py = "python";
                 string script = Path.Combine(dir, "ai\\face_group.py");
                 if (!File.Exists(script)) { Send("{\"type\":\"toast\",\"msg\":\"缺少 ai\\\\face_group.py\"}"); return; }
+                Log("人物分析: 线程开始 photos=" + list.Count + " py=" + py + " script=" + script);
                 faceListFile = CacheStore.TempFile("ibt_faces_", ".txt");
                 string listFile = faceListFile;
                 File.WriteAllLines(listFile, list.ToArray(), System.Text.Encoding.UTF8);
@@ -6607,20 +6617,24 @@ namespace ImageBatchTool
                     }
                     else if (f[0] == "E")
                     {
+                        Log("人物分析脚本: " + line);
                         Send("{\"type\":\"toast\",\"msg\":" + JsonStr("人脸分析: " + line) + "}");
                     }
                 }
                 int exitCode = -1;
                 try { proc.WaitForExit(5000); exitCode = proc.ExitCode; } catch { }
+                Log("人物分析: 进程结束 code=" + exitCode + " faces=" + facesTotal + " stop=" + faceStop + " paused=" + facePaused + " restartPending=" + faceRestartPending + " resumePending=" + faceResumePending);
 
                 if (faceStop)
                 {
+                    Log("人物分析: 被停止 paused=" + facePaused + " restartPending=" + faceRestartPending);
                     Send("{\"type\":\"albfaces\",\"phase\":\"" + (facePaused ? "pause" : "stop") + "\"}");
                     return;
                 }
                 // 模型缺失等原因导致脚本异常退出时，不要把空结果写成缓存，否则以后会一直显示 0 个人物。
                 if (exitCode != 0 && facesTotal == 0)
                 {
+                    Log("人物分析: 脚本失败 code=" + exitCode);
                     Send("{\"type\":\"albfaces\",\"phase\":\"error\",\"msg\":" + JsonStr("人脸分析失败，脚本退出码 " + exitCode) + "}");
                     return;
                 }
@@ -6645,11 +6659,13 @@ namespace ImageBatchTool
                 sb.Append("]}");
                 string faceJson = sb.ToString();
                 faceLastJson = faceJson;
+                Log("人物分析: 发送结果 groups=" + shown + " faces=" + facesTotal + " photos=" + list.Count);
                 Send(faceJson);
                 SaveFaceResult(faceJson, scanSig);
             }
             catch (Exception ex)
             {
+                Log("人物分析异常: " + ex);
                 Send("{\"type\":\"albfaces\",\"phase\":\"error\",\"msg\":" + JsonStr(ex.Message) + "}");
             }
             finally
@@ -9907,4 +9923,3 @@ namespace ImageBatchTool
         string JsonStr(string s) { return "\"" + (s??"").Replace("\\","\\\\").Replace("\"","\\\"") + "\""; }
     }
 }
-
