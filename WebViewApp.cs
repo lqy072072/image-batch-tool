@@ -1714,6 +1714,9 @@ namespace ImageBatchTool
         // 修改缓存位置后，等旧窗口彻底关闭，再由 Program 启动新实例完成迁移。
         public static bool RestartAfterCacheMove = false;
         public static string RestartMode = "album";
+        const int WM_SYSCOMMAND = 0x0112;
+        const int SC_MINIMIZE = 0xF020;
+        volatile bool allowMinimizeOnce = false;
         WebView2 web;
         WebView2 dedupWeb;
         Form dedupForm;
@@ -1865,6 +1868,35 @@ namespace ImageBatchTool
             this.FormClosed += (s, e) => CloseDupWindow();
         }
 
+        // Windows 任务栏点击已激活窗口的图标默认会发送 SC_MINIMIZE。
+        // 这里只拦截任务栏触发的这一下，让它保持在前台；标题栏的最小化按钮仍可正常最小化。
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_SYSCOMMAND && ((int)(m.WParam.ToInt64() & 0xFFF0)) == SC_MINIMIZE && !allowMinimizeOnce)
+            {
+                try
+                {
+                    if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                    Show();
+                    Activate();
+                }
+                catch { }
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        void MinimizeFromUi()
+        {
+            try
+            {
+                allowMinimizeOnce = true;
+                WindowState = FormWindowState.Minimized;
+            }
+            catch { }
+            finally { allowMinimizeOnce = false; }
+        }
+
         void ApplyRoundedCorner()
         {
             try {
@@ -1892,7 +1924,18 @@ namespace ImageBatchTool
                 CoreWebView2Environment env = null;
                 try
                 {
-                    env = await CoreWebView2Environment.CreateAsync(null, webData, null);
+                    CoreWebView2EnvironmentOptions envOpts = null;
+                    string debugPort = "";
+                    foreach (string arg in Environment.GetCommandLineArgs())
+                    {
+                        if (arg == "--debug-webview") debugPort = "9222";
+                    }
+                    if (!string.IsNullOrEmpty(debugPort))
+                    {
+                        envOpts = new CoreWebView2EnvironmentOptions();
+                        envOpts.AdditionalBrowserArguments = "--remote-debugging-port=" + debugPort;
+                    }
+                    env = await CoreWebView2Environment.CreateAsync(null, webData, envOpts);
                 }
                 catch (Exception ex)
                 {
@@ -2486,11 +2529,35 @@ namespace ImageBatchTool
                     case "albfacescan":
                         StartFaceScan();
                         break;
+                    case "albfacesstart":
+                        StartFaceScan();
+                        break;
+                    case "albfacespause":
+                        FacePause();
+                        break;
+                    case "albfacesresume":
+                        FaceResume();
+                        break;
+                    case "albfacesrestart":
+                        FaceRestart();
+                        break;
                     case "albaiensure":
                         {
                             bool forceAi = parts.Length > 1 && parts[1] == "1";
                             AiEnsureSearch(forceAi);
                         }
+                        break;
+                    case "albaiindexstart":
+                        AiEnsureSearch(true);
+                        break;
+                    case "albaiindexpause":
+                        AiPauseIndex();
+                        break;
+                    case "albaiindexresume":
+                        AiResumeIndex();
+                        break;
+                    case "albaiindexrestart":
+                        AiRestartIndex();
                         break;
                     case "albaiensureidle":
                         AiScheduleIdleIndex();
@@ -2512,6 +2579,18 @@ namespace ImageBatchTool
                         break;
                     case "albrefresh":
                         if (albRoots.Count > 0) StartAlbumScan(false, true);
+                        break;
+                    case "albscanstart":
+                        AlbScanStartManual();
+                        break;
+                    case "albscanpause":
+                        AlbScanPause();
+                        break;
+                    case "albscanresume":
+                        AlbScanResume();
+                        break;
+                    case "albscanrestart":
+                        AlbScanRestartManual();
                         break;
                     case "albclearcache":
                         ClearAlbCache();
@@ -2594,7 +2673,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 2.08\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show("图片批处理工具\n版本 2.09\n\n制作者：純潔の工口君", "关于");
                         break;
                     case "setskin":
                         try {
@@ -2603,7 +2682,7 @@ namespace ImageBatchTool
                         } catch {}
                         break;
                     case "winclose": InvokeUi(() => Close()); break;
-                    case "winmin": InvokeUi(() => WindowState = FormWindowState.Minimized); break;
+                    case "winmin": InvokeUi(() => MinimizeFromUi()); break;
                     case "winmax": InvokeUi(() => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized); break;
                     case "dragstart":
                         InvokeUi(() => { Native.ReleaseCapture(); Native.SendMessage(this.Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero); });
@@ -3955,6 +4034,7 @@ namespace ImageBatchTool
         List<AlbItem> albItems = new List<AlbItem>();
         List<string> albRoots = new List<string>();
         volatile bool albRunning = false;
+        volatile bool albScanPaused = false;
         DateTime albLastCkpt = DateTime.MinValue;
 
         // ===== AI 语义搜索（Chinese-CLIP 本地索引 + 常驻查询进程）=====
@@ -3971,6 +4051,9 @@ namespace ImageBatchTool
         volatile int aiIndexItemCount = 0;
         volatile bool aiIndexUnavailable = false;
         volatile bool aiReindexPending = false;
+        volatile bool aiIndexPaused = false;
+        volatile bool aiIndexResumePending = false;
+        volatile bool aiIndexRestartPending = false;
         string aiIndexDb = null;
         string aiIndexStop = null;
         string aiLastQuery = "";
@@ -5198,6 +5281,64 @@ namespace ImageBatchTool
 
         void StartAlbumScan(bool auto) { StartAlbumScan(auto, false); }
 
+        // 相册扫描暂停：工作线程在每个目录/每批文件前等在这里。
+        // 不用挂起线程，避免退出扫描时留下挂起线程无法回收。
+        void AlbScanWaitIfPaused()
+        {
+            while (albScanPaused && albRunning)
+            {
+                try { Thread.Sleep(120); } catch { break; }
+            }
+        }
+
+        void SendAlbScanControl(string phase)
+        {
+            long done = 0;
+            var ctx = albLiveScanCtx;
+            if (ctx != null) { try { lock (ctx.gate) done = ctx.done; } catch { } }
+            Send("{\"type\":\"albscan\",\"phase\":" + JsonStr(phase) + ",\"done\":" + done + ",\"total\":0}");
+        }
+
+        void AlbScanPause()
+        {
+            if (!albRunning) { Send("{\"type\":\"toast\",\"msg\":\"相册扫描当前没有运行\"}"); return; }
+            albScanPaused = true;
+            SendAlbScanControl("pause");
+            Send("{\"type\":\"toast\",\"msg\":\"已暂停相册扫描\"}");
+        }
+
+        void AlbScanResume()
+        {
+            if (!albRunning || !albScanPaused) { Send("{\"type\":\"toast\",\"msg\":\"相册扫描当前没有暂停\"}"); return; }
+            albScanPaused = false;
+            SendAlbScanControl("resume");
+            Send("{\"type\":\"toast\",\"msg\":\"已继续相册扫描\"}");
+        }
+
+        void AlbScanStartManual()
+        {
+            if (albRunning)
+            {
+                if (albScanPaused) AlbScanResume();
+                else Send("{\"type\":\"toast\",\"msg\":\"相册扫描正在进行\"}");
+                return;
+            }
+            StartAlbumScan(false, false);
+        }
+
+        void AlbScanRestartManual()
+        {
+            albScanPaused = false;
+            if (albRunning)
+            {
+                albRescanPending = true;
+                albRescanFullPending = true;
+                Send("{\"type\":\"toast\",\"msg\":\"已排队重新扫描，当前扫描结束后开始\"}");
+                return;
+            }
+            StartAlbumScan(false, true);
+        }
+
         void StartAlbumScan(bool auto, bool full)
         {
             if (albRoots.Count == 0) { if (!auto) Send("{\"type\":\"toast\",\"msg\":\"请先添加相册路径\"}"); return; }
@@ -5215,6 +5356,7 @@ namespace ImageBatchTool
             {
                 if (albRunning) { albRescanPending = true; albScanFull = albScanFull || full; albRescanFullPending = albRescanFullPending || full; return; }
                 albRunning = true;
+                albScanPaused = false;
                 albScanAuto = auto;
                 albScanFull = full;
             }
@@ -5368,6 +5510,7 @@ namespace ImageBatchTool
         {
             try
             {
+                AlbScanWaitIfPaused();
                 string dpath = job.path;
                 string dl = dpath.ToLowerInvariant();
                 long liveStamp = job.stamp;
@@ -5393,6 +5536,7 @@ namespace ImageBatchTool
                         foreach (var ce in ents)
                         {
                             Interlocked.Increment(ref ctx.done);
+                            if ((ctx.done & 31) == 0) AlbScanWaitIfPaused();
                             string lk = ce.realPath.ToLowerInvariant();
                             AlbItem it = AlbItemFromEnt(ce, dirRoot);
                             string bn = Path.GetFileNameWithoutExtension(ce.realPath);
@@ -5436,6 +5580,7 @@ namespace ImageBatchTool
                     foreach (var fi in files)
                     {
                         Interlocked.Increment(ref ctx.done);
+                        if ((ctx.done & 31) == 0) AlbScanWaitIfPaused();
                         string f = fi.FullName;
                         bool isImg = IsAlbImage(f);
                         string bn = Path.GetFileNameWithoutExtension(f);
@@ -5602,6 +5747,7 @@ namespace ImageBatchTool
                     try { stack.Push(new DirectoryInfo(root)); } catch { return; }
                     while (stack.Count > 0)
                     {
+                        AlbScanWaitIfPaused();
                         DirectoryInfo di;
                         try { di = stack.Pop(); } catch { break; }
                         string dpath = di.FullName;
@@ -5665,6 +5811,7 @@ namespace ImageBatchTool
                 while (!scanTask.IsCompleted)
                 {
                     if (scanTask.Wait(2000)) break;
+                    if (albScanPaused) { AlbScanWaitIfPaused(); continue; }
                     AlbScanSendProgress(ctx, total);
                     AlbScanCheckpointNow(ctx);
                     AiKickScanIndex(ctx);
@@ -5782,6 +5929,7 @@ namespace ImageBatchTool
                 lock (albScanStateGate)
                 {
                     albRunning = false;
+                    albScanPaused = false;
                     albScanAuto = false;
                     albScanFull = false;
                     rescan = albRescanPending;
@@ -6262,6 +6410,9 @@ namespace ImageBatchTool
         // ---- 人脸分组（调用 python + OpenCV 检测与聚类）----
         volatile bool faceRunning = false;
         volatile bool faceStop = false;
+        volatile bool facePaused = false;
+        volatile bool faceResumePending = false;
+        volatile bool faceRestartPending = false;
         volatile bool faceAgain = false;
         System.Diagnostics.Process faceProc = null;
         string faceStopFile = "";
@@ -6334,6 +6485,51 @@ namespace ImageBatchTool
 
         void StartFaceScan() { StartFaceScan(false); }
 
+        void ResetFaceCache()
+        {
+            try { if (File.Exists(FaceStateFile())) File.Delete(FaceStateFile()); } catch { }
+            try { if (File.Exists(FaceResultFile())) File.Delete(FaceResultFile()); } catch { }
+            try { if (File.Exists(FaceSigFile())) File.Delete(FaceSigFile()); } catch { }
+            faceLastJson = "";
+        }
+
+        void FacePause()
+        {
+            if (!faceRunning) { Send("{\"type\":\"toast\",\"msg\":\"人物分析当前没有运行\"}"); return; }
+            facePaused = true;
+            faceStop = true;
+            try { if (!string.IsNullOrEmpty(faceStopFile)) File.WriteAllText(faceStopFile, "stop"); } catch { }
+            Send("{\"type\":\"albfaces\",\"phase\":\"pausing\"}");
+        }
+
+        void FaceResume()
+        {
+            if (faceRunning && facePaused)
+            {
+                faceResumePending = true;
+                Send("{\"type\":\"albfaces\",\"phase\":\"resume\"}");
+                return;
+            }
+            facePaused = false;
+            StartFaceScan(false);
+        }
+
+        void FaceRestart()
+        {
+            facePaused = false;
+            faceResumePending = false;
+            if (faceRunning)
+            {
+                faceRestartPending = true;
+                faceStop = true;
+                try { if (!string.IsNullOrEmpty(faceStopFile)) File.WriteAllText(faceStopFile, "stop"); } catch { }
+                Send("{\"type\":\"albfaces\",\"phase\":\"restarting\"}");
+                return;
+            }
+            ResetFaceCache();
+            StartFaceScan(false);
+        }
+
         void StartFaceScan(bool auto)
         {
             if (faceRunning) { if (auto) faceAgain = true; else Send("{\"type\":\"toast\",\"msg\":\"人脸分析正在进行\"}"); return; }
@@ -6344,7 +6540,7 @@ namespace ImageBatchTool
                 if (!auto) Send("{\"type\":\"toast\",\"msg\":\"人物分组已是最新\"}");
                 return;
             }
-            faceRunning = true; faceStop = false;
+            faceRunning = true; faceStop = false; facePaused = false;
             faceStopFile = FaceStateFile() + ".stop";
             try { if (File.Exists(faceStopFile)) File.Delete(faceStopFile); } catch { }
             var th = new Thread(FaceScanThread); th.IsBackground = true; th.Start();
@@ -6419,7 +6615,7 @@ namespace ImageBatchTool
 
                 if (faceStop)
                 {
-                    Send("{\"type\":\"albfaces\",\"phase\":\"stop\"}");
+                    Send("{\"type\":\"albfaces\",\"phase\":\"" + (facePaused ? "pause" : "stop") + "\"}");
                     return;
                 }
                 // 模型缺失等原因导致脚本异常退出时，不要把空结果写成缓存，否则以后会一直显示 0 个人物。
@@ -6465,7 +6661,20 @@ namespace ImageBatchTool
                 try { if (!string.IsNullOrEmpty(faceListFile)) File.Delete(faceListFile); } catch { }
                 faceProc = null;
                 faceRunning = false;
-                if (faceAgain)
+                if (faceRestartPending)
+                {
+                    faceRestartPending = false;
+                    facePaused = false;
+                    ResetFaceCache();
+                    StartFaceScan(false);
+                }
+                else if (faceResumePending)
+                {
+                    faceResumePending = false;
+                    facePaused = false;
+                    StartFaceScan(false);
+                }
+                else if (faceAgain)
                 {
                     faceAgain = false;
                     StartFaceScan(true);
@@ -9025,6 +9234,7 @@ namespace ImageBatchTool
         {
             try
             {
+                if (aiIndexPaused) return;
                 if (albItems == null || albItems.Count == 0) return;
                 AiCancelIdleIndex();
                 int seq = aiIdleSeq;
@@ -9063,9 +9273,8 @@ namespace ImageBatchTool
         {
             try
             {
-                if (ctx == null || aiIndexUnavailable) return;
-                int count;
-                lock (ctx.gate) count = ctx.items.Count;
+                if (ctx == null || aiIndexUnavailable || aiIndexPaused) return;
+                int count;                lock (ctx.gate) count = ctx.items.Count;
                 if (count <= 0) return;
                 if (aiIndexRunning || aiServerStarting)
                 {
@@ -9100,6 +9309,7 @@ namespace ImageBatchTool
         {
             try
             {
+                if (aiIndexPaused) return;
                 AiMarkPriority(path);
                 if (aiIndexRunning || aiServerStarting)
                 {
@@ -9120,10 +9330,57 @@ namespace ImageBatchTool
             AiEnsureSearch(false);
         }
 
+        void AiPauseIndex()
+        {
+            if (!aiIndexRunning)
+            {
+                Send("{\"type\":\"albaiindex\",\"phase\":\"paused\"}");
+                Send("{\"type\":\"toast\",\"msg\":\"标签索引当前没有运行\"}");
+                return;
+            }
+            aiIndexPaused = true;
+            aiIndexResumePending = false;
+            aiIndexRestartPending = false;
+            try { if (!string.IsNullOrEmpty(aiIndexStop)) File.WriteAllText(aiIndexStop, "stop"); } catch { }
+            Send("{\"type\":\"albaiindex\",\"phase\":\"pausing\"}");
+            Send("{\"type\":\"toast\",\"msg\":\"正在暂停标签索引…\"}");
+        }
+
+        void AiResumeIndex()
+        {
+            aiIndexPaused = false;
+            if (!aiIndexRunning)
+            {
+                aiIndexResumePending = false;
+                AiEnsureSearch(true);
+                return;
+            }
+            aiIndexResumePending = true;
+            Send("{\"type\":\"albaiindex\",\"phase\":\"resume\"}");
+            Send("{\"type\":\"toast\",\"msg\":\"正在继续标签索引…\"}");
+        }
+
+        void AiRestartIndex()
+        {
+            aiIndexPaused = false;
+            aiIndexResumePending = false;
+            if (!aiIndexRunning)
+            {
+                aiIndexRestartPending = false;
+                AiEnsureSearch(true);
+                return;
+            }
+            aiIndexRestartPending = true;
+            try { if (!string.IsNullOrEmpty(aiIndexStop)) File.WriteAllText(aiIndexStop, "stop"); } catch { }
+            Send("{\"type\":\"albaiindex\",\"phase\":\"restarting\"}");
+            Send("{\"type\":\"toast\",\"msg\":\"正在重新启动标签索引…\"}");
+        }
+
         void AiEnsureSearch(bool force)
         {
             try
             {
+                if (aiIndexPaused) return;
                 AiCancelIdleIndex();
                 if (aiIndexRunning || aiServerStarting)
                 {
@@ -9297,12 +9554,9 @@ namespace ImageBatchTool
                             aiIndexDoneCount = Math.Max(aiIndexDoneCount, total);
                             if (!string.IsNullOrEmpty(aiPendingTagPath)) AiStartServer();
                         }
-                        if (phase == "stopped" || phase == "unavailable" || phase == "error")
-                        {
-                            aiIndexRunning = false;
-                        }
                         if (phase == "unavailable" || phase == "error")
                         {
+                            aiIndexRunning = false;
                             aiIndexUnavailable = true;
                         }
                         Send("{\"type\":\"albaiindex\",\"phase\":" + JsonStr(phase) +
@@ -9347,6 +9601,23 @@ namespace ImageBatchTool
                     try
                     {
                         aiIndexRunning = false;
+                        if (aiIndexPaused)
+                        {
+                            Send("{\"type\":\"albaiindex\",\"phase\":\"paused\",\"done\":" + aiIndexDoneCount + ",\"total\":" + aiIndexTotal + "}");
+                            return;
+                        }
+                        if (aiIndexRestartPending)
+                        {
+                            aiIndexRestartPending = false;
+                            AiEnsureSearch(true);
+                            return;
+                        }
+                        if (aiIndexResumePending)
+                        {
+                            aiIndexResumePending = false;
+                            AiEnsureSearch(true);
+                            return;
+                        }
                         bool restartPending = aiReindexPending && !aiIndexUnavailable && !aiShuttingDown;
                         if (!aiIndexDone && !aiIndexUnavailable && !restartPending)
                             Send("{\"type\":\"albaiindex\",\"phase\":\"error\",\"reason\":\"index_process_exit\",\"done\":" + aiIndexDoneCount + ",\"total\":" + aiIndexTotal + "}");

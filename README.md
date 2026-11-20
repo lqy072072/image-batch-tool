@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.08-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.08/image-batch-tool_v2.08_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.09-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.09/image-batch-tool_v2.09_setup.exe)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 1.1GB，已内置 Python 运行时、Chinese-CLIP 与 PP-OCRv4 模型）：
 
-**[👉 下载 image-batch-tool_v2.08_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.08/image-batch-tool_v2.08_setup.exe)**
+**[👉 下载 image-batch-tool_v2.09_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.09/image-batch-tool_v2.09_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
 
@@ -52,9 +52,23 @@
 - **启动秒开**：扫描结果与 EXIF / 尺寸 / 地理位置持久化到 `alb_index.dat`，缩略图落盘缓存，第二次打开直接用缓存先展示，后台再核对
 - **大目录优化**：枚举阶段只收集图片 / 视频，跳过回收站、系统目录、node_modules 等；界面分页 + 滚动懒加载
 - **删除同步**：相册内删除后自动校准计数与其他视图，不需要手动刷新
-- **选项菜单**：图片编辑 / 回收站 / 去重 / 人物分析 / 重新扫描 / 删除缓存 / 缓存位置
+- **选项菜单**：扫描控制、标签索引 AI、回收站、缓存与索引性能分区；去重已移到相册顶栏，人物识别控制条只出现在人物分类
 
-![选项菜单](docs/screenshots/album_v2_menu.png)
+![选项菜单](docs/screenshots/album_v209_menu.png)
+
+![人物分类](docs/screenshots/album_v209_person.png)
+
+### v2.09 更新
+- **扫描四键控制**：选项菜单的「扫描」支持重新 / 开始 / 暂停 / 继续；暂停在枚举、缓存核对和逐文件读取阶段都会生效，继续从当前文件接着扫，不丢进度
+- **标签索引 AI 四键控制**：新增「标签索引 AI」分区，可重新 / 开始 / 暂停 / 继续本地标签索引；暂停时索引进程保存进度退出，继续后接着处理，不重复计算已索引照片
+- **人物识别控制条**：人物识别从选项菜单移到人物分类页顶部，只在「人物」分类显示；同样支持重新 / 开始 / 暂停 / 继续，切到其他分类自动隐藏
+- **选项菜单重排**：按「扫描、标签索引 AI、照片管理、缓存与索引性能」四组分类摆放，常用操作更容易找
+- **去重独立入口**：去重从选项菜单移到相册顶栏搜索左侧，点击仍打开原独立去重窗口
+- **搜索栏精简**：移除搜索框后面的快速搜索词，只保留输入框和结果计数；详情页标签点击仍会自动填入搜索
+- **选择操作收进下拉**：顶栏「选择 ▾」点击后展开进入/退出选择模式、全选、编辑选中、删除选中，未进入选择模式时相关项灰显
+- **对比拉帘跟手修复**：原图对比横杠改用 Pointer Events + 指针捕获，并修正鼠标坐标与预览容器坐标的换算，拖动不再偏移、不会中途丢事件
+- **任务栏点击不最小化**：点击任务栏图标只把窗口恢复到前台，不再收起；界面自带的最小化按钮仍可正常最小化
+- **移除示例按钮**：图片编辑工具条去掉「示例」入口，其他效果按钮和缩略图预览保持不变
 
 ### v2.08 更新
 - **标签点击即搜索**：相册详情页的 AI 索引标签可直接点击，标签会自动填入搜索框并只检索相同标签的图片（走本地多标签索引，不混入 CLIP 语义相近结果）；保留原有三模型颜色区分和详情页其他操作

@@ -368,12 +368,26 @@ body.skin-light .alb-search-cancel { color:#2f6fb8; }
 .alb-tab.on { background:#3a3d42; color:#fff; border-color:#4c5057; }
 .alb-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
 .alb-opt-wrap { position:relative; }
-.alb-opt-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:190px; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; z-index:800; box-shadow:0 12px 28px rgba(0,0,0,.5); }
+.alb-sel-wrap { position:relative; }
+.alb-opt-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:230px; max-height:calc(100vh - 120px); overflow-y:auto; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; z-index:800; box-shadow:0 12px 28px rgba(0,0,0,.5); }
 .alb-opt-menu.on { display:block; animation:optIn .16s ease-out both; }
 @keyframes optIn { from { opacity:0; transform:translateY(-6px) scale(.97); } to { opacity:1; transform:none; } }
+.alb-opt-sec { padding:5px 2px 6px; border-bottom:1px solid #414248; }
+.alb-opt-sec:last-child { border-bottom:0; padding-bottom:3px; }
+.alb-opt-sec-title { display:flex; align-items:center; gap:6px; padding:2px 7px 6px; color:#8f959d; font-size:10px; letter-spacing:.3px; }
+.alb-opt-note { color:#76a9df; font-size:9px; border:1px solid #3f5d7e; border-radius:8px; padding:0 5px; line-height:14px; }
+.alb-ctl-row { display:flex; gap:4px; padding:0 5px; }
+.alb-ctl { flex:1; min-width:0; padding:5px 2px; border:1px solid #4a4c53; border-radius:5px; background:#383a3f; color:#d8dce1; font-size:11px; line-height:18px; cursor:pointer; user-select:none; }
+.alb-ctl:hover { background:#474a51; color:#fff; border-color:#5c6068; }
+.alb-ctl:active { background:#3f6fb5; border-color:#5b8bd1; }
+.alb-sel-menu { right:0; min-width:178px; }
 .alb-opt-item { padding:8px 11px; font-size:12px; color:#ddd; border-radius:6px; cursor:pointer; white-space:nowrap; }
+.alb-sel-item.dis, .alb-opt-item.dis { color:#6b6d72; cursor:default; pointer-events:none; }
+.alb-opt-item.danger { color:#ff9a9a; }
+.alb-opt-item.danger:hover { background:#4a2b2b; color:#ffd0d0; }
+.alb-opt-item.danger.dis { color:#755f5f; }
 .alb-opt-item:hover { background:#3d3e44; color:#fff; }
-.alb-opt-perf { padding:7px 7px 5px; margin:2px 0 3px; border-top:1px solid #414248; border-bottom:1px solid #414248; }
+.alb-opt-perf { padding:7px 7px 5px; margin:2px 0 3px; border-top:0; border-bottom:0; }
 .alb-opt-perf-title { display:flex; justify-content:space-between; gap:8px; font-size:10px; color:#8f959d; padding:0 3px 6px; }
 .alb-perf-seg { display:flex; gap:4px; }
 .alb-perf-seg span { flex:1; text-align:center; font-size:11px; padding:4px 6px; border:1px solid #45474e; border-radius:5px; color:#cfd3d8; cursor:pointer; user-select:none; }
@@ -385,8 +399,14 @@ body.skin-light .alb-perf-seg span { color:#444; border-color:#d6d6dc; }
 body.skin-light .alb-perf-seg span:hover { background:#ececef; color:#1d1d1f; }
 body.skin-light .alb-perf-seg span.on { background:#3f6fb5; border-color:#5b8bd1; color:#fff; }
 body.skin-light .alb-opt-menu { background:#ffffff; border-color:#d1d1d6; box-shadow:0 12px 28px rgba(0,0,0,.16); }
+body.skin-light .alb-opt-sec { border-color:#e6e6ec; }
+body.skin-light .alb-opt-sec-title { color:#85858c; }
+body.skin-light .alb-ctl { background:#f4f4f7; color:#333; border-color:#d6d6dc; }
+body.skin-light .alb-ctl:hover { background:#ececef; color:#111; border-color:#c9c9d1; }
 body.skin-light .alb-opt-item { color:#1d1d1f; }
 body.skin-light .alb-opt-item:hover { background:#ececef; }
+body.skin-light .alb-opt-item.danger { color:#c0392b; }
+body.skin-light .alb-opt-item.danger:hover { background:#fdeceb; }
 /* 相册右键菜单 */
 .alb-ctx { display:none; position:fixed; z-index:1200; min-width:168px; background:#2f3033; border:1px solid #43444a; border-radius:9px; padding:5px; box-shadow:0 14px 34px rgba(0,0,0,.55); }
 .alb-ctx.on { display:block; animation:optIn .13s ease-out both; }
@@ -551,6 +571,14 @@ body.skin-fade, body.skin-fade * { transition: background-color .28s ease, color
 .alb-pcard img { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#191919; }
 .alb-pcard .nm { font-size:12px; color:#ddd; padding:6px 4px; }
 .alb-pcard .ct { font-size:10px; color:#8a8a8a; padding-bottom:6px; }
+.alb-person-ctl { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 11px; background:#232326; border:1px solid #3a3c42; border-radius:9px; margin:0 14px 8px; flex-shrink:0; }
+.alb-person-ctl .ttl { font-size:12px; color:#d9dde2; white-space:nowrap; }
+.alb-person-ctl .alb-ctl-row { flex:1 1 260px; padding:0; min-width:220px; }
+.alb-person-ctl .alb-ctl { flex:0 1 62px; }
+.alb-person-ctl .stat { font-size:10px; color:#8f959d; white-space:nowrap; margin-left:auto; }
+body.skin-light .alb-person-ctl { background:#fff; border-color:#dcdce2; }
+body.skin-light .alb-person-ctl .ttl { color:#333; }
+body.skin-light .alb-person-ctl .stat { color:#85858c; }
 /* 详情 EXIF */
 .alb-vexif { font-size:11px; color:#9a9a9a; line-height:1.7; border-top:1px solid #333; padding-top:8px; max-height:44vh; overflow-y:auto; }
 .alb-vexif .row { display:flex; gap:8px; }
@@ -769,7 +797,6 @@ window.addEventListener('mouseup', function(e) {
       <div class="tool-btn" onclick="doRotate(90)">↻ 右旋</div>
       <div class="tool-btn" onclick="retryOne()">⟳ 重做</div>
       <div class="tool-btn" id="wipeBtn" onclick="toggleWipe()">◧ 对比</div>
-      <div class="tool-btn" onclick="showFxGallery()" title="查看各功能效果示例">🖼 示例</div>
     </div>
     <div class="preview-row">
       <div class="preview-area" id="preview">
@@ -1059,6 +1086,7 @@ window.addEventListener('mouseup', function(e) {
       <span class="alb-tab" data-tab="map">地图</span>
     </div>
     <div class="alb-right">
+      <button class="mini-btn" id="albDedupBtn" onclick="albDedup()" title="查找重复照片，确认后移入回收站">去重</button>
       <button class="mini-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置">搜索</button>
       <button class="mini-btn" id="albTimeBtn" onclick="albToggleTimeSort()" title="按拍摄时间排列，并按天分组">按时间</button>
       <button class="mini-btn alb-zoom" onclick="albZoom(-1)" title="缩小缩略图（Ctrl+滚轮也可缩放）">−</button>
@@ -1066,26 +1094,52 @@ window.addEventListener('mouseup', function(e) {
       <div class="alb-opt-wrap">
         <button class="mini-btn" id="albOptBtn" onclick="albToggleOpt(event)" title="更多功能">选项 ▾</button>
         <div class="alb-opt-menu" id="albOptMenu">
-          <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
-          <div class="alb-opt-item" onclick="albOptDo('dedup')">去重</div>
-          <div class="alb-opt-item" id="albFaceBtn" onclick="albOptDo('face')">人物分析</div>
-          <div class="alb-opt-item" onclick="albOptDo('rescan')">重新扫描</div>
-          <div class="alb-opt-item" onclick="albOptDo('cacheclear')">删除缓存</div>
-          <div class="alb-opt-item" onclick="albOptDo('cacheloc')">缓存位置</div>
-          <div class="alb-opt-perf">
-            <div class="alb-opt-perf-title"><span>索引性能</span><span id="albPerfNow">均衡</span></div>
-            <div class="alb-perf-seg" id="albPerfSeg">
-              <span data-perf="low" onclick="albOptDo('perf:low')" title="低：CPU 单线程并关闭 GPU，最省资源">低</span>
-              <span data-perf="mid" onclick="albOptDo('perf:mid')" title="中：GPU 可用，CPU 最多 4 线程，均衡">中</span>
-              <span data-perf="high" onclick="albOptDo('perf:high')" title="高：GPU + 全部 CPU 线程 + 高进程优先级，速度拉满">高</span>
+          <div class="alb-opt-sec">
+            <div class="alb-opt-sec-title">扫描</div>
+            <div class="alb-ctl-row">
+              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('restart')" title="重新完整扫描相册">重新</button>
+              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('start')" title="开始扫描相册">开始</button>
+              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('pause')" title="暂停当前相册扫描">暂停</button>
+              <button class="alb-ctl" onclick="event.stopPropagation();albScanCtl('resume')" title="继续暂停的相册扫描">继续</button>
+            </div>
+          </div>
+          <div class="alb-opt-sec">
+            <div class="alb-opt-sec-title">标签索引 <span class="alb-opt-note">AI</span></div>
+            <div class="alb-ctl-row">
+              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('restart')" title="重新启动 AI 标签索引">重新</button>
+              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('start')" title="立即开始 AI 标签索引">开始</button>
+              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('pause')" title="暂停 AI 标签索引">暂停</button>
+              <button class="alb-ctl" onclick="event.stopPropagation();albAiCtl('resume')" title="继续 AI 标签索引">继续</button>
+            </div>
+          </div>
+          <div class="alb-opt-sec">
+            <div class="alb-opt-sec-title">照片管理</div>
+            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
+          </div>
+          <div class="alb-opt-sec">
+            <div class="alb-opt-sec-title">缓存与索引性能</div>
+            <div class="alb-opt-item" onclick="albOptDo('cacheclear')">删除缓存</div>
+            <div class="alb-opt-item" onclick="albOptDo('cacheloc')">缓存位置</div>
+            <div class="alb-opt-perf">
+              <div class="alb-opt-perf-title"><span>索引性能</span><span id="albPerfNow">均衡</span></div>
+              <div class="alb-perf-seg" id="albPerfSeg">
+                <span data-perf="low" onclick="albOptDo('perf:low')" title="低：CPU 单线程并关闭 GPU，最省资源">低</span>
+                <span data-perf="mid" onclick="albOptDo('perf:mid')" title="中：GPU 可用，CPU 最多 4 线程，均衡">中</span>
+                <span data-perf="high" onclick="albOptDo('perf:high')" title="高：GPU + 全部 CPU 线程 + 高进程优先级，速度拉满">高</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <button class="mini-btn" id="albSelBtn" onclick="albToggleSel()">选择</button>
-      <button class="mini-btn" id="albSelAllBtn" style="display:none" onclick="albSelAllToggle()">全选</button>
-      <button class="mini-btn" id="albEditBtn" style="display:none" onclick="albToEdit()">编辑选中</button>
-      <button class="mini-btn" id="albDelSelBtn" style="display:none;background:#b33;color:#fff;border-color:#c44" onclick="albDeleteSelected()">删除选中</button>
+      <div class="alb-sel-wrap">
+        <button class="mini-btn" id="albSelBtn" onclick="albToggleSelMenu(event)">选择 ▾</button>
+        <div class="alb-opt-menu alb-sel-menu" id="albSelMenu">
+          <div class="alb-opt-item" id="albSelModeItem" onclick="albSelMenuMode()">进入选择模式</div>
+          <div class="alb-opt-item alb-sel-item" id="albSelAllBtn" onclick="albSelMenuAll()">全选</div>
+          <div class="alb-opt-item alb-sel-item" id="albEditBtn" onclick="albSelMenuEdit()">编辑选中</div>
+          <div class="alb-opt-item alb-sel-item danger" id="albDelSelBtn" onclick="albSelMenuDelete()">删除选中</div>
+        </div>
+      </div>
     </div>
     <div class="alb-search-row" id="albSearchRow">
       <div class="alb-search-box">
@@ -1094,21 +1148,6 @@ window.addEventListener('mouseup', function(e) {
         <span class="alb-search-count" id="albSearchCount"></span>
         <span class="alb-search-cancel" onclick="albSearchClose()">取消</span>
       </div>
-      <div class="alb-search-hints" id="albSearchHints">
-        <span onclick="albSearchHint('照片')">照片</span>
-        <span onclick="albSearchHint('视频')">视频</span>
-        <span onclick="albSearchHint('GIF')">GIF</span>
-        <span onclick="albSearchHint('RAW')">RAW</span>
-        <span onclick="albSearchHint('今天')">今天</span>
-        <span onclick="albSearchHint('本周')">本周</span>
-        <span onclick="albSearchHint('有定位')">有定位</span>
-        <span onclick="albSearchHint('猫')">猫</span>
-        <span onclick="albSearchHint('狗')">狗</span>
-        <span onclick="albSearchHint('海边日落')">海边日落</span>
-        <span onclick="albSearchHint('生日蛋糕')">生日蛋糕</span>
-        <span onclick="albSearchHint('蓝色汽车')">蓝色汽车</span>
-        <span onclick="albSearchHint('发票')">发票</span>
-      </div>
     </div>
   </div>
   <div class="alb-paths">
@@ -1116,6 +1155,16 @@ window.addEventListener('mouseup', function(e) {
     <div class="alb-path-btns">
       <button class="mini-btn" onclick="post('albaddpath')" title="可选择普通文件夹，也可直接选某个磁盘根目录（如 D:\）">＋ 添加文件夹</button>
     </div>
+  </div>
+  <div class="alb-person-ctl" id="albPersonCtl" style="display:none">
+    <span class="ttl">人物识别</span>
+    <div class="alb-ctl-row">
+      <button class="alb-ctl" onclick="albFaceCtl('restart')" title="清除人物分组缓存并从头分析">重新</button>
+      <button class="alb-ctl" onclick="albFaceCtl('start')" title="开始或继续未完成的人物分析">开始</button>
+      <button class="alb-ctl" onclick="albFaceCtl('pause')" title="暂停人物分析，保留当前进度">暂停</button>
+      <button class="alb-ctl" onclick="albFaceCtl('resume')" title="继续暂停的人物分析">继续</button>
+    </div>
+    <span class="stat" id="albFaceStat">未开始</span>
   </div>
   <div class="alb-body">
     <div class="alb-grid" id="albGrid"></div>
@@ -1492,25 +1541,36 @@ function wipeRangeInput(el) {
   function setPos(clientX) {
     const box = imageRect();
     if (!box || !box.width) return;
-    _wipePos = Math.max(0, Math.min(100, (clientX - box.left) / box.width * 100));
+    // imageRect 的 left/top 是相对 #preview 的坐标；鼠标事件是视口坐标，必须用 clientLeft 换算，
+    // 否则窗口越靠右，拉帘位置偏得越多，会出现“不跟鼠标”的手感。
+    const left = (typeof box.clientLeft === 'number') ? box.clientLeft : box.left;
+    _wipePos = Math.max(0, Math.min(100, (clientX - left) / box.width * 100));
     renderWipe();
   }
   function start(e) {
-    if (!_wipeOn) return;
+    if (!_wipeOn || e.button === 1 || e.button === 2) return;
     _wipeDragging = true;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
     setPos(e.clientX);
     e.preventDefault();
     e.stopPropagation();
   }
+  function move(e) {
+    if (!_wipeDragging) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) { _wipeDragging = false; return; }
+    setPos(e.clientX);
+    e.preventDefault();
+  }
+  function end() { _wipeDragging = false; }
   ['wipeHit', 'wipeHandle'].forEach(function(id) {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('mousedown', start);
+    if (!el) return;
+    el.style.touchAction = 'none';
+    el.addEventListener('pointerdown', start);
   });
-  window.addEventListener('mousemove', e => {
-    if (!_wipeDragging) return;
-    setPos(e.clientX);
-  });
-  window.addEventListener('mouseup', () => { _wipeDragging = false; });
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
   window.addEventListener('resize', () => { if (_wipeOn) renderWipe(); });
 })();
 
@@ -1835,11 +1895,14 @@ function confirmCrop() {
 // 拿到当前图片在预览容器中的实际矩形
 function imageRect() {
   const prev = document.getElementById('preview');
-  const img = prev.querySelector('img');
+  if (!prev) return null;
+  let img = prev.querySelector(':scope > img');
+  if (!img) img = prev.querySelector('img');
   if (!img || !img.naturalWidth) return null;
   const r = img.getBoundingClientRect();
   const cr = prev.getBoundingClientRect();
-  return { left:r.left-cr.left, top:r.top-cr.top, width:r.width, height:r.height };
+  // left/top 供 #preview 内的绝对定位图层使用；clientLeft/clientTop 供鼠标/触摸坐标换算使用。
+  return { left:r.left-cr.left, top:r.top-cr.top, width:r.width, height:r.height, clientLeft:r.left, clientTop:r.top };
 }
 function drawCropRect() {
   const box = imageRect(); if (!box || !_cropRect) return;
@@ -2159,15 +2222,23 @@ if (window.chrome && chrome.webview) {
       const total = Number(m.total) || 0, done = Math.min(Number(m.done) || 0, total || 999999999);
       const scanned = Number(m.items) || 0;
       if (m.phase === 'enum') {
-        A.scanTotal = 0; A.scanDone = 0; A.scanItems = 0;
+        A.scanPaused = false; A.scanTotal = 0; A.scanDone = 0; A.scanItems = 0;
         if (sub) sub.textContent = '正在统计文件…';
+      } else if (m.phase === 'pause') {
+        A.scanPaused = true;
+        if (sub) sub.textContent = '扫描已暂停 · 文件 ' + (A.scanDone||0) + ' / ' + (A.scanTotal||0);
+      } else if (m.phase === 'resume') {
+        A.scanPaused = false;
+        if (sub) sub.textContent = '继续扫描 · 文件 ' + (A.scanDone||0) + ' / ' + (A.scanTotal||0);
       } else if (m.phase === 'done') {
-        A.scanTotal = total; A.scanDone = total; A.scanItems = scanned || total;
+        A.scanPaused = false; A.scanTotal = total; A.scanDone = total; A.scanItems = scanned || total;
         if (sub) sub.textContent = '扫描完成';
       } else {
-        A.scanTotal = total; A.scanDone = done;
-        if (scanned) { A.scanItems = scanned; if (scanned > A.total) A.total = scanned; }
-        if (sub) sub.textContent = '扫描中 · 文件 ' + done + ' / ' + total;
+        if (!A.scanPaused) {
+          A.scanTotal = total; A.scanDone = done;
+          if (scanned) { A.scanItems = scanned; if (scanned > A.total) A.total = scanned; }
+          if (sub) sub.textContent = '扫描中 · 文件 ' + done + ' / ' + total;
+        }
       }
       if (m.phase === 'done') post('albaiensureidle');
     } else if (m.type === 'albaiindex') {
@@ -2176,16 +2247,25 @@ if (window.chrome && chrome.webview) {
       if (typeof m.ocr !== 'undefined') A.aiOcr = !!m.ocr;
       if (typeof m.obj !== 'undefined') A.aiObj = !!m.obj;
       if (phase === 'run' || phase === 'start' || phase === 'load') {
+        A.aiPaused = false;
         A.aiIndexing = true;
         A.aiDone = Number(m.done) || 0;
         A.aiTotal = Number(m.total) || A.aiTotal || 0;
         A.aiCount = Number(m.count) || A.aiCount || 0;
+      } else if (phase === 'pausing' || phase === 'paused') {
+        A.aiIndexing = false;
+        A.aiPaused = true;
+      } else if (phase === 'resume' || phase === 'restarting') {
+        A.aiPaused = false;
+        A.aiIndexing = true;
       } else if (phase === 'done') {
+        A.aiPaused = false;
         A.aiIndexing = false;
         A.aiDone = Number(m.total) || A.aiDone || 0;
         A.aiTotal = Number(m.total) || A.aiTotal || 0;
         A.aiCount = Number(m.count) || A.aiCount || 0;
       } else if (phase === 'ready') {
+        A.aiPaused = false;
         A.aiReady = true;
         A.aiIndexing = false;
         A.aiDone = Number(m.done) || A.aiDone || 0;
@@ -2193,6 +2273,7 @@ if (window.chrome && chrome.webview) {
         A.aiCount = Number(m.count) || A.aiCount || 0;
         A.aiError = '';
       } else if (phase === 'unavailable' || phase === 'error') {
+        A.aiPaused = false;
         A.aiIndexing = false;
         A.aiPending = false;
         A.aiError = (m.reason || 'AI 不可用');
@@ -2264,24 +2345,35 @@ if (window.chrome && chrome.webview) {
       setAppMode('album');
       openAlbum();
     } else if (m.type === 'albfaces') {
-      if (m.phase === 'run' || m.phase === 'enum') {
-        window._alb.faceBusy = true;
-        const fb = document.getElementById('albFaceBtn');
-        if (fb) { fb.textContent = '停止分析'; fb.style.color = '#ffd479'; }
+      const A=window._alb;
+      if (m.phase === 'run' || m.phase === 'enum' || m.phase === 'pausing' || m.phase === 'restarting' || m.phase === 'resume') {
+        A.faceBusy = true;
+        A.faceDone = Number(m.done) || A.faceDone || 0;
+        A.faceTotal = Number(m.total) || A.faceTotal || 0;
+        A.facePaused = (m.phase === 'pausing');
         const sub = document.getElementById('albSub');
-        if (sub) sub.textContent = '人物分析 ' + (m.done || 0) + ' / ' + (m.total || 0);
+        if (sub) sub.textContent = m.phase === 'pausing' ? '人物分析正在暂停…' : (m.phase === 'restarting' ? '正在重新开始人物分析…' : '人物分析 ' + (A.faceDone) + ' / ' + (A.faceTotal));
+        albUpdateFaceStatus();
+      } else if (m.phase === 'pause') {
+        A.faceBusy = false;
+        A.facePaused = true;
+        const sub = document.getElementById('albSub');
+        if (sub) sub.textContent = '人物分析已暂停' + ((A.faceDone||A.faceTotal)?' · '+A.faceDone+' / '+A.faceTotal:'');
+        albUpdateFaceStatus();
       } else if (m.phase === 'done') {
-        window._alb.faceBusy = false;
-        window._alb.faces = { groups: m.groups || [], photos: m.photos || 0, faces: m.faces || 0 };
-        const b = document.getElementById('albFaceBtn');
-        if (b) { b.textContent = '重新分析'; b.style.color = ''; }
+        A.faceBusy = false;
+        A.facePaused = false;
+        A.faces = { groups: m.groups || [], photos: m.photos || 0, faces: m.faces || 0 };
+        A.faceDone = Number(m.photos) || 0;
+        A.faceTotal = Number(m.photos) || 0;
         const sub = document.getElementById('albSub');
         if (sub) sub.textContent = '人物分析完成 · ' + ((m.groups || []).length) + ' 个人物';
-        if (window._alb.tab === 'person') albRender();
+        albUpdateFaceStatus();
+        if (A.tab === 'person') albRender();
       } else if (m.phase === 'stop' || m.phase === 'error') {
-        window._alb.faceBusy = false;
-        const b = document.getElementById('albFaceBtn');
-        if (b) { b.textContent = '人物分析'; b.style.color = ''; }
+        A.faceBusy = false;
+        A.facePaused = false;
+        albUpdateFaceStatus();
         toastMsg(m.phase === 'stop' ? '已停止人物分析' : ('人物分析失败：' + (m.msg || '')));
       }
     } else if (m.type === 'albstats') {
@@ -2905,7 +2997,7 @@ document.addEventListener("keydown",function(e){
   },{passive:false});
 })();
 // ==================== 相册 UI ====================
-window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:''};
+window._alb = {root:'',roots:[],items:[],byPath:{},thumbs:{},cellMap:{},thumbQueue:[],thumbActive:0,tab:'all',sel:false,selSet:{},viewerPath:null,viewerData:null,viewerLivePlaying:false,loading:true,total:0,scanItems:0,scanDone:0,scanTotal:0,scanPaused:false,allPaths:null,selAllActive:false,selAllWant:false,selAllPending:false,map:null,layer:null,leafletLoading:false,lastDraw:0,faces:null,faceBusy:false,facePaused:false,faceDone:0,faceTotal:0,person:-1,device:'',timeSort:false,collapsed:{},autoPreload:false,autoTarget:0,autoTimer:null,fullLoading:false,dataLoaded:false,virtualActive:false,vSpace:null,vList:null,vDirty:true,vRaf:0,vCols:0,vCw:150,vRowH:160,pageOff:0,virtualFallback:false,searchMode:false,search:'',searchTotal:0,searchTimer:null,mapFocus:null,mapMarkers:[],aiReady:false,aiIndexing:false,aiPaused:false,aiDone:0,aiTotal:0,aiCount:0,aiOcr:false,aiObj:false,aiPerf:'mid',aiPending:false,aiResults:null,aiResultsQ:'',aiError:'',searchTagOnly:''};
 
 function toastMsg(msg){ const sb=document.getElementById('statusBox'); if(sb){ sb.textContent=msg; sb.style.color='#ffd479'; } }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -2942,6 +3034,7 @@ function albToggleOpt(e){
   if(e) e.stopPropagation();
   const m=document.getElementById('albOptMenu');
   if(!m) return;
+  const sm=document.getElementById('albSelMenu'); if(sm) sm.classList.remove('on');
   const on=m.classList.contains('on');
   m.classList.toggle('on', !on);
 }
@@ -2970,7 +3063,7 @@ function albOptDo(kind){
   if(kind==='editor') enterEditorFromAlbum();
   else if(kind==='bin') binOpen();
   else if(kind==='dedup') albDedup();
-  else if(kind==='face') albFaceScan();
+  else if(kind==='face') albFaceCtl('start');
   else if(kind==='rescan') post('albrefresh');
   else if(kind==='cacheclear'){
     post('albclearcache');
@@ -2985,6 +3078,88 @@ function albOptDo(kind){
     post('albperf|'+mode);
   }
 }
+function albScanStatusText(){
+  const A=window._alb;
+  if(A && A.scanPaused) return '扫描已暂停' + (A.scanDone||A.scanTotal ? ' · '+(A.scanDone||0)+' / '+(A.scanTotal||0) : '');
+  return '';
+}
+function albScanCtl(action){
+  const A=window._alb;
+  if(!A) return;
+  if(!(A.roots||[]).length){ toastMsg('请先添加相册路径'); return; }
+  if(action==='restart'){
+    if(!confirm('重新扫描会重新读取全部相册目录，不会删除照片。继续？')) return;
+    A.scanPaused=false;
+    post('albscanrestart');
+    toastMsg('已请求重新扫描相册');
+  } else if(action==='start'){
+    A.scanPaused=false;
+    post('albscanstart');
+  } else if(action==='pause'){
+    if(!(A.scanTotal>0) && !A.loading){ toastMsg('当前没有正在进行的相册扫描'); return; }
+    A.scanPaused=true;
+    post('albscanpause');
+    const sub=document.getElementById('albSub'); if(sub) sub.textContent=albScanStatusText();
+  } else if(action==='resume'){
+    if(!A.scanPaused){ toastMsg('当前没有暂停的相册扫描'); return; }
+    A.scanPaused=false;
+    post('albscanresume');
+  }
+}
+function albAiCtl(action){
+  const A=window._alb;
+  if(!A) return;
+  if(!(A.items||[]).length){ toastMsg('相册里还没有照片'); return; }
+  if(action==='restart'){
+    if(!confirm('重新启动 AI 标签索引？已建立的索引会保留，只重新检查新增/变更照片。')) return;
+    A.aiPaused=false;
+    post('albaiindexrestart');
+    toastMsg('已请求重新启动标签索引');
+  } else if(action==='start'){
+    A.aiPaused=false;
+    post('albaiindexstart');
+  } else if(action==='pause'){
+    A.aiPaused=true;
+    post('albaiindexpause');
+    toastMsg('正在暂停标签索引…');
+  } else if(action==='resume'){
+    A.aiPaused=false;
+    post('albaiindexresume');
+    toastMsg('正在继续标签索引…');
+  }
+}
+function albFaceStatusText(){
+  const A=window._alb;
+  if(!A) return '未开始';
+  if(A.faceBusy) return A.facePaused ? '已暂停' : '识别中' + (A.faceDone||A.faceTotal ? ' · '+A.faceDone+' / '+A.faceTotal : '');
+  if(A.facePaused) return '已暂停';
+  return A.faces ? '已完成' : '未开始';
+}
+function albUpdateFaceStatus(){
+  const el=document.getElementById('albFaceStat');
+  if(el) el.textContent=albFaceStatusText();
+}
+function albFaceCtl(action){
+  const A=window._alb;
+  if(!A) return;
+  if(!(A.items||[]).length){ toastMsg('相册里还没有照片'); return; }
+  if(action==='restart'){
+    if(!confirm('重新分析会清除当前人物分组缓存，并从第一张照片重新识别，不会修改原图。继续？')) return;
+    A.faces=null; A.faceBusy=true; A.facePaused=false; A.faceDone=0; A.faceTotal=0;
+    post('albfacesrestart');
+  } else if(action==='start'){
+    if(A.faceBusy && !A.facePaused){ toastMsg('人物分析正在进行'); return; }
+    A.faceBusy=true; A.facePaused=false; post('albfacesstart');
+  } else if(action==='pause'){
+    if(!A.faceBusy){ toastMsg('当前没有正在进行的人物分析'); return; }
+    A.facePaused=true; post('albfacespause');
+  } else if(action==='resume'){
+    if(A.faceBusy && A.facePaused){ A.facePaused=false; post('albfacesresume'); }
+    else { A.faceBusy=true; A.facePaused=false; post('albfacesstart'); }
+  }
+  albUpdateFaceStatus();
+  if(A.tab==='person') albRender();
+}
 document.addEventListener('click', function(e){
   const m=document.getElementById('albOptMenu');
   if(!m || !m.classList.contains('on')) return;
@@ -2993,7 +3168,14 @@ document.addEventListener('click', function(e){
   if(b && b.contains(e.target)) return;
   m.classList.remove('on');
 });
-document.addEventListener('keydown', function(e){ if(e.key==='Escape') albCloseOpt(); });
+document.addEventListener('click', function(e){
+  const sm=document.getElementById('albSelMenu'), sb=document.getElementById('albSelBtn');
+  if(!sm || !sm.classList.contains('on')) return;
+  if(sm.contains(e.target)) return;
+  if(sb && sb.contains(e.target)) return;
+  sm.classList.remove('on');
+});
+document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ albCloseOpt(); const sm=document.getElementById('albSelMenu'); if(sm) sm.classList.remove('on'); } });
 // iOS 风格显隐（fade + 轻微缩放）
 function iosShow(el, disp){
   if(!el) return;
@@ -3039,6 +3221,8 @@ document.addEventListener('wheel', function(e){
 }, { passive: false });
 if(document.getElementById('albGrid')) albApplyZoom();
 if(document.getElementById('albPerfSeg')) albUpdatePerfChecks();
+if(document.getElementById('albSelBtn')) albUpdateSelBtn();
+if(document.getElementById('albFaceStat')) albUpdateFaceStatus();
 
 function albRenderPaths(){
   const A=window._alb, box=document.getElementById('albChips');
@@ -3063,14 +3247,7 @@ function albRmRoot(p){
 }
 
 function albFaceScan(){
-  const A=window._alb;
-  if(A.faceBusy){ post('albfacesstop'); toastMsg('正在停止人物分析…'); return; }
-  if(!(A.items||[]).length){ toastMsg('相册里还没有照片'); return; }
-  A.faceBusy=true; A.faces=null;
-  const b=document.getElementById('albFaceBtn'); if(b){ b.textContent='停止分析'; b.style.color='#ffd479'; }
-  const sub=document.getElementById('albSub'); if(sub) sub.textContent='正在分析人脸…';
-  post('albfacescan');
-  albSetTab('person');
+  albFaceCtl('start');
 }
 function albToEdit(){
   const paths=Object.keys(window._alb.selSet||{});
@@ -3454,7 +3631,7 @@ function albRenderPeople(){
   if(!A.faces){
     pbox.innerHTML='';
     const e=document.getElementById('albEmpty');
-    if(e){ e.style.display='flex'; e.textContent='还没有人物分组，点右上「人物分析」开始扫描'; }
+    if(e){ e.style.display='flex'; e.textContent='还没有人物分组，点上方「人物识别 · 开始」开始扫描'; }
     return;
   }
   const e=document.getElementById('albEmpty'); if(e) e.style.display='none';
@@ -3758,6 +3935,9 @@ function albAppendPage(items){
 function albRender(){
   const grid=document.getElementById('albGrid'); if(!grid) return;
   const A0=window._alb;
+  const pc=document.getElementById('albPersonCtl');
+  if(pc) pc.style.display=(A0 && A0.tab==='person')?'flex':'none';
+  if(A0) albUpdateFaceStatus();
   if(A0) A0.vDirty=true;
   if(A0 && A0.tab!=='map' && grid.style.display==='none') grid.style.display='flex';
   if(A0 && (A0.dataLoaded || A0.fullLoading) && albCanVirtual() && albVirtualRender()) return;
@@ -3993,25 +4173,50 @@ function albSyncSelAllBtn(){
   const A=window._alb, b=document.getElementById('albSelAllBtn');
   if(!b) return;
   const list=albVisibleList();
-  if(!A.sel || !list.length){ b.style.display='none'; return; }
-  b.style.display='inline-block';
-  const all=A.selAllActive || list.every(function(i){ return !!A.selSet[i.p]; });
-  b.textContent=all?'取消全选':'全选';
+  const enabled=!!A.sel && !!list.length;
+  b.classList.toggle('dis', !enabled);
+  const all=enabled && (A.selAllActive || list.every(function(i){ return !!A.selSet[i.p]; }));
+  b.textContent=enabled ? (all?'取消全选':'全选') : '全选';
 }
+function albToggleSelMenu(e){
+  if(e) e.stopPropagation();
+  const sm=document.getElementById('albSelMenu');
+  if(!sm) return;
+  const m=document.getElementById('albOptMenu'); if(m) m.classList.remove('on');
+  sm.classList.toggle('on');
+}
+function albCloseSelMenu(){ const sm=document.getElementById('albSelMenu'); if(sm) sm.classList.remove('on'); }
+function albSelMenuEnsureSel(){
+  const A=window._alb;
+  if(A.sel) return;
+  A.sel=true; A.selSet={}; A.dragMode=null;
+  albUpdateSelBtn(); albRender();
+}
+function albSelMenuMode(){ albToggleSel(); albCloseSelMenu(); }
+function albSelMenuAll(){ albSelMenuEnsureSel(); albSelAllToggle(); albCloseSelMenu(); }
+function albSelMenuEdit(){ albSelMenuEnsureSel(); albCloseSelMenu(); albToEdit(); }
+function albSelMenuDelete(){ albSelMenuEnsureSel(); albCloseSelMenu(); albDeleteSelected(); }
 function albToggleSel(){
   window._alb.sel=!window._alb.sel;
   window._alb.selSet={};
   window._alb.dragMode=null;
-  document.getElementById('albSelBtn').textContent=window._alb.sel?'取消选择':'选择';
   albUpdateSelBtn();
   albRender();
 }
 function albUpdateSelBtn(){
-  const n=Object.keys(window._alb.selSet).length;
+  const A=window._alb, n=Object.keys(A.selSet||{}).length;
+  const sb=document.getElementById('albSelBtn'); if(sb) sb.textContent=(A.sel?'选择中':'选择')+' ▾';
+  const sm=document.getElementById('albSelModeItem'); if(sm) sm.textContent=A.sel?'退出选择模式':'进入选择模式';
   const b=document.getElementById('albDelSelBtn');
-  if(b){ b.style.display=(window._alb.sel && n>0)?'inline-block':'none'; b.textContent='删除选中 ('+n+')'; }
+  if(b){
+    b.classList.toggle('dis', !A.sel || n<=0);
+    b.textContent='删除选中 ('+n+')';
+  }
   const e=document.getElementById('albEditBtn');
-  if(e){ e.style.display=(window._alb.sel && n>0)?'inline-block':'none'; e.textContent='编辑 ('+n+')'; }
+  if(e){
+    e.classList.toggle('dis', !A.sel || n<=0);
+    e.textContent='编辑选中 ('+n+')';
+  }
   albSyncSelAllBtn();
 }
 document.addEventListener('change',function(e){ if(e.target && e.target.classList && e.target.classList.contains('chk')) albUpdateSelBtn(); });
