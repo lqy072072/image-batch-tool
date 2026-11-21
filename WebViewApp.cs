@@ -44,7 +44,7 @@ namespace ImageBatchTool
 
         static string ConfigDir()
         {
-            try { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool"); }
+            try { return AppModule.ConfigDir(); }
             catch { return Path.Combine(Application.StartupPath, "config"); }
         }
 
@@ -387,22 +387,13 @@ namespace ImageBatchTool
             Application.ThreadException += (s, e) =>
             {
                 try { MainForm.Log("UI线程异常: " + e.Exception); } catch { }
-                try { MessageBox.Show("程序遇到异常：\r\n" + e.Exception.Message, "图片批处理工具", MessageBoxButtons.OK, MessageBoxIcon.Error); } catch { }
+                try { MessageBox.Show("程序遇到异常：\r\n" + e.Exception.Message, AppModule.DisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error); } catch { }
             };
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
                 try { MainForm.Log("致命异常: " + e.ExceptionObject); } catch { }
             };
-            string mode = "album";
-            if (args != null && args.Length > 0)
-            {
-                foreach (var a in args)
-                {
-                    string al = (a ?? "").Trim().ToLower();
-                    if (al == "--edit" || al == "/edit" || al == "edit" || al == "--editor") { mode = "edit"; break; }
-                    if (al == "--album" || al == "/album" || al == "album") { mode = "album"; break; }
-                }
-            }
+            string mode = AppModule.Id;
             MainForm.Log("程序启动 mode=" + mode);
             var main = new MainForm();
             main.StartupMode = mode;
@@ -422,7 +413,7 @@ namespace ImageBatchTool
                     System.Threading.Thread.Sleep(1500);
                     var psi = new ProcessStartInfo();
                     psi.FileName = Application.ExecutablePath;
-                    psi.Arguments = MainForm.RestartMode == "edit" ? "--edit" : "--album";
+                    psi.Arguments = "";
                     psi.WorkingDirectory = Application.StartupPath;
                     psi.UseShellExecute = true;
                     Process.Start(psi);
@@ -455,14 +446,14 @@ namespace ImageBatchTool
             BackColor = light ? Color.FromArgb(245,245,247) : Color.FromArgb(43,43,43);
 
             var t = new Label();
-            t.Text = "图片批处理工具";
+            t.Text = AppModule.DisplayName;
             t.ForeColor = light ? Color.FromArgb(29,29,31) : Color.FromArgb(220,220,220);
             t.Font = new Font("Microsoft YaHei UI", 14f);
             t.AutoSize = false; t.Size = new Size(360, 40); t.Location = new Point(0, 70);
             t.TextAlign = ContentAlignment.MiddleCenter;
 
             var sub = new Label();
-            sub.Text = "正在初始化图像处理引擎…";
+            sub.Text = AppModule.SplashSubtitle;
             sub.ForeColor = light ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
             sub.Font = new Font("Microsoft YaHei UI", 9f);
             sub.AutoSize = false; sub.Size = new Size(360, 20); sub.Location = new Point(0, 120);
@@ -1722,7 +1713,7 @@ namespace ImageBatchTool
         Form dedupForm;
         CoreWebView2Environment webEnv;
         public SplashForm Splash;
-        public string StartupMode = "album";
+        public string StartupMode = AppModule.Id;
         readonly List<string> files = new List<string>();
         readonly List<string> lutFiles = new List<string>();
         // 字符串参数（输出命名模板等，double 字典放不下）
@@ -1731,7 +1722,7 @@ namespace ImageBatchTool
         volatile bool pauseFlag = false;
         volatile bool stopFlag = false;
         readonly List<string[]> failList = new List<string[]>();
-        bool running = false;
+        volatile bool running = false;
         int selected = -1;
         string outputDir = "";
         CubeLut activeLut = null;
@@ -1777,6 +1768,11 @@ namespace ImageBatchTool
 
         // 预览防抖：拖滑块时取消上一次未完成的渲染
         int previewToken = 0;
+        // D3D11 immediate context 不是线程安全的：预览线程与导出线程会同时走 GPU，
+        // 并发进入原生 gpu_* 函数会导致 AccessViolation（进程直接崩溃）。
+        static readonly object GpuLock = new object();
+        // 预览共享 cachedBase/cachedSmall，多个 QueuePreview 任务不能并行执行。
+        readonly object PreviewLock = new object();
         // LUT 分析缓存（按 activeLut 缓存）
         string adaptCurveLut = null;
         float cachedBlackPt = 0, cachedWhitePt = 1;
@@ -1798,7 +1794,7 @@ namespace ImageBatchTool
         {
             try
             {
-                string name = StartupMode == "edit" ? "相册_编辑.ico" : "相册.ico";
+                string name = AppModule.IconFile;
                 string p = Path.Combine(Application.StartupPath, name);
                 if (File.Exists(p)) Icon = new System.Drawing.Icon(p);
             }
@@ -1813,7 +1809,7 @@ namespace ImageBatchTool
                 try { Log("缓存位置迁移失败: " + ex.Message); } catch { }
                 try { MessageBox.Show("缓存位置迁移失败，仍继续使用原缓存位置：\n" + ex.Message, "缓存位置", MessageBoxButtons.OK, MessageBoxIcon.Warning); } catch { }
             }
-            Text = "图片批处理工具";
+            Text = AppModule.WindowTitle;
             Width = 1400; Height = 900;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Color.FromArgb(32,32,36);
@@ -1821,7 +1817,7 @@ namespace ImageBatchTool
             DoubleBuffered = true;
             Opacity = 0;
 
-            try { MigrateLegacyCache(); } catch {}
+            if (AppModule.IsAlbum) { try { MigrateLegacyCache(); } catch {} }
             web = new WebView2();
             web.Dock = DockStyle.Fill;
             Controls.Add(web);
@@ -1859,13 +1855,16 @@ namespace ImageBatchTool
             par["pick_on"]=0; par["pick_blur"]=35; par["pick_expo"]=25;      // 自动挑片阈值
 
 
-            LoadLuts(Path.Combine(Application.StartupPath, "luts"));
-            MigrateRefLuts();
-            LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+            if (!AppModule.IsAlbum)
+            {
+                LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+                MigrateRefLuts();
+                LoadLuts(Path.Combine(Application.StartupPath, "luts"));
+            }
 
             this.Load += (s, e) => ApplyRoundedCorner();
             this.Resize += (s, e) => ApplyRoundedCorner();
-            this.FormClosed += (s, e) => CloseDupWindow();
+            if (AppModule.IsAlbum) this.FormClosed += (s, e) => CloseDupWindow();
         }
 
         // Windows 任务栏点击已激活窗口的图标默认会发送 SC_MINIMIZE。
@@ -1972,15 +1971,18 @@ namespace ImageBatchTool
                         "media.local", mediaDir, CoreWebView2HostResourceAccessKind.Allow);
                 }
                 catch { }
-                // 缩略图走本地虚拟站点，避免把 JPEG 转成 base64 后通过 IPC 传给前端。
-                try
+                // 相册缩略图走本地虚拟站点；图片编辑版不需要相册缩略图站点。
+                if (AppModule.IsAlbum)
                 {
-                    string thumbDir = AlbThumbDir();
-                    web.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                        "thumb.local", thumbDir, CoreWebView2HostResourceAccessKind.Allow);
-                    thumbHostReady = true;
+                    try
+                    {
+                        string thumbDir = AlbThumbDir();
+                        web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                            "thumb.local", thumbDir, CoreWebView2HostResourceAccessKind.Allow);
+                        thumbHostReady = true;
+                    }
+                    catch (Exception ex) { Log("缩略图虚拟站点创建失败: " + ex.Message); }
                 }
-                catch (Exception ex) { Log("缩略图虚拟站点创建失败: " + ex.Message); }
                 web.CoreWebView2.WebMessageReceived += Web_Message;
                 web.CoreWebView2.NavigationCompleted += async (s, e) =>
                 {
@@ -1992,9 +1994,9 @@ namespace ImageBatchTool
                 string skinFile = Path.Combine(Application.StartupPath, "skin.txt");
                 string skin = "dark";
                 try { if (File.Exists(skinFile)) skin = File.ReadAllText(skinFile).Trim().ToLower(); } catch {}
-                // 加版本参数和启动模式，避免覆盖安装后 WebView2 继续命中旧 ui.html 的 HTTP 缓存
-                web.CoreWebView2.Navigate("http://app.local/ui.html?skin=" + skin + "&mode=" + StartupMode + "&v=" + DateTime.Now.Ticks);
-                SendState();
+                // 各模块加载自己的入口页面，不再通过同一个 ui.html 切模式。
+                web.CoreWebView2.Navigate("http://app.local/" + AppModule.HtmlFile + "?skin=" + skin + "&mode=" + AppModule.Id + "&standalone=" + AppModule.Id + "&v=" + DateTime.Now.Ticks);
+                if (!AppModule.IsAlbum) SendState();
             }
             catch (Exception ex) { MessageBox.Show("WebView2 初始化失败：\n" + ex.Message); }
         }
@@ -2196,14 +2198,19 @@ namespace ImageBatchTool
                         Log("页面 ready，显示主窗口");
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
                         Opacity = 1; Show(); Activate();
-                        Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
-                        // 页面这时才真正能收消息：补发一次完整状态（LUT 列表、文件列表、输出目录）
-                        SendState();
-                        // 启动模式：相册版只打开相册（页面隐藏修图界面），修图版直接进编辑器
-                        LoadAlbRoots();
-                        LoadAiPerf();
-                        SendAlbRoots();
-                        Send("{\"type\":\"appmode\",\"mode\":" + JsonStr(StartupMode) + "}");
+                        if (AppModule.IsAlbum)
+                        {
+                            LoadAlbRoots();
+                            LoadAiPerf();
+                            SendAlbRoots();
+                        }
+                        else
+                        {
+                            Send("{\"type\":\"presets\",\"items\":" + Presets.List() + "}");
+                            // 页面这时才真正能收消息：补发一次完整状态（LUT 列表、文件列表、输出目录）
+                            SendState();
+                        }
+                        Send("{\"type\":\"appmode\",\"mode\":" + JsonStr(AppModule.Id) + "}");
                         break;
                     case "addfolder":
                         InvokeUi(() => {
@@ -2374,6 +2381,12 @@ namespace ImageBatchTool
                             SendState();
                             Send("{\"type\":\"toast\",\"msg\":\"已删除 LUT：" + dname + "\"}");
                             Log("删除 LUT: " + dp);
+                        }
+                        break;
+                    case "setout": {
+                            if (parts.Length < 2) break;
+                            outputDir = msg.Substring(action.Length + 1).Trim();
+                            SendState();
                         }
                         break;
                     case "chooseout":
@@ -2676,7 +2689,7 @@ namespace ImageBatchTool
                         try { System.Diagnostics.Process.Start("explorer.exe", "\"" + BinDir() + "\""); } catch { }
                         break;
                     case "about":
-                        MessageBox.Show("图片批处理工具\n版本 2.10\n\n制作者：純潔の工口君", "关于");
+                        MessageBox.Show(AppModule.AboutText, "关于 " + AppModule.DisplayName);
                         break;
                     case "setskin":
                         try {
@@ -2842,8 +2855,11 @@ namespace ImageBatchTool
                     if (par.ContainsKey("beauty_pro_on") && par["beauty_pro_on"] > 0.5) delay = 260;
                     if (par.ContainsKey("dof_on") && par["dof_on"] > 0.5) delay = 420;
                     Thread.Sleep(delay);
-                    if (Volatile.Read(ref previewToken) != my) return;
-                    SendPreview();
+                    lock (PreviewLock)
+                    {
+                        if (Volatile.Read(ref previewToken) != my) return;
+                        SendPreview();
+                    }
                 } catch {}
             });
         }
@@ -3435,6 +3451,81 @@ namespace ImageBatchTool
                     ",\"warm\":" + (dupWarmDone ? "true" : "false") + ",\"ready\":" + (dupReady ? "true" : "false") + "}");
         }
 
+        List<List<int>> DupCollectGroups(List<DupInfo> list, Func<int, int> find)
+        {
+            var map = new Dictionary<int, List<int>>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                int r = find(i);
+                List<int> g;
+                if (!map.TryGetValue(r, out g)) { g = new List<int>(); map[r] = g; }
+                g.Add(i);
+            }
+            var groups = new List<List<int>>();
+            foreach (var kv in map) if (kv.Value.Count >= 2) groups.Add(kv.Value);
+            groups.Sort(delegate(List<int> x, List<int> y) {
+                long px = (long)list[x[0]].w * list[x[0]].h, py = (long)list[y[0]].w * list[y[0]].h;
+                return py.CompareTo(px);
+            });
+            // 组内按像素数/体积降序，第一张作为默认保留
+            foreach (var g in groups)
+            {
+                g.Sort(delegate(int a, int b) {
+                    long pa = (long)list[a].w * list[a].h, pb = (long)list[b].w * list[b].h;
+                    if (pa != pb) return pb.CompareTo(pa);
+                    return list[b].size.CompareTo(list[a].size);
+                });
+            }
+            return groups;
+        }
+
+        string BuildDupGroupsJson(List<DupInfo> list, List<List<int>> outGroups, bool partial)
+        {
+            var jsb = new System.Text.StringBuilder();
+            jsb.Append("{\"type\":\"dupgroups\",\"total\":").Append(outGroups.Count).Append(",\"files\":").Append(list.Count);
+            if (partial) jsb.Append(",\"partial\":true");
+            jsb.Append(",\"items\":[");
+            int sent = 0;
+            for (int gi = 0; gi < outGroups.Count; gi++)
+            {
+                var g = outGroups[gi];
+                if (gi >= 300) break;
+                if (gi > 0) jsb.Append(",");
+                jsb.Append("{\"items\":[");
+                for (int k = 0; k < g.Count; k++)
+                {
+                    var it = list[g[k]];
+                    if (k > 0) jsb.Append(",");
+                    string thumb = null;   // 缩略图改为界面按需请求，避免扫描结束时一次性解码几百张卡住窗口
+                    string compsJson = "null";
+                    if (it.comps != null && it.comps.Length > 0)
+                    {
+                        var cjb = new System.Text.StringBuilder("[");
+                        for (int ci = 0; ci < it.comps.Length; ci++)
+                        {
+                            if (ci > 0) cjb.Append(",");
+                            cjb.Append(JsonStr(Path.GetFileName(it.comps[ci])));
+                        }
+                        cjb.Append("]");
+                        compsJson = cjb.ToString();
+                    }
+                    jsb.Append("{\"p\":").Append(JsonStr(it.path))
+                      .Append(",\"n\":").Append(JsonStr(Path.GetFileName(it.path)))
+                      .Append(",\"s\":").Append(it.size)
+                      .Append(",\"w\":").Append(it.w)
+                      .Append(",\"h\":").Append(it.h)
+                      .Append(",\"d\":").Append(it.decoded ? "1" : "0")
+                      .Append(",\"c\":").Append(compsJson)
+                      .Append(",\"t\":").Append(thumb == null ? "null" : JsonStr("data:image/jpeg;base64," + thumb))
+                      .Append("}");
+                }
+                jsb.Append("]}");
+                sent++;
+            }
+            jsb.Append("]}");
+            return jsb.ToString();
+        }
+
         void StartDupScan()
         {
             if (dupRunning) { Send("{\"type\":\"toast\",\"msg\":\"扫描进行中\"}"); return; }
@@ -3489,6 +3580,33 @@ namespace ImageBatchTool
                 DupSend("{\"type\":\"dup\",\"phase\":\"scan\",\"done\":0,\"total\":" + dupTotal + "}");
 
                 var list = new List<DupInfo>();
+                var parent = new List<int>();
+                Func<int, int> find = delegate(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+                bool unionChanged = false;
+                Action<int, int> union = delegate(int a, int b) { int ra = find(a), rb = find(b); if (ra != rb) { parent[rb] = ra; unionChanged = true; } };
+                var exact = new Dictionary<string, int>();
+                var exactPairs = new List<int[]>();
+                var buckets = new Dictionary<string, List<int>>();
+                var visualPairs = new Dictionary<string, List<int[]>>();
+                var disabledBuckets = new HashSet<string>();
+                long lastPartialTicks = 0;
+                bool partialDirty = false;
+
+                // 兼容旧规则：宽高比桶超过 6000 张时整桶不做视觉近似。
+                // 边扫边合并时若桶越界，按「精确重复 + 未越界桶的视觉边」重建并查集，
+                // 保证最终结果与旧的一次性分组一致。
+                Action rebuildUnions = delegate
+                {
+                    parent.Clear();
+                    for (int i = 0; i < list.Count; i++) parent.Add(i);
+                    foreach (var pair in exactPairs) union(pair[0], pair[1]);
+                    foreach (var kv in visualPairs)
+                    {
+                        if (disabledBuckets.Contains(kv.Key)) continue;
+                        foreach (var pair in kv.Value) union(pair[0], pair[1]);
+                    }
+                };
+
                 foreach (var p in paths)
                 {
                     if (dupCancel) break;
@@ -3510,130 +3628,92 @@ namespace ImageBatchTool
                             info.w = ent.w; info.h = ent.h; info.hash = ent.hash;
                             info.sha = ent.sha ?? ""; info.decoded = ent.decoded;
                             info.comps = DupCompanions(p);
+                            int idx = list.Count;
+                            info.parent = idx;
                             list.Add(info);
+                            parent.Add(idx);
+
+                            // 边扫边分组：新图片一进来就和已发现的候选比较，命中后立刻推送当前分组。
+                            unionChanged = false;
+                            string exactKey = info.size + ":" + info.sha;
+                            int exactIdx;
+                            if (exact.TryGetValue(exactKey, out exactIdx))
+                            {
+                                union(idx, exactIdx);
+                                exactPairs.Add(new int[] { idx, exactIdx });
+                            }
+                            else exact[exactKey] = idx;
+
+                            if (info.w > 0 && info.h > 0)
+                            {
+                                string bucketKey = ((int)Math.Round((double)info.w / info.h * 100)).ToString();
+                                List<int> bucket;
+                                if (!buckets.TryGetValue(bucketKey, out bucket))
+                                {
+                                    bucket = new List<int>();
+                                    buckets[bucketKey] = bucket;
+                                }
+                                if (!disabledBuckets.Contains(bucketKey))
+                                {
+                                    // 旧逻辑只在桶内 2~6000 张时做视觉近似；本次再加入一张就超过 6000，
+                                    // 整桶的视觉边都要撤回，只保留精确重复。
+                                    if (bucket.Count >= 6000)
+                                    {
+                                        disabledBuckets.Add(bucketKey);
+                                        rebuildUnions();
+                                        partialDirty = true;
+                                    }
+                                    else
+                                    {
+                                        List<int[]> edges = null;
+                                        for (int b = 0; b < bucket.Count; b++)
+                                        {
+                                            int ib = bucket[b];
+                                            if (find(idx) == find(ib)) continue;
+                                            var A = info; var B = list[ib];
+                                            int hd = Hamming(A.hash, B.hash);
+                                            if (hd > 6) continue;
+                                            double ar1 = (double)A.w / A.h, ar2 = (double)B.w / B.h;
+                                            if (Math.Abs(ar1 - ar2) > 0.05) continue;
+                                            union(idx, ib);
+                                            if (edges == null)
+                                            {
+                                                if (!visualPairs.TryGetValue(bucketKey, out edges))
+                                                {
+                                                    edges = new List<int[]>();
+                                                    visualPairs[bucketKey] = edges;
+                                                }
+                                            }
+                                            edges.Add(new int[] { idx, ib });
+                                        }
+                                    }
+                                }
+                                bucket.Add(idx);
+                            }
+                            if (unionChanged) partialDirty = true;
                         }
                     }
                     catch { }
                     if (dupDone % 15 == 0 || dupDone == dupTotal)
                         DupSend("{\"type\":\"dup\",\"phase\":\"scan\",\"done\":" + dupDone + ",\"total\":" + dupTotal + "}");
+                    if (partialDirty)
+                    {
+                        long nowTicks = DateTime.UtcNow.Ticks;
+                        if (nowTicks - lastPartialTicks >= 250 * TimeSpan.TicksPerMillisecond)
+                        {
+                            var partialGroups = DupCollectGroups(list, find);
+                            DupSend(BuildDupGroupsJson(list, partialGroups, true));
+                            lastPartialTicks = nowTicks;
+                            partialDirty = false;
+                        }
+                    }
                 }
 
                 SaveDupCache();
 
                 int n = list.Count;
-                int[] parent = new int[n];
-                for (int i = 0; i < n; i++) { parent[i] = i; list[i].parent = i; }
-                Func<int, int> find = delegate(int x) { while (parent[x] != x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
-                Action<int, int> union = delegate(int a, int b) { int ra = find(a), rb = find(b); if (ra != rb) parent[rb] = ra; };
-
-                DupSend("{\"type\":\"dup\",\"phase\":\"compare\",\"done\":0,\"total\":" + n + "}");
-
-                // 1) 完全相同的文件：大小 + SHA256
-                var exact = new Dictionary<string, int>();
-                for (int i = 0; i < n; i++)
-                {
-                    string key = list[i].size + ":" + list[i].sha;
-                    if (exact.ContainsKey(key)) union(i, exact[key]);
-                    else exact[key] = i;
-                }
-
-                // 2) 视觉近似：按「宽高比」分桶，再用 4 段 16 位索引找候选，最后校验汉明距离
-                var buckets = new Dictionary<string, List<int>>();
-                for (int i = 0; i < n; i++)
-                {
-                    if (list[i].w <= 0 || list[i].h <= 0) continue;
-                    string key = ((int)Math.Round((double)list[i].w / list[i].h * 100)).ToString();
-                    if (!buckets.ContainsKey(key)) buckets[key] = new List<int>();
-                    buckets[key].Add(i);
-                }
-                foreach (var kv in buckets)
-                {
-                    var idx = kv.Value;
-                    if (idx.Count < 2 || idx.Count > 6000) continue;
-                    for (int a = 0; a < idx.Count; a++)
-                    {
-                        int ia = idx[a];
-                        for (int b = a + 1; b < idx.Count; b++)
-                        {
-                            int ib = idx[b];
-                            if (find(ia) == find(ib)) continue;
-                            var A = list[ia]; var B = list[ib];
-                            int hd = Hamming(A.hash, B.hash);
-                            if (hd > 6) continue;
-                            double ar1 = (double)A.w / A.h, ar2 = (double)B.w / B.h;
-                            if (Math.Abs(ar1 - ar2) > 0.05) continue;
-                            union(ia, ib);
-                        }
-                    }
-                }
-
-                var map = new Dictionary<int, List<int>>();
-                for (int i = 0; i < n; i++)
-                {
-                    int r = find(i);
-                    if (!map.ContainsKey(r)) map[r] = new List<int>();
-                    map[r].Add(i);
-                }
-                var groups = new List<List<int>>();
-                foreach (var kv in map) if (kv.Value.Count >= 2) groups.Add(kv.Value);
-                groups.Sort(delegate(List<int> x, List<int> y) {
-                    long px = (long)list[x[0]].w * list[x[0]].h, py = (long)list[y[0]].w * list[y[0]].h;
-                    return py.CompareTo(px);
-                });
-
-                // 组内按像素数/体积降序，第一张作为默认保留
-                var outGroups = new List<List<int>>();
-                foreach (var g in groups)
-                {
-                    g.Sort(delegate(int a, int b) {
-                        long pa = (long)list[a].w * list[a].h, pb = (long)list[b].w * list[b].h;
-                        if (pa != pb) return pb.CompareTo(pa);
-                        return list[b].size.CompareTo(list[a].size);
-                    });
-                    outGroups.Add(g);
-                }
-
-                var jsb = new System.Text.StringBuilder();
-                jsb.Append("{\"type\":\"dupgroups\",\"total\":").Append(outGroups.Count).Append(",\"files\":").Append(n).Append(",\"items\":[");
-                int sent = 0;
-                for (int gi = 0; gi < outGroups.Count; gi++)
-                {
-                    var g = outGroups[gi];
-                    if (gi >= 300) break;
-                    if (gi > 0) jsb.Append(",");
-                    jsb.Append("{\"items\":[");
-                    for (int k = 0; k < g.Count; k++)
-                    {
-                        var it = list[g[k]];
-                        if (k > 0) jsb.Append(",");
-                        string thumb = null;   // 缩略图改为界面按需请求，避免扫描结束时一次性解码几百张卡住窗口
-                        string compsJson = "null";
-                        if (it.comps != null && it.comps.Length > 0)
-                        {
-                            var cjb = new System.Text.StringBuilder("[");
-                            for (int ci = 0; ci < it.comps.Length; ci++)
-                            {
-                                if (ci > 0) cjb.Append(",");
-                                cjb.Append(JsonStr(Path.GetFileName(it.comps[ci])));
-                            }
-                            cjb.Append("]");
-                            compsJson = cjb.ToString();
-                        }
-                        jsb.Append("{\"p\":").Append(JsonStr(it.path))
-                          .Append(",\"n\":").Append(JsonStr(Path.GetFileName(it.path)))
-                          .Append(",\"s\":").Append(it.size)
-                          .Append(",\"w\":").Append(it.w)
-                          .Append(",\"h\":").Append(it.h)
-                          .Append(",\"d\":").Append(it.decoded ? "1" : "0")
-                          .Append(",\"c\":").Append(compsJson)
-                          .Append(",\"t\":").Append(thumb == null ? "null" : JsonStr("data:image/jpeg;base64," + thumb))
-                          .Append("}");
-                    }
-                    jsb.Append("]}");
-                    sent++;
-                }
-                jsb.Append("]}");
-                dupLastGroupsJson = jsb.ToString();
+                var outGroups = DupCollectGroups(list, find);
+                dupLastGroupsJson = BuildDupGroupsJson(list, outGroups, false);
                 Send(dupLastGroupsJson);
                 if (dupUseAlbum && !dupCancel) SaveDupResult(scanSig);
                 int nodec = 0; foreach (var it0 in list) if (!it0.decoded) nodec++;
@@ -4079,7 +4159,7 @@ namespace ImageBatchTool
         {
             try
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+                string dir = AppModule.ConfigDir();
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 return Path.Combine(dir, "alb_paths.txt");
             }
@@ -4133,6 +4213,7 @@ namespace ImageBatchTool
             public ConcurrentDictionary<string, AlbCacheEnt> newIndex = new ConcurrentDictionary<string, AlbCacheEnt>();
             public ConcurrentDictionary<string, long> newStamps = new ConcurrentDictionary<string, long>();
             public List<AlbItem> items = new List<AlbItem>();
+            public HashSet<string> itemPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             public List<AlbItem> pending = new List<AlbItem>();
             public object gate = new object();
             public int done = 0;
@@ -4551,6 +4632,7 @@ namespace ImageBatchTool
         // 把旧版本的临时缩略图 / AppData / TEMP 缓存迁移到当前缓存根目录
         static void MigrateLegacyCache()
         {
+            if (!AppModule.IsAlbum) return;
             try
             {
                 string cache = CacheRoot();
@@ -5489,8 +5571,16 @@ namespace ImageBatchTool
             if (batch == null || batch.Count == 0) return;
             lock (ctx.gate)
             {
-                ctx.items.AddRange(batch);
-                ctx.pending.AddRange(batch);
+                var deduped = new List<AlbItem>(batch.Count);
+                foreach (var it in batch)
+                {
+                    // 相册根目录允许重叠（例如同时添加 D:\Pictures 和它的子目录）。
+                    // 同一物理文件会被多个根目录扫到，必须在合并时按路径去重。
+                    if (ctx.itemPaths.Add(it.path)) deduped.Add(it);
+                }
+                if (deduped.Count == 0) return;
+                ctx.items.AddRange(deduped);
+                ctx.pending.AddRange(deduped);
             }
             AlbScanFlush(ctx, total, false);
         }
@@ -6555,6 +6645,29 @@ namespace ImageBatchTool
             var th = new Thread(FaceScanThread); th.IsBackground = true; th.Start();
         }
 
+        string BuildFaceGroupsJson(Dictionary<int, List<string>> faces, Dictionary<int, string> thumbs, int photos, int facesTotal, string phase)
+        {
+            var order = new List<int>();
+            foreach (var kv in faces) order.Add(kv.Key);
+            order.Sort(delegate(int a, int b) { return faces[b].Count.CompareTo(faces[a].Count); });
+            var sb = new System.Text.StringBuilder();
+            sb.Append("{\"type\":\"albfaces\",\"phase\":\"").Append(phase).Append("\",\"photos\":").Append(photos)
+              .Append(",\"faces\":").Append(facesTotal).Append(",\"groups\":[");
+            int shown = 0;
+            foreach (var gid in order)
+            {
+                if (shown >= 80) break;
+                if (shown > 0) sb.Append(",");
+                var fl = faces[gid];
+                sb.Append("{\"id\":").Append(gid).Append(",\"thumb\":")
+                  .Append(thumbs.ContainsKey(gid) ? JsonStr("data:image/jpeg;base64," + thumbs[gid]) : "null")
+                  .Append(",\"faces\":[").Append(string.Join(",", fl.ToArray())).Append("]}");
+                shown++;
+            }
+            sb.Append("]}");
+            return sb.ToString();
+        }
+
         void FaceScanThread()
         {
             System.Diagnostics.Process proc = null;
@@ -6591,7 +6704,10 @@ namespace ImageBatchTool
 
                 var thumbs = new Dictionary<int, string>();
                 var faces = new Dictionary<int, List<string>>();
+                var faceKeys = new HashSet<string>();
                 int facesTotal = 0;
+                long lastPartialTicks = 0;
+                bool partialDirty = false;
                 string line;
                 var so = proc.StandardOutput;
                 while ((line = so.ReadLine()) != null)
@@ -6606,19 +6722,35 @@ namespace ImageBatchTool
                     else if (f[0] == "G" && f.Length >= 3)
                     {
                         thumbs[int.Parse(f[1])] = f[2];
+                        partialDirty = true;
                     }
                     else if (f[0] == "F" && f.Length >= 7)
                     {
                         int gid = int.Parse(f[1]);
-                        if (!faces.ContainsKey(gid)) faces[gid] = new List<string>();
-                        faces[gid].Add("{\"p\":" + JsonStr(f[2]) + ",\"x\":" + f[3] + ",\"y\":" + f[4] +
-                                       ",\"w\":" + f[5] + ",\"h\":" + f[6] + "}");
-                        facesTotal++;
+                        string fkey = f[1] + "|" + f[2] + "|" + f[3] + "|" + f[4] + "|" + f[5] + "|" + f[6];
+                        if (faceKeys.Add(fkey))
+                        {
+                            if (!faces.ContainsKey(gid)) faces[gid] = new List<string>();
+                            faces[gid].Add("{\"p\":" + JsonStr(f[2]) + ",\"x\":" + f[3] + ",\"y\":" + f[4] +
+                                           ",\"w\":" + f[5] + ",\"h\":" + f[6] + "}");
+                            facesTotal++;
+                            partialDirty = true;
+                        }
                     }
                     else if (f[0] == "E")
                     {
                         Log("人物分析脚本: " + line);
                         Send("{\"type\":\"toast\",\"msg\":" + JsonStr("人脸分析: " + line) + "}");
+                    }
+                    if (partialDirty && facesTotal > 0)
+                    {
+                        long nowTicks = DateTime.UtcNow.Ticks;
+                        if (nowTicks - lastPartialTicks >= 250 * TimeSpan.TicksPerMillisecond)
+                        {
+                            Send(BuildFaceGroupsJson(faces, thumbs, list.Count, facesTotal, "partial"));
+                            lastPartialTicks = nowTicks;
+                            partialDirty = false;
+                        }
                     }
                 }
                 int exitCode = -1;
@@ -6639,27 +6771,9 @@ namespace ImageBatchTool
                     return;
                 }
 
-                var order = new List<int>();
-                foreach (var kv in faces) order.Add(kv.Key);
-                order.Sort(delegate(int a, int b) { return faces[b].Count.CompareTo(faces[a].Count); });
-                var sb = new System.Text.StringBuilder();
-                sb.Append("{\"type\":\"albfaces\",\"phase\":\"done\",\"photos\":").Append(list.Count)
-                  .Append(",\"faces\":").Append(facesTotal).Append(",\"groups\":[");
-                int shown = 0;
-                foreach (var gid in order)
-                {
-                    if (shown >= 80) break;
-                    if (shown > 0) sb.Append(",");
-                    var fl = faces[gid];
-                    sb.Append("{\"id\":").Append(gid).Append(",\"thumb\":")
-                      .Append(thumbs.ContainsKey(gid) ? JsonStr("data:image/jpeg;base64," + thumbs[gid]) : "null")
-                      .Append(",\"faces\":[").Append(string.Join(",", fl.ToArray())).Append("]}");
-                    shown++;
-                }
-                sb.Append("]}");
-                string faceJson = sb.ToString();
+                string faceJson = BuildFaceGroupsJson(faces, thumbs, list.Count, facesTotal, "done");
                 faceLastJson = faceJson;
-                Log("人物分析: 发送结果 groups=" + shown + " faces=" + facesTotal + " photos=" + list.Count);
+                Log("人物分析: 发送结果 groups=" + faces.Count + " faces=" + facesTotal + " photos=" + list.Count);
                 Send(faceJson);
                 SaveFaceResult(faceJson, scanSig);
             }
@@ -6708,7 +6822,7 @@ namespace ImageBatchTool
 
         string CfgDir()
         {
-            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+            string dir = AppModule.ConfigDir();
             try { if (!Directory.Exists(dir)) Directory.CreateDirectory(dir); } catch { }
             return dir;
         }
@@ -7386,7 +7500,7 @@ namespace ImageBatchTool
                         if (dofb != null) {
                             using (var gd = Graphics.FromImage(small)) gd.DrawImage(dofb, 0, 0, w, h);
                             dofb.Dispose();
-                        } else Send("{\"type\":\"status\",\"text\":\"景深虚化失败: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                        } else Send("{\"type\":\"status\",\"text\":\"景深虚化失败: " + (BeautyRunner.LastError ?? "").Replace("\"","'") + "\"}");
                     }
 
                     // 美颜相机：分项美颜（磨皮/美白/祛斑/黑眼圈/亮眼/口红/红润/瘦脸/大眼/瘦鼻/下巴）
@@ -7400,11 +7514,11 @@ namespace ImageBatchTool
                                 g3.DrawImage(pro, 0, 0, w, h);
                             }
                             pro.Dispose();
-                            Send("{\"type\":\"status\",\"text\":\"美颜相机: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                            Send("{\"type\":\"status\",\"text\":\"美颜相机: " + (BeautyRunner.LastError ?? "").Replace("\"","'") + "\"}");
                         }
                         else
                         {
-                            Send("{\"type\":\"status\",\"text\":\"美颜相机失败: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                            Send("{\"type\":\"status\",\"text\":\"美颜相机失败: " + (BeautyRunner.LastError ?? "").Replace("\"","'") + "\"}");
                         }
                     }
 
@@ -7420,11 +7534,11 @@ namespace ImageBatchTool
                                 g2.DrawImage(beautified, 0, 0, w, h);
                             }
                             beautified.Dispose();
-                            Send("{\"type\":\"status\",\"text\":\"AI美颜: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                            Send("{\"type\":\"status\",\"text\":\"AI美颜: " + (BeautyRunner.LastError ?? "").Replace("\"","'") + "\"}");
                         }
                         else
                         {
-                            Send("{\"type\":\"status\",\"text\":\"AI美颜失败: " + BeautyRunner.LastError.Replace("\"","'") + "\"}");
+                            Send("{\"type\":\"status\",\"text\":\"AI美颜失败: " + (BeautyRunner.LastError ?? "").Replace("\"","'") + "\"}");
                         }
                     }
 
@@ -8043,8 +8157,12 @@ namespace ImageBatchTool
             bool linLut = par.ContainsKey("lut_linear") && par["lut_linear"] > 0.5;
             if (linLut) needTables = true;
             if (!needTables)
-                try { gpuDone = Native.gpu_lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
-                    lutStrength, chroma, wbGainArr) != 0; } catch { gpuDone = false; }
+                try {
+                    lock (GpuLock) {
+                        gpuDone = Native.gpu_lut_apply(buf, W, H, stride, tbl, lutSize, inMin, inMax,
+                            lutStrength, chroma, wbGainArr) != 0;
+                    }
+                } catch { gpuDone = false; }
             Log("GPU路径: " + (gpuDone ? "成功" : (needTables ? "跳过(需曝光/灰片表)" : "失败/跳过")) + " WB=" + (wbGainArr!=null));
 
             // CPU 原生 C++（AVX2+OpenMP），GPU失败才走
@@ -8505,8 +8623,10 @@ namespace ImageBatchTool
             // GPU 优先：D3D11 compute shader
             bool usedNative = false;
             try {
-                usedNative = Native.gpu_color_adjust(buf, W, H, stride,
-                    sat, con, bri, sh, hl, tp, ti, vig) != 0;
+                lock (GpuLock) {
+                    usedNative = Native.gpu_color_adjust(buf, W, H, stride,
+                        sat, con, bri, sh, hl, tp, ti, vig) != 0;
+                }
             } catch { usedNative = false; }
             // CPU 原生 C++ 回退
             if (!usedNative) try {
@@ -8655,9 +8775,11 @@ namespace ImageBatchTool
             // GPU 模糊（3 pass），失败回退 CPU
             bool gpuBlur = false;
             try {
-                for (int pass = 0; pass < 3; pass++) {
-                    if (Native.gpu_blur(a1, w, h, srcStride, r) == 0) break;
-                    if (pass == 2) gpuBlur = true;
+                lock (GpuLock) {
+                    for (int pass = 0; pass < 3; pass++) {
+                        if (Native.gpu_blur(a1, w, h, srcStride, r) == 0) break;
+                        if (pass == 2) gpuBlur = true;
+                    }
                 }
                 // 校验：GPU 输出如果全黑/异常，回退 CPU
                 if (gpuBlur) {
@@ -8838,7 +8960,8 @@ namespace ImageBatchTool
             }
             string tpl = parS.ContainsKey("out_template") ? parS["out_template"] : "";
             string baseName = tpl.Trim().Length > 0 ? ExpandName(tpl, srcPath, seq) : Path.GetFileNameWithoutExtension(srcPath) + "_out";
-            string ext = ".jpg";
+            string fmt = parS.ContainsKey("out_fmt") ? parS["out_fmt"].Trim().ToLowerInvariant() : "jpg";
+            string ext = fmt == "png" ? ".png" : (fmt == "webp" ? ".webp" : ".jpg");
             int mode = par.ContainsKey("dup_mode") ? (int)par["dup_mode"] : 1;
             bool resume = par.ContainsKey("skip_existing") && par["skip_existing"] > 0.5;
             string first = Path.Combine(dir, baseName + ext);
@@ -8919,9 +9042,7 @@ namespace ImageBatchTool
                     if (par.ContainsKey("dither") && par["dither"] > 0.5) DitherFx.Apply(outBmp);
                     if (!par.ContainsKey("exif_keep") || par["exif_keep"] > 0.5) MetaWriter.CopyMeta(f, outBmp);
                     long q = (par.ContainsKey("lossless") && par["lossless"] > 0.5) ? 100L : (long)(int)(par.ContainsKey("quality") ? par["quality"] : 95);
-                    var ep = new EncoderParameters(1);
-                    ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
-                    outBmp.Save(dst, LUT.JpegCodec, ep);
+                    if (!SaveOutput(outBmp, dst, q)) { RecordFail(f, "编码输出失败"); return false; }
 
                     // 统一转 sRGB：拿源图内嵌 ICC 做真实色彩转换（只在开启时多跑一次 Python）
                     if (par.ContainsKey("icc_convert") && par["icc_convert"] > 0.5)
@@ -8938,6 +9059,40 @@ namespace ImageBatchTool
             }
             finally { bmp.Dispose(); }
             return true;
+        }
+
+        bool SaveOutput(Bitmap bmp, string dst, long q)
+        {
+            string fmt = parS.ContainsKey("out_fmt") ? parS["out_fmt"].Trim().ToLowerInvariant() : "jpg";
+            try
+            {
+                if (fmt == "png")
+                {
+                    bmp.Save(dst, ImageFormat.Png);
+                    return true;
+                }
+                if (fmt == "webp")
+                {
+                    string tmp = CacheStore.TempFile("webp_", ".png");
+                    bmp.Save(tmp, ImageFormat.Png);
+                    string err;
+                    string res = PyTools.Run(BeautyRunner.PythonExe, "savefmt.py",
+                        new string[] { tmp, dst, "webp", q.ToString() }, 60000, out err);
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    bool ok = res != null && res.Replace(" ", "").Contains("\"ok\":true");
+                    if (!ok) Log("WebP 编码失败: " + (err ?? "") + " " + (res ?? ""));
+                    return ok;
+                }
+                var ep = new EncoderParameters(1);
+                ep.Param[0] = new EncoderParameter(Encoder.Quality, q);
+                bmp.Save(dst, LUT.JpegCodec, ep);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log("输出编码失败: " + ex.Message);
+                return false;
+            }
         }
 
         bool NeedSoloCopy()
@@ -8968,6 +9123,12 @@ namespace ImageBatchTool
 
         void DoExport(List<string> srcList = null)
         {
+            // 批次运行期间再次点“开始”会重置 stopFlag、并发写同一输出列表，
+            // 导致停止提示丢失甚至两个批次互相踩状态；这里直接拒绝第二次启动。
+            if (running) {
+                Send("{\"type\":\"toast\",\"msg\":\"正在导出，请先等待完成或点击停止\"}");
+                return;
+            }
             List<string> list = srcList != null ? srcList : new List<string>(files);
             if (string.IsNullOrEmpty(outputDir)) {
                 string picked = null;
@@ -8979,6 +9140,11 @@ namespace ImageBatchTool
                 });
                 if (string.IsNullOrEmpty(picked)) return;
                 outputDir = picked;
+            }
+            try { Directory.CreateDirectory(outputDir); }
+            catch (Exception ex) {
+                Send("{\"type\":\"toast\",\"msg\":\"无法创建输出目录：" + ex.Message.Replace("\"", "'") + "\"}");
+                return;
             }
             int total = list.Count;
             if (total == 0) return;
@@ -9030,6 +9196,7 @@ namespace ImageBatchTool
             }
             foreach (var t in threads) t.Join();
 
+            bool wasStopped = stopFlag;
             forceFreshAnalysis = false;
             ResetAiCache();
             running = false; pauseFlag = false;
@@ -9039,7 +9206,10 @@ namespace ImageBatchTool
 
             int realFails;
             lock (failList) realFails = failList.Count;
-            if (realFails > 0) {
+            if (wasStopped) {
+                Send("{\"type\":\"toast\",\"msg\":\"已停止：完成 " + done + "/" + total + " 张\"}");
+            }
+            else if (realFails > 0) {
                 string csv = WriteFailCsv();
                 if (csv != null) {
                     parS["_last_fail_csv"] = csv;
@@ -9156,7 +9326,7 @@ namespace ImageBatchTool
         {
             try
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ImageBatchTool");
+                string dir = AppModule.ConfigDir();
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 return Path.Combine(dir, "ai_perf.txt");
             }

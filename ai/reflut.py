@@ -7,13 +7,14 @@ import os
 import sys
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 
 SIZE = 33
 
 
 def load_rgb(path, max_edge=1024):
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    img = imread_u(path, cv2.IMREAD_COLOR)
     if img is None:
         return None
     if max(img.shape[:2]) > max_edge:

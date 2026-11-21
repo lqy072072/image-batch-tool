@@ -6,6 +6,7 @@ import json
 import sys
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 
 
@@ -35,7 +36,7 @@ def main():
     k = int(sys.argv[2])
     k = max(3, min(12, k))
 
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    img = imread_u(path, cv2.IMREAD_COLOR)
     if img is None:
         print(json.dumps({"ok": False, "error": "无法读取图片"}))
         return

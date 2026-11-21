@@ -12,6 +12,7 @@ import os
 import sys
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 
 SIM_THRESHOLD = 0.36
@@ -240,6 +241,22 @@ def main():
     if total > 0:
         sys.stdout.write("P\t%d\t%d\n" % (processed_before, album_total))
         sys.stdout.flush()
+    # 先把缓存里已有的人物分组推给界面，扫描过程中新识别到的再逐张追加。
+    for path in paths:
+        rec = images.get(path)
+        if not rec:
+            continue
+        for face in rec.get("faces", []):
+            sys.stdout.write("F\t%d\t%s\t%d\t%d\t%d\t%d\n" % (
+                int(face.get("gid", 0)), path,
+                int(face.get("x", 0)), int(face.get("y", 0)),
+                int(face.get("w", 0)), int(face.get("h", 0))))
+            sys.stdout.flush()
+    for gid in sorted(thumbs.keys(), key=lambda s: int(s)):
+        t = thumbs.get(gid)
+        if isinstance(t, dict) and t.get("b64"):
+            sys.stdout.write("G\t%d\t%s\n" % (int(gid), t["b64"]))
+            sys.stdout.flush()
     for path in todo:
         # 用户点“停止分析”或程序准备退出时，从当前断点保存后立刻退出；
         # 下次启动只处理剩余项，不会重新从第一张开始。
@@ -299,6 +316,10 @@ def main():
                     "x": ox, "y": oy, "w": ow, "h": oh,
                     "feat": [round(float(v), 6) for v in feat.tolist()],
                 })
+                # 识别到一张就立刻上报一张，界面不用等整轮扫描结束。
+                sys.stdout.write("F\t%d\t%s\t%d\t%d\t%d\t%d\n" % (
+                    int(gid), path, ox, oy, ow, oh))
+                sys.stdout.flush()
 
                 old = thumbs.get(str(gid))
                 if old is None or score > float(old.get("score", -1)):
@@ -306,10 +327,13 @@ def main():
                         thumb = cv2.resize(aligned, (96, 96), interpolation=cv2.INTER_AREA)
                         ok, buf = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                         if ok:
+                            b64 = base64.b64encode(buf.tobytes()).decode("ascii")
                             thumbs[str(gid)] = {
                                 "score": round(score, 6),
-                                "b64": base64.b64encode(buf.tobytes()).decode("ascii"),
+                                "b64": b64,
                             }
+                            sys.stdout.write("G\t%d\t%s\n" % (int(gid), b64))
+                            sys.stdout.flush()
                     except Exception:
                         pass
         except Exception as e:
@@ -322,24 +346,6 @@ def main():
             # 最多只需重做 24 张，避免 12 万张相册被长时间阻塞在写状态上。
             if done % 25 == 0:
                 save_state(state_file, images, thumbs)
-
-    # 输出全部已有分组/人脸，界面可以完整替换。
-    for path in paths:
-        rec = images.get(path)
-        if not rec:
-            continue
-        for face in rec.get("faces", []):
-            sys.stdout.write("F\t%d\t%s\t%d\t%d\t%d\t%d\n" % (
-                int(face.get("gid", 0)), path,
-                int(face.get("x", 0)), int(face.get("y", 0)),
-                int(face.get("w", 0)), int(face.get("h", 0))))
-            sys.stdout.flush()
-
-    for gid in sorted(thumbs.keys(), key=lambda s: int(s)):
-        t = thumbs.get(gid)
-        if isinstance(t, dict) and t.get("b64"):
-            sys.stdout.write("G\t%d\t%s\n" % (int(gid), t["b64"]))
-            sys.stdout.flush()
 
     sys.stdout.write("P\t%d\t%d\n" % (album_total, album_total))
     sys.stdout.flush()

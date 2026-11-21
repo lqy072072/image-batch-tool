@@ -7,6 +7,7 @@ inside the installer and reuse the existing DirectML runtime from clip_common.
 import os
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 
 from clip_common import create_session

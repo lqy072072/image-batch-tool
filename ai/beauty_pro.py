@@ -18,6 +18,7 @@
 import sys, os, json, time
 import numpy as np
 import cv2
+from imgio import imread_u, imwrite_u
 import onnxruntime as ort
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -633,7 +634,7 @@ def parse_params(argv):
 
 
 def process_image(input_path, output_path, p):
-    img = cv2.imread(input_path)
+    img = imread_u(input_path)
     if img is None:
         return {"ok": False, "error": "cannot read: " + input_path}
     h, w = img.shape[:2]
@@ -646,10 +647,10 @@ def process_image(input_path, output_path, p):
             n += 1
     q = 100 if p['aifix'] <= 0 else 96
     if output_path.lower().endswith(('.png', '.tif', '.tiff', '.bmp')):
-        cv2.imwrite(output_path, img)          # 无损中转：不再二次压缩
+        imwrite_u(output_path, img)          # 无损中转：不再二次压缩
     else:
         # 0x444 = 不做色度抽样，避免唇色/肤色被 4:2:0 糊掉
-        cv2.imwrite(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, q,
+        imwrite_u(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, q,
                                       cv2.IMWRITE_JPEG_SAMPLING_FACTOR, cv2.IMWRITE_JPEG_SAMPLING_FACTOR_444])
     return {"ok": True, "faces": n}
 

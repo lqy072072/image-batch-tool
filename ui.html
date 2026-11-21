@@ -1003,7 +1003,7 @@ window.addEventListener('mouseup', function(e) {
     <option value="2400">极致 2400</option>
   </select>
   <span class="bottom-label">格式</span>
-  <select class="bottom-select" id="outFmt" onchange="setParam('out_fmt',this.value)">
+  <select class="bottom-select" id="outFmt" onchange="setStr('out_fmt',this.value)">
     <option value="jpg" selected>JPG</option>
     <option value="png">PNG</option>
     <option value="webp">WebP</option>
@@ -2394,6 +2394,12 @@ if (window.chrome && chrome.webview) {
         A.facePaused = true;
         const sub = document.getElementById('albSub');
         if (sub) sub.textContent = '人物分析已暂停' + ((A.faceDone||A.faceTotal)?' · '+A.faceDone+' / '+A.faceTotal:'');
+        albUpdateFaceStatus();
+      } else if (m.phase === 'partial') {
+        A.faceBusy = true;
+        A.faces = { groups: m.groups || [], photos: m.photos || 0, faces: m.faces || 0 };
+        if(A.person>=0 && !(A.faces.groups||[]).some(function(g){ return g.id===A.person; })) A.person=-1;
+        if (A.tab === 'person') albRender();
         albUpdateFaceStatus();
       } else if (m.phase === 'done') {
         A.faceBusy = false;

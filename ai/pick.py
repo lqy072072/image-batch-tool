@@ -7,6 +7,7 @@ import os
 import sys
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -79,7 +80,7 @@ def main():
 
     items = []
     for p in paths:
-        img = cv2.imread(p, cv2.IMREAD_COLOR)
+        img = imread_u(p, cv2.IMREAD_COLOR)
         if img is None:
             continue
         work = img

@@ -269,6 +269,13 @@ def main():
             continue
         q = (msg.get("q") or "").strip()
         limit = int(msg.get("limit") or 500)
+        # CLIP 相似度阈值：无关文本（例如文件名片段）经常仍有一定余弦相似度，
+        # 不设阈值会把整本相册都当成“语义命中”。实测本机中文 CLIP：
+        # 真正相关约 0.43 以上，无关文本多在 0.32~0.41，取 0.42 作为下限。
+        try:
+            min_score = float(msg.get("min_score") or 0.42)
+        except Exception:
+            min_score = 0.42
         if not q:
             emit({"type": "result", "q": q, "paths": [], "scores": []})
             continue
@@ -335,9 +342,13 @@ def main():
                             continue
                         if not path_alive(p):
                             continue
+                        score = float(scores[int(i)])
+                        if score < min_score:
+                            # 已按分数降序排列，低于阈值即可全部停止。
+                            break
                         seen.add(p)
                         out_paths.append(p)
-                        out_scores.append(round(float(scores[int(i)]), 5))
+                        out_scores.append(round(score, 5))
                         if len(out_paths) >= limit:
                             break
                     if len(out_paths) >= limit or n >= len(paths):

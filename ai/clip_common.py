@@ -4,6 +4,7 @@ import unicodedata
 
 import numpy as np
 import cv2
+from imgio import imread_u, imwrite_u
 
 _MODEL_DIR = None
 _ORT = None

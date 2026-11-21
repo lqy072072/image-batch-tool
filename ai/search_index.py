@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
 import cv2
+from imgio import imread_u, imwrite_u
 
 from clip_common import set_model_dir, create_session, BertTokenizer, preprocess_image, l2norm
 from ocr_common import OcrEngine

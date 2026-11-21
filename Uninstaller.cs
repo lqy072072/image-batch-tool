@@ -40,18 +40,16 @@ static class Uninstaller
         if (!LooksLikeInstallDir(installRoot))
         {
             MessageBox.Show(
-                "没有在当前目录找到「" + AppExeName + "」。\n\n请把本卸载程序放在软件的安装目录中运行。",
+                "没有在当前目录找到「相册\\相册.exe」或「图片编辑\\图片编辑.exe」。\n\n请把本卸载程序放在软件的安装目录中运行。",
                 "无法卸载", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
         DialogResult answer = MessageBox.Show(
             "确定卸载「" + AppTitle + "」？\n\n" +
-            "将删除：\n" +
-            "  • 安装目录内的程序、缓存和缩略图\n" +
-            "  • 自定义缓存位置中的缓存和缩略图\n" +
-            "  • 软件配置和扫描索引\n" +
-            "  • 桌面快捷方式\n\n" +
+            "将删除当前安装目录中的程序、缓存和缩略图，以及已安装组件的配置与快捷方式。\n\n" +
+            "如果相册和图片编辑安装在同一目录，两者会一起卸载；\n" +
+            "如果只安装了其中一个，不会碰另一个独立安装目录。\n\n" +
             "你的照片文件、视频文件以及相册回收站中尚未彻底删除的文件不会被删除。\n\n" +
             "卸载前请先保存正在进行的编辑。",
             "卸载 " + AppTitle,
@@ -88,7 +86,22 @@ static class Uninstaller
         if (full.Length <= 3) return false; // 防止误删磁盘根目录
         string root = Path.GetPathRoot(full);
         if (root != null && string.Equals(root.TrimEnd('\\'), full, StringComparison.OrdinalIgnoreCase)) return false;
-        return File.Exists(Path.Combine(full, AppExeName)) && File.Exists(Path.Combine(full, "ui.html"));
+        bool album = File.Exists(Path.Combine(full, "相册", "相册.exe"));
+        bool edit = File.Exists(Path.Combine(full, "图片编辑", "图片编辑.exe"));
+        bool legacy = File.Exists(Path.Combine(full, AppExeName)) && File.Exists(Path.Combine(full, "ui.html"));
+        return album || edit || legacy;
+    }
+
+    static bool HasAlbum(string dir)
+    {
+        return File.Exists(Path.Combine(dir, "相册", "相册.exe")) ||
+               (File.Exists(Path.Combine(dir, AppExeName)) && File.Exists(Path.Combine(dir, "ui.html")));
+    }
+
+    static bool HasEdit(string dir)
+    {
+        return File.Exists(Path.Combine(dir, "图片编辑", "图片编辑.exe")) ||
+               (File.Exists(Path.Combine(dir, AppExeName)) && File.Exists(Path.Combine(dir, "ui.html")));
     }
 
     static void RunCleanup(string installRoot, int waitPid, bool quiet, bool testMode)
@@ -111,6 +124,8 @@ static class Uninstaller
         }
 
         // 先结束后台主程序；卸载器自身是另一个进程名，不会被误杀。
+        bool hadAlbum = HasAlbum(installRoot);
+        bool hadEdit = HasEdit(installRoot);
         KillAppProcesses(installRoot, waitPid);
         Thread.Sleep(1200);
 
@@ -135,27 +150,52 @@ static class Uninstaller
             string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             string startMenu = Path.Combine(appData, @"Microsoft\Windows\Start Menu\Programs");
 
-            // 自定义缓存位置可能不在安装目录，先读配置再清理；只删除缓存子目录，
-            // 避免误删用户在选择缓存目录时放在同一文件夹里的其他文件。
-            string customCache = null;
-            try
+            // 按已安装组件清理各自缓存，避免误删另一套独立安装的配置。
+            if (hadAlbum)
             {
-                string cfg = Path.Combine(appData, "ImageBatchTool", "cache_root.txt");
-                if (File.Exists(cfg)) customCache = File.ReadAllText(cfg).Trim();
+                string customCache = null;
+                try
+                {
+                    string cfg = Path.Combine(appData, "ImageBatchTool", "cache_root.txt");
+                    if (File.Exists(cfg)) customCache = File.ReadAllText(cfg).Trim();
+                }
+                catch { }
+                DeleteCustomCache(customCache, installRoot, failed);
+                DeleteTree(Path.Combine(appData, "ImageBatchTool"), failed);
+                DeleteTree(Path.Combine(localAppData, "ImageBatchTool"), failed);
+                DeleteTree(Path.Combine(localAppData, "ImageBatchTool_cache"), failed);
             }
-            catch { }
-            DeleteCustomCache(customCache, installRoot, failed);
-
-            DeleteTree(Path.Combine(appData, "ImageBatchTool"), failed);
+            if (hadEdit)
+            {
+                string customCache = null;
+                try
+                {
+                    string cfg = Path.Combine(appData, "ImageBatchTool_Edit", "cache_root.txt");
+                    if (File.Exists(cfg)) customCache = File.ReadAllText(cfg).Trim();
+                }
+                catch { }
+                DeleteCustomCache(customCache, installRoot, failed);
+                DeleteTree(Path.Combine(appData, "ImageBatchTool_Edit"), failed);
+            }
             DeleteTree(Path.Combine(appData, "图片批处理工具"), failed);
-            DeleteTree(Path.Combine(localAppData, "ImageBatchTool"), failed);
-            DeleteTree(Path.Combine(localAppData, "ImageBatchTool_cache"), failed);
 
-            string[] desktopNames = { "相册.lnk", "图片编辑.lnk", "图片批处理工具.lnk", "卸载图片批处理工具.lnk", "相册.bat", "图片编辑.bat" };
-            foreach (string name in desktopNames) DeleteFile(Path.Combine(desktop, name), failed);
+            string[] commonDesktopNames = { "图片批处理工具.lnk", "卸载图片批处理工具.lnk" };
+            foreach (string name in commonDesktopNames) DeleteFile(Path.Combine(desktop, name), failed);
+            if (hadAlbum)
+            {
+                DeleteFile(Path.Combine(desktop, "相册.lnk"), failed);
+                DeleteFile(Path.Combine(desktop, "相册.bat"), failed);
+            }
+            if (hadEdit)
+            {
+                DeleteFile(Path.Combine(desktop, "图片编辑.lnk"), failed);
+                DeleteFile(Path.Combine(desktop, "图片编辑.bat"), failed);
+            }
 
-            string[] startNames = { "相册.lnk", "图片编辑.lnk", "图片批处理工具.lnk", "卸载图片批处理工具.lnk" };
-            foreach (string name in startNames) DeleteFile(Path.Combine(startMenu, name), failed);
+            string[] commonStartNames = { "图片批处理工具.lnk", "卸载图片批处理工具.lnk" };
+            foreach (string name in commonStartNames) DeleteFile(Path.Combine(startMenu, name), failed);
+            if (hadAlbum) DeleteFile(Path.Combine(startMenu, "相册.lnk"), failed);
+            if (hadEdit) DeleteFile(Path.Combine(startMenu, "图片编辑.lnk"), failed);
             DeleteTree(Path.Combine(startMenu, "图片批处理工具"), failed);
 
             string temp = Path.GetTempPath();
@@ -172,8 +212,7 @@ static class Uninstaller
             }
             catch { }
 
-            DeleteRegistryKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\ImageBatchTool", failed);
-            DeleteRegistryKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\图片批处理工具", failed);
+            DeleteRegistryEntriesForInstall(installRoot, failed);
         }
 
         if (!quiet)
@@ -191,25 +230,29 @@ static class Uninstaller
 
     static void KillAppProcesses(string installRoot, int waitPid)
     {
-        try
+        string root = Path.GetFullPath(installRoot).TrimEnd('\\').ToLowerInvariant() + "\\";
+        string[] names = { "相册", "图片编辑", "图片批处理工具" };
+        foreach (string name in names)
         {
-            foreach (Process p in Process.GetProcessesByName("图片批处理工具"))
+            try
             {
-                try
+                foreach (Process p in Process.GetProcessesByName(name))
                 {
-                    if (p.Id == waitPid) continue;
-                    string path = null;
-                    try { path = p.MainModule.FileName; } catch { }
-                    if (!string.IsNullOrEmpty(path) &&
-                        !string.Equals(Path.GetFullPath(path), Path.GetFullPath(Path.Combine(installRoot, AppExeName)), StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    p.Kill();
-                    p.WaitForExit(3000);
+                    try
+                    {
+                        if (p.Id == waitPid) continue;
+                        string path = null;
+                        try { path = p.MainModule.FileName; } catch { }
+                        if (string.IsNullOrEmpty(path)) continue;
+                        if (!Path.GetFullPath(path).ToLowerInvariant().StartsWith(root)) continue;
+                        p.Kill();
+                        p.WaitForExit(3000);
+                    }
+                    catch { }
                 }
-                catch { }
             }
+            catch { }
         }
-        catch { }
     }
 
     static void DeleteCustomCache(string root, string installRoot, List<string> failed)
@@ -277,6 +320,39 @@ static class Uninstaller
         {
             failed.Add(path + "（" + ex.Message + "）");
         }
+    }
+
+    static void DeleteRegistryEntriesForInstall(string installRoot, List<string> failed)
+    {
+        string root = Path.GetFullPath(installRoot).TrimEnd('\\');
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall", true))
+            {
+                if (key == null) return;
+                foreach (string name in key.GetSubKeyNames())
+                {
+                    // 只处理本产品写入的卸载项，避免碰其他软件。
+                    if (!name.StartsWith("ImageBatchTool", StringComparison.OrdinalIgnoreCase) &&
+                        !name.Equals("图片批处理工具", StringComparison.OrdinalIgnoreCase)) continue;
+                    string loc = null;
+                    try
+                    {
+                        using (RegistryKey sub = key.OpenSubKey(name))
+                        {
+                            if (sub != null) loc = Convert.ToString(sub.GetValue("InstallLocation"));
+                        }
+                    }
+                    catch { }
+                    bool same = string.IsNullOrEmpty(loc) ||
+                        string.Equals(Path.GetFullPath(loc).TrimEnd('\\'), root, StringComparison.OrdinalIgnoreCase);
+                    if (!same) continue;
+                    try { key.DeleteSubKeyTree(name, false); }
+                    catch (Exception ex) { failed.Add("注册表 " + name + "（" + ex.Message + "）"); }
+                }
+            }
+        }
+        catch (Exception ex) { failed.Add("注册表卸载项（" + ex.Message + "）"); }
     }
 
     static void DeleteRegistryKey(string subKey, List<string> failed)

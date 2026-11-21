@@ -66,10 +66,8 @@
     <div><span class="t">照片去重</span><span class="s" id="dupHeadSub"></span></div>
   </div>
   <div class="dup-tools">
-    <button class="mini-btn" onclick="post('dupsrc')">扫描文件夹</button>
     <button class="mini-btn" onclick="post('dupscan')">开始扫描</button>
     <button class="mini-btn" id="dupPauseBtn" onclick="post('duppause')">暂停</button>
-    <button class="mini-btn" onclick="post('dupdst')">回收站目录</button>
     <span style="font-size:11px;color:#9a9a9a" id="dupDstPath">移入：软件回收站</span>
     <div class="dup-bar" style="flex:0 0 120px;margin:0"><div id="dupBarFill"></div></div>
     <span style="font-size:11px;color:#9a9a9a;min-width:52px" id="dupStat">未扫描</span>
@@ -80,7 +78,7 @@
     <button class="mini-btn" style="background:#b33;color:#fff;border-color:#c44" onclick="dupMoveSelected()">移入回收站</button>
   </div>
   <div class="dup-path" id="dupSrcPath" title="">扫描：未选择文件夹</div>
-  <div class="dup-list" id="dupList"><div class="dup-empty">还没有扫描结果，点上方「扫描文件夹」或直接「开始扫描」。</div></div>
+  <div class="dup-list" id="dupList"><div class="dup-empty">还没有扫描结果，点上方「开始扫描」开始。</div></div>
 </div>
 <div class="dup-light" id="dupLight">
   <div class="dup-light-info" id="dupLightInfo"></div>
@@ -95,7 +93,7 @@
 function post(m){ try{ if(window.chrome&&chrome.webview) chrome.webview.postMessage(m); }catch(e){} }
 function fmtSize(n){ if(!n) return "0 B"; const u=["B","KB","MB","GB"]; let i=0,v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i===0? v : v.toFixed(1))+" "+u[i]; }
 function escHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
-window._dupGroups=[]; window._dupSel={}; window._dupThumbs={}; window._dupMoveList=[]; window._dupSrc=""; window._dupDst=""; window._dupRunning=false; window._dupPaused=false;
+window._dupGroups=[]; window._dupSel={}; window._dupUserSel={}; window._dupThumbs={}; window._dupMoveList=[]; window._dupSrc=""; window._dupDst=""; window._dupRunning=false; window._dupPaused=false; window._dupScanning=false;
 let _dupLightG=null,_dupLightK=0;
 function dupUpdateSelInfo(){
   const n=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];}).length;
@@ -104,7 +102,8 @@ function dupUpdateSelInfo(){
 function renderDupGroups(){
   const list=document.getElementById("dupList"); if(!list) return;
   const gs=window._dupGroups||[];
-  if(!gs.length){ list.innerHTML='<div class="dup-empty">没有发现重复照片</div>'; dupUpdateSelInfo(); return; }
+  if(!gs.length){ list.innerHTML='<div class="dup-empty">'+(window._dupScanning?'扫描中，发现重复后会立即显示…':'没有发现重复照片')+'</div>'; dupUpdateSelInfo(); return; }
+  const keepScroll=list.scrollTop||0;
   let html="";
   for(let gi=0;gi<gs.length;gi++){
     const g=gs[gi].items||[];
@@ -124,7 +123,8 @@ function renderDupGroups(){
     html+="</div></div>";
   }
   list.innerHTML=html; dupUpdateSelInfo();
-  window._dupThumbReq={};
+  list.scrollTop=keepScroll;
+  window._dupThumbReq=window._dupThumbReq||{};
   list._dupThumbCursor=0;
   if(!list._thumbScroll){ list._thumbScroll=true; list.addEventListener('scroll', function(){ if((Date.now()-(list._thumbT||0))>120){ list._thumbT=Date.now(); dupQueueThumbs(); } }); }
   dupQueueThumbs();
@@ -160,13 +160,18 @@ function dupFillThumb(path,data){
 function dupToggle(cb){
   const p=cb.getAttribute("data-p");
   window._dupSel[p]=cb.checked;
+  window._dupUserSel[p]=cb.checked;
   cb.parentNode.parentNode.classList.toggle("out",cb.checked);
   dupUpdateSelInfo();
 }
 function dupSelectAll(v){
   const gs=window._dupGroups||[];
   window._dupSel={};
-  for(let gi=0;gi<gs.length;gi++){ const g=gs[gi].items||[]; for(let k=0;k<g.length;k++) if(v&&k>0) window._dupSel[g[k].p]=true; }
+  window._dupUserSel=window._dupUserSel||{};
+  for(let gi=0;gi<gs.length;gi++){ const g=gs[gi].items||[]; for(let k=0;k<g.length;k++){
+    const on=!!(v&&k>0);
+    window._dupSel[g[k].p]=on; window._dupUserSel[g[k].p]=on;
+  } }
   renderDupGroups();
 }
 function dupOpenLightByPath(path){
@@ -213,19 +218,38 @@ function handleMessage(m){
     if(sp) sp.textContent='扫描：'+(m.src?m.src:'未选择文件夹');
     if(dp) dp.textContent='移入：'+(m.dst?'回收站 '+m.dst:'软件回收站');
     if(sp) sp.title=m.src||''; if(dp) dp.title=m.dst||'';
-    window._dupRunning=!!m.running; window._dupPaused=!!m.paused;
+    window._dupRunning=!!m.running; window._dupPaused=!!m.paused; window._dupScanning=!!m.running;
     const pb=document.getElementById('dupPauseBtn'); if(pb) pb.textContent=m.paused?'继续':'暂停';
   } else if(m.type==='dup'){
     const bar=document.getElementById('dupBarFill'), st=document.getElementById('dupStat');
-    if(m.phase==='pause'){ if(st) st.textContent='已暂停 '+m.done+' / '+m.total; }
-    else if(m.phase==='done'){ if(bar) bar.style.width='100%'; if(st) st.textContent='扫描完成：'+(m.groups||0)+' 组重复，共处理 '+m.total+' 张'; }
-    else if(m.phase==='error'){ if(st) st.textContent='扫描出错：'+(m.msg||''); }
-    else { const pct=m.total?Math.round(m.done/m.total*100):0; if(bar) bar.style.width=pct+'%'; if(st) st.textContent=(m.phase==='enum'?'正在枚举文件…':(m.phase==='compare'?'正在比对相似度…':'扫描中 '+m.done+' / '+m.total)); }
+    if(m.phase==='pause'){ window._dupScanning=true; if(st) st.textContent='已暂停 '+m.done+' / '+m.total; }
+    else if(m.phase==='done'){ window._dupScanning=false; if(bar) bar.style.width='100%'; if(st) st.textContent='扫描完成：'+(m.groups||0)+' 组重复，共处理 '+m.total+' 张'; }
+    else if(m.phase==='error'){ window._dupScanning=false; if(st) st.textContent='扫描出错：'+(m.msg||''); }
+    else {
+      window._dupScanning=true;
+      const pct=m.total?Math.round(m.done/m.total*100):0; if(bar) bar.style.width=pct+'%';
+      if(m.phase==='enum'){
+        window._dupGroups=[]; window._dupSel={}; window._dupUserSel={}; window._dupThumbs={}; window._dupThumbReq={};
+        if(st) st.textContent='正在枚举文件…';
+        renderDupGroups();
+      }
+      else if(st) st.textContent=(m.phase==='compare'?'正在比对相似度…':'扫描中 '+m.done+' / '+m.total);
+    }
   } else if(m.type==='dupgroups'){
-    window._dupGroups=m.items||[]; window._dupSel={};
-    for(let gi=0;gi<window._dupGroups.length;gi++){ const g=window._dupGroups[gi].items||[]; for(let k=1;k<g.length;k++) window._dupSel[g[k].p]=true; }
+    window._dupGroups=m.items||[];
+    window._dupUserSel=window._dupUserSel||{};
+    const valid={};
+    for(let gi=0;gi<window._dupGroups.length;gi++){
+      const g=window._dupGroups[gi].items||[];
+      for(let k=0;k<g.length;k++){
+        const p=g[k].p; valid[p]=1;
+        if(Object.prototype.hasOwnProperty.call(window._dupUserSel,p)) window._dupSel[p]=!!window._dupUserSel[p];
+        else window._dupSel[p]=(k>0);
+      }
+    }
+    for(const p in window._dupSel){ if(!valid[p]) delete window._dupSel[p]; }
     const sub=document.getElementById('dupHeadSub');
-    if(sub) sub.textContent=(m.total||0)+' 组 · 已分析 '+(m.files||0)+' 张';
+    if(sub) sub.textContent=(m.partial?'扫描中 · ':'')+(m.total||0)+' 组 · 已分析 '+(m.files||0)+' 张';
     renderDupGroups();
   } else if(m.type==='dupbig'){
     const li=document.getElementById('dupLightImg'), info=document.getElementById('dupLightInfo');

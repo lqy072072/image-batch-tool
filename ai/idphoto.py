@@ -6,6 +6,7 @@ import os
 import sys
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -219,7 +220,7 @@ def main():
     SW = int(sys.argv[8]) if len(sys.argv) > 8 else 1800
     SH = int(sys.argv[9]) if len(sys.argv) > 9 else 1200
 
-    img = cv2.imread(src, cv2.IMREAD_COLOR)
+    img = imread_u(src, cv2.IMREAD_COLOR)
     if img is None:
         print(json.dumps({"ok": False, "error": "无法读取图片"}))
         return
@@ -237,7 +238,7 @@ def main():
     faces = [(c / scale, y / scale, f / scale, s) for (c, y, f, s) in faces] if scale != 1.0 else faces
     if scale != 1.0:
         # 裁切用原图坐标，重新读原图
-        img = cv2.imread(src, cv2.IMREAD_COLOR)
+        img = imread_u(src, cv2.IMREAD_COLOR)
 
     portrait, face_out = crop_id_centered(img.copy(), faces, W, H)
     p_mask = person_mask(portrait, face_out)

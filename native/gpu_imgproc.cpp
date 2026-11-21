@@ -168,7 +168,8 @@ __declspec(dllexport) int __cdecl gpu_lut_apply(
 )
 {
     if (!EnsureDevice()) return 0;
-    if (!g_lutCS) return 0;
+    if (!g_lutCS || !g_paramBuffer || !buf || !lut || size < 2) return 0;
+    if (W <= 0 || H <= 0 || stride < W * 4) return 0;
 
     // Create input texture (BGRA -> R8G8B8A8_UNORM)
     D3D11_TEXTURE2D_DESC td = {};
@@ -182,17 +183,23 @@ __declspec(dllexport) int __cdecl gpu_lut_apply(
     init.pSysMem = buf;
     init.SysMemPitch = stride;
     ID3D11Texture2D* srcTex = nullptr;
-    if (FAILED(g_pd3dDevice->CreateTexture2D(&td, &init, &srcTex))) return 0;
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&td, &init, &srcTex)) || !srcTex) return 0;
     ID3D11ShaderResourceView* srcSRV = nullptr;
-    g_pd3dDevice->CreateShaderResourceView(srcTex, nullptr, &srcSRV);
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(srcTex, nullptr, &srcSRV)) || !srcSRV) {
+        srcTex->Release(); return 0;
+    }
 
     // Create output texture (UAV)
     D3D11_TEXTURE2D_DESC od = td;
     od.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
     ID3D11Texture2D* dstTex = nullptr;
-    g_pd3dDevice->CreateTexture2D(&od, nullptr, &dstTex);
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&od, nullptr, &dstTex)) || !dstTex) {
+        srcSRV->Release(); srcTex->Release(); return 0;
+    }
     ID3D11UnorderedAccessView* dstUAV = nullptr;
-    g_pd3dDevice->CreateUnorderedAccessView(dstTex, nullptr, &dstUAV);
+    if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(dstTex, nullptr, &dstUAV)) || !dstUAV) {
+        dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
 
     // Create 3D LUT texture
     D3D11_TEXTURE3D_DESC t3d = {};
@@ -214,13 +221,19 @@ __declspec(dllexport) int __cdecl gpu_lut_apply(
     init3.SysMemPitch = size * 4 * sizeof(float);
     init3.SysMemSlicePitch = size * size * 4 * sizeof(float);
     ID3D11Texture3D* lutTex = nullptr;
-    g_pd3dDevice->CreateTexture3D(&t3d, &init3, &lutTex);
+    if (FAILED(g_pd3dDevice->CreateTexture3D(&t3d, &init3, &lutTex)) || !lutTex) {
+        dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     ID3D11ShaderResourceView* lutSRV = nullptr;
-    if (lutTex) g_pd3dDevice->CreateShaderResourceView(lutTex, nullptr, &lutSRV);
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(lutTex, nullptr, &lutSRV)) || !lutSRV) {
+        lutTex->Release(); dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
 
     // Update constants
     D3D11_MAPPED_SUBRESOURCE map;
-    g_pd3dContext->Map(g_paramBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+    if (FAILED(g_pd3dContext->Map(g_paramBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map)) || !map.pData) {
+        lutSRV->Release(); lutTex->Release(); dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     float* p = (float*)map.pData;
     p[0]=inMin; p[1]=inMax; p[2]=strength; p[3]=chroma;
     p[4]=wbGain?wbGain[0]:1.0f; p[5]=wbGain?wbGain[1]:1.0f; p[6]=wbGain?wbGain[2]:1.0f; p[7]=1.0f;
@@ -244,9 +257,16 @@ __declspec(dllexport) int __cdecl gpu_lut_apply(
     rd.Usage = D3D11_USAGE_STAGING;
     rd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     ID3D11Texture2D* readTex = nullptr;
-    g_pd3dDevice->CreateTexture2D(&rd, nullptr, &readTex);
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&rd, nullptr, &readTex)) || !readTex) {
+        if (lutSRV) lutSRV->Release(); if (lutTex) lutTex->Release();
+        dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     g_pd3dContext->CopyResource(readTex, dstTex);
-    g_pd3dContext->Map(readTex, 0, D3D11_MAP_READ, 0, &map);
+    if (FAILED(g_pd3dContext->Map(readTex, 0, D3D11_MAP_READ, 0, &map)) || !map.pData) {
+        readTex->Release();
+        if (lutSRV) lutSRV->Release(); if (lutTex) lutTex->Release();
+        dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     for (int y = 0; y < H; y++) {
         memcpy(buf + y*stride, (uint8_t*)map.pData + y*map.RowPitch, W*4);
     }
@@ -266,7 +286,8 @@ __declspec(dllexport) int __cdecl gpu_color_adjust(
     float shadows, float highlights, float temp, float tint, float vignette
 )
 {
-    if (!EnsureDevice() || !g_colorCS) return 0;
+    if (!EnsureDevice() || !g_colorCS || !g_paramBuffer || !buf) return 0;
+    if (W <= 0 || H <= 0 || stride < W * 4) return 0;
 
     D3D11_TEXTURE2D_DESC td = {};
     td.Width = W; td.Height = H; td.MipLevels = 1; td.ArraySize = 1;
@@ -277,19 +298,27 @@ __declspec(dllexport) int __cdecl gpu_color_adjust(
     D3D11_SUBRESOURCE_DATA init = {};
     init.pSysMem = buf; init.SysMemPitch = stride;
     ID3D11Texture2D* srcTex = nullptr;
-    if (FAILED(g_pd3dDevice->CreateTexture2D(&td, &init, &srcTex))) return 0;
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&td, &init, &srcTex)) || !srcTex) return 0;
     ID3D11ShaderResourceView* srcSRV = nullptr;
-    g_pd3dDevice->CreateShaderResourceView(srcTex, nullptr, &srcSRV);
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(srcTex, nullptr, &srcSRV)) || !srcSRV) {
+        srcTex->Release(); return 0;
+    }
 
     D3D11_TEXTURE2D_DESC od = td;
     od.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
     ID3D11Texture2D* dstTex = nullptr;
-    g_pd3dDevice->CreateTexture2D(&od, nullptr, &dstTex);
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&od, nullptr, &dstTex)) || !dstTex) {
+        srcSRV->Release(); srcTex->Release(); return 0;
+    }
     ID3D11UnorderedAccessView* dstUAV = nullptr;
-    g_pd3dDevice->CreateUnorderedAccessView(dstTex, nullptr, &dstUAV);
+    if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(dstTex, nullptr, &dstUAV)) || !dstUAV) {
+        dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
 
     D3D11_MAPPED_SUBRESOURCE map;
-    g_pd3dContext->Map(g_paramBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+    if (FAILED(g_pd3dContext->Map(g_paramBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map)) || !map.pData) {
+        dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     float* p = (float*)map.pData;
     p[0]=saturation; p[1]=contrast; p[2]=brightness; p[3]=0;
     p[4]=shadows; p[5]=highlights; p[6]=temp; p[7]=tint;
@@ -309,9 +338,13 @@ __declspec(dllexport) int __cdecl gpu_color_adjust(
     rd.BindFlags = 0; rd.Usage = D3D11_USAGE_STAGING;
     rd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
     ID3D11Texture2D* readTex = nullptr;
-    g_pd3dDevice->CreateTexture2D(&rd, nullptr, &readTex);
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&rd, nullptr, &readTex)) || !readTex) {
+        dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     g_pd3dContext->CopyResource(readTex, dstTex);
-    g_pd3dContext->Map(readTex, 0, D3D11_MAP_READ, 0, &map);
+    if (FAILED(g_pd3dContext->Map(readTex, 0, D3D11_MAP_READ, 0, &map)) || !map.pData) {
+        readTex->Release(); dstUAV->Release(); dstTex->Release(); srcSRV->Release(); srcTex->Release(); return 0;
+    }
     for (int y = 0; y < H; y++) {
         memcpy(buf + y*stride, (uint8_t*)map.pData + y*map.RowPitch, W*4);
     }
@@ -386,7 +419,8 @@ static void EnsureBlurShaders() {
 // GPU separable box blur (multi-pass). buf is BGRA.
 __declspec(dllexport) int __cdecl gpu_blur(uint8_t* buf, int W, int H, int stride, int radius)
 {
-    if (!EnsureDevice() || !g_pd3dDevice) return 0;
+    if (!EnsureDevice() || !g_pd3dDevice || !g_pd3dContext || !g_sampler) return 0;
+    if (!buf || W <= 0 || H <= 0 || stride < W * 4 || radius < 1) return 0;
     EnsureBlurShaders();
     if (!g_blurHCS || !g_blurVCS) return 0;
 
@@ -397,63 +431,68 @@ __declspec(dllexport) int __cdecl gpu_blur(uint8_t* buf, int W, int H, int strid
     td.Usage = D3D11_USAGE_DEFAULT;
     td.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-    // initial texture from buf
     D3D11_SUBRESOURCE_DATA init = {};
     init.pSysMem = buf; init.SysMemPitch = stride;
     ID3D11Texture2D* texA = nullptr;
-    g_pd3dDevice->CreateTexture2D(&td, &init, &texA);
     ID3D11Texture2D* texB = nullptr;
-    g_pd3dDevice->CreateTexture2D(&td, nullptr, &texB);
-
-    ID3D11ShaderResourceView* srvA = nullptr; g_pd3dDevice->CreateShaderResourceView(texA, nullptr, &srvA);
-    ID3D11UnorderedAccessView* uavA = nullptr; g_pd3dDevice->CreateUnorderedAccessView(texA, nullptr, &uavA);
-    ID3D11ShaderResourceView* srvB = nullptr; g_pd3dDevice->CreateShaderResourceView(texB, nullptr, &srvB);
-    ID3D11UnorderedAccessView* uavB = nullptr; g_pd3dDevice->CreateUnorderedAccessView(texB, nullptr, &uavB);
-
-    // constant buffer for radius
+    ID3D11ShaderResourceView* srvA = nullptr;
+    ID3D11UnorderedAccessView* uavA = nullptr;
+    ID3D11ShaderResourceView* srvB = nullptr;
+    ID3D11UnorderedAccessView* uavB = nullptr;
+    ID3D11Buffer* cb = nullptr;
+    ID3D11Texture2D* readTex = nullptr;
     D3D11_BUFFER_DESC bd = {};
+    D3D11_TEXTURE2D_DESC rd = {};
+    D3D11_MAPPED_SUBRESOURCE map;
+    float* p = nullptr;
+    bool ok = false;
+
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&td, &init, &texA)) || !texA) goto cleanup;
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&td, nullptr, &texB)) || !texB) goto cleanup;
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(texA, nullptr, &srvA)) || !srvA) goto cleanup;
+    if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(texA, nullptr, &uavA)) || !uavA) goto cleanup;
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(texB, nullptr, &srvB)) || !srvB) goto cleanup;
+    if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(texB, nullptr, &uavB)) || !uavB) goto cleanup;
+
     bd.Usage = D3D11_USAGE_DYNAMIC; bd.ByteWidth = 16;
     bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    ID3D11Buffer* cb = nullptr;
-    g_pd3dDevice->CreateBuffer(&bd, nullptr, &cb);
+    if (FAILED(g_pd3dDevice->CreateBuffer(&bd, nullptr, &cb)) || !cb) goto cleanup;
 
-    D3D11_MAPPED_SUBRESOURCE map;
-    g_pd3dContext->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
-    float* p = (float*)map.pData;
+    if (FAILED(g_pd3dContext->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &map)) || !map.pData) goto cleanup;
+    p = (float*)map.pData;
     p[0] = (float)radius; p[1] = (float)W; p[2] = (float)H; p[3] = 0;
     g_pd3dContext->Unmap(cb, 0);
 
-    // H pass: A -> B
     g_pd3dContext->CSSetShader(g_blurHCS, nullptr, 0);
     g_pd3dContext->CSSetShaderResources(0, 1, &srvA);
     g_pd3dContext->CSSetUnorderedAccessViews(0, 1, &uavB, nullptr);
     g_pd3dContext->CSSetConstantBuffers(0, 1, &cb);
     g_pd3dContext->Dispatch((W+15)/16, (H+15)/16, 1);
 
-    // V pass: B -> A
     g_pd3dContext->CSSetShader(g_blurVCS, nullptr, 0);
     g_pd3dContext->CSSetShaderResources(0, 1, &srvB);
     g_pd3dContext->CSSetUnorderedAccessViews(0, 1, &uavA, nullptr);
     g_pd3dContext->CSSetConstantBuffers(0, 1, &cb);
     g_pd3dContext->Dispatch((W+15)/16, (H+15)/16, 1);
 
-    // copy back from texA
-    D3D11_TEXTURE2D_DESC rd = td;
+    rd = td;
     rd.BindFlags = 0; rd.Usage = D3D11_USAGE_STAGING;
     rd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    ID3D11Texture2D* readTex = nullptr;
-    g_pd3dDevice->CreateTexture2D(&rd, nullptr, &readTex);
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&rd, nullptr, &readTex)) || !readTex) goto cleanup;
     g_pd3dContext->CopyResource(readTex, texA);
-    g_pd3dContext->Map(readTex, 0, D3D11_MAP_READ, 0, &map);
+    if (FAILED(g_pd3dContext->Map(readTex, 0, D3D11_MAP_READ, 0, &map)) || !map.pData) goto cleanup;
     for (int y = 0; y < H; y++)
         memcpy(buf + y*stride, (uint8_t*)map.pData + y*map.RowPitch, W*4);
     g_pd3dContext->Unmap(readTex, 0);
+    ok = true;
 
-    readTex->Release(); cb->Release();
-    srvA->Release(); uavA->Release(); texA->Release();
-    srvB->Release(); uavB->Release(); texB->Release();
-    return 1;
+cleanup:
+    if (readTex) readTex->Release();
+    if (cb) cb->Release();
+    if (srvA) srvA->Release(); if (uavA) uavA->Release(); if (texA) texA->Release();
+    if (srvB) srvB->Release(); if (uavB) uavB->Release(); if (texB) texB->Release();
+    return ok ? 1 : 0;
 }
 
 // Detect if GPU is available

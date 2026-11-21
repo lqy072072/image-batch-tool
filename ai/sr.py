@@ -7,6 +7,7 @@ import os
 import sys
 
 import cv2
+from imgio import imread_u, imwrite_u
 import numpy as np
 import onnxruntime as ort
 
@@ -66,7 +67,7 @@ def main():
     src, dst = sys.argv[1], sys.argv[2]
     scale = int(sys.argv[3]) if len(sys.argv) > 3 else 2
 
-    img = cv2.imread(src, cv2.IMREAD_COLOR)
+    img = imread_u(src, cv2.IMREAD_COLOR)
     if img is None:
         print(json.dumps({"ok": False, "error": "无法读取图片"}))
         return

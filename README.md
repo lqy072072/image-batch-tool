@@ -1,18 +1,18 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.10-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases/download/v2.10/image-batch-tool_v2.10_setup.exe)
+[![Release](https://img.shields.io/badge/下载安装包-v2.14-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）、美颜与液化，并内置本地相册管理。
+批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）、美颜与液化，并内置本地相册管理。v2.12 起，相册与图片编辑拆分为两个可独立安装、独立运行的程序。
 
 ## 下载安装
 
-直接下载最新安装包（约 1.1GB，已内置 Python 运行时、Chinese-CLIP 与 PP-OCRv4 模型）：
+直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
-**[👉 下载 image-batch-tool_v2.10_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.10/image-batch-tool_v2.10_setup.exe)**
+**[👉 下载 图片批处理工具_v2.14_安装包.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.14/%E5%9B%BE%E7%89%87%E6%89%B9%E5%A4%84%E7%90%86%E5%B7%A5%E5%85%B7_v2.14_%E5%AE%89%E8%A3%85%E5%8C%85.exe)**
 
-或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导安装，默认路径 `D:\Program Files\图片批量处理工具`。
+或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
 ## 功能
 
@@ -44,7 +44,7 @@
 
 ## 相册（v2.00 新增，v2.01 增强）
 
-独立「相册」入口（`相册.lnk --album`），与图片编辑分开启动，支持多根目录、全部 / 照片 / 视频 / 实况 / 文件夹 / 设备 / 人物 / 地图 八个视图。
+独立「相册」程序（`相册\相册.exe`），与图片编辑分开安装、分开启动，支持多根目录、全部 / 照片 / 视频 / 实况 / 文件夹 / 设备 / 人物 / 地图 八个视图。
 
 ![相册主界面](docs/screenshots/album_v210_top.png)
 
@@ -57,6 +57,26 @@
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.14 更新
+- **相册重叠根目录去重**：父目录与子目录同时加入相册根时，同一文件只保留一条索引，修复总数虚高、分页缺项以及实况照片类型被覆盖的问题
+- **根目录变更后自动补页**：移除/重新添加相册根后主动向后台补拉第一页，避免界面长时间停在 0 张
+- **重复开始保护**：批量导出运行中再次点“开始”会被拒绝并提示，防止两个批次并发写同一输出列表、停止提示被后一个批次覆盖
+- **完整回归**：相册 14 项、图片编辑 33 项及安装/卸载隔离全部通过；详见 `v2.14_回归测试报告.md`
+
+### v2.13 更新
+- **输出格式修复**：JPG / PNG / WebP 选择现在真实生效，证件照三种格式尺寸正确
+- **GPU 并发崩溃修复**：预览与导出线程共用 D3D11 资源时加锁，原生 GPU 模块补资源失败检查与安全释放
+- **停止批次提示修复**：停止后显示“已停止：完成 N/M 张”，不再被预览刷新提示覆盖
+
+### v2.12 更新
+- **相册 / 图片编辑彻底拆分**：两个独立 EXE、独立入口页、独立配置与缓存目录；安装后分别为 `相册\相册.exe` 与 `图片编辑\图片编辑.exe`
+- **组件选择安装**：安装向导可勾选「相册」「图片编辑」，至少选一个；未勾选的组件不会释放任何文件，只装其中一个也能正常运行
+- **安装载荷分块**：安装包内部拆为 `common` / `相册` / `图片编辑` 三个独立 7z，按勾选只解压对应模块；公共包仅含卸载程序和版本说明
+- **配置隔离**：相册继续使用 `%APPDATA%\ImageBatchTool`（保留已有路径、人物和回收站数据），图片编辑改用 `%APPDATA%\ImageBatchTool_Edit`
+- **卸载隔离**：卸载程序按实际安装的组件清理各自配置、快捷方式和注册表项，不再误删另一套独立安装
+- **中文路径修复**：自动挑片、证件照、参考图 LUT 等 OpenCV 脚本改为 Unicode 安全读写，含中文的安装/图片路径不再失败
+- **相册搜索修复**：文件名精确命中时不再合并 AI 全量结果；CLIP 语义搜索增加相似度阈值，避免无关查询返回整本相册
 
 ### v2.10 更新
 - **去重窗口修正**：去掉去重窗口内容区重复的关闭按钮，只保留系统标题栏关闭；打开去重窗口时自动置顶并切到前台，不再被相册主窗口压在后面

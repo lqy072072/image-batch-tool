@@ -7,6 +7,7 @@ GFPGAN v1.4 人脸美颜（纯AI）
 import sys, os, json
 import numpy as np
 import cv2
+from imgio import imread_u, imwrite_u
 import onnxruntime as ort
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -80,16 +81,16 @@ def detect_faces(img):
     return keep
 
 def process_image(input_path, output_path, strength=0.7):
-    img = cv2.imread(input_path)
+    img = imread_u(input_path)
     if img is None:
         return {"ok": False, "error": "cannot read: " + input_path}
     h, w = img.shape[:2]
     faces = detect_faces(img)
     if len(faces) == 0:
         if output_path.lower().endswith(('.png', '.tif', '.tiff', '.bmp')):
-            cv2.imwrite(output_path, img)
+            imwrite_u(output_path, img)
         else:
-            cv2.imwrite(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            imwrite_u(output_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         return {"ok": True, "faces": 0}
 
     session = get_session(GFPGAN_PATH)
@@ -150,9 +151,9 @@ def process_image(input_path, output_path, strength=0.7):
         n += 1
 
     if output_path.lower().endswith(('.png', '.tif', '.tiff', '.bmp')):
-        cv2.imwrite(output_path, result)          # 无损中转
+        imwrite_u(output_path, result)          # 无损中转
     else:
-        cv2.imwrite(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        imwrite_u(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 95])
     return {"ok": True, "faces": n}
 
 if __name__ == "__main__":
