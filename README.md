@@ -10,7 +10,7 @@
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
-**[👉 下载 图片批处理工具_v2.14_安装包.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.14/%E5%9B%BE%E7%89%87%E6%89%B9%E5%A4%84%E7%90%86%E5%B7%A5%E5%85%B7_v2.14_%E5%AE%89%E8%A3%85%E5%8C%85.exe)**
+**[👉 下载 image-batch-tool_v2.14_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.14/image-batch-tool_v2.14_setup.exe)**
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
