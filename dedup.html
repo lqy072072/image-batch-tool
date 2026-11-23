@@ -32,6 +32,7 @@
   .dup-cell img, .dup-cell .ph { width:100%; height:104px; object-fit:cover; border-radius:4px; display:block; background:#1a1a1a; cursor:zoom-in; }
   .dup-cell .ph { display:flex; align-items:center; justify-content:center; color:#555; font-size:10px; cursor:pointer; }
   .dup-cell .nm { font-size:10px; color:#ddd; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dup-cell .fd { font-size:9px; color:#8fa8c8; margin-top:2px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-all; }
   .dup-cell .mt { font-size:9px; color:#888; margin-top:2px; }
   .dup-cell label { display:flex; align-items:center; gap:4px; font-size:10px; color:#bbb; margin-top:4px; cursor:pointer; }
   .dup-empty { color:#777; font-size:12px; text-align:center; padding:40px; }
@@ -55,6 +56,7 @@
   body.skin-light .dup-group-h { color:#666; }
   body.skin-light .dup-cell { background:#f2f2f5; border-color:#dcdce2; }
   body.skin-light .dup-cell .nm { color:#222; }
+  body.skin-light .dup-cell .fd { color:#5e6f8c; }
   body.skin-light .dup-cell .mt { color:#777; }
   body.skin-light .dup-cell label { color:#444; }
   body.skin-light .dup-list { background:#f7f7fa; }
@@ -93,6 +95,11 @@
 function post(m){ try{ if(window.chrome&&chrome.webview) chrome.webview.postMessage(m); }catch(e){} }
 function fmtSize(n){ if(!n) return "0 B"; const u=["B","KB","MB","GB"]; let i=0,v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i===0? v : v.toFixed(1))+" "+u[i]; }
 function escHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+function dupFolder(p){
+  p=String(p==null?"":p);
+  const i=Math.max(p.lastIndexOf("\\"),p.lastIndexOf("/"));
+  return i>=0?p.slice(0,i):"";
+}
 window._dupGroups=[]; window._dupSel={}; window._dupUserSel={}; window._dupThumbs={}; window._dupMoveList=[]; window._dupSrc=""; window._dupDst=""; window._dupRunning=false; window._dupPaused=false; window._dupScanning=false; window._dupScanDone=false;
 let _dupLightG=null,_dupLightK=0;
 function dupUpdateSelInfo(){
@@ -111,9 +118,11 @@ function renderDupGroups(){
     for(let k=0;k<g.length;k++){
       const it=g[k]; const ck=!!window._dupSel[it.p];
       const dt=window._dupThumbs&&window._dupThumbs[it.p];
+      const folder=dupFolder(it.p);
       html+='<div class="dup-cell '+(k===0?"keep":"")+(ck?" out":"")+'" data-dp="'+escHtml(it.p)+'">'
         + (dt?'<img src="'+dt+'" onclick="dupOpenLight('+gi+','+k+')" title="点击放大对比">':'<div class="ph" onclick="dupOpenLight('+gi+','+k+')">载入中…</div>')
         + '<div class="nm" title="'+escHtml(it.n)+'">'+escHtml(it.n)+'</div>'
+        + '<div class="fd" title="所在文件夹：'+escHtml(folder||it.p)+'">'+escHtml(folder||"—")+'</div>'
         + '<div class="mt">'+(it.w?it.w+"×"+it.h:"—")+' · '+fmtSize(it.s)+'</div>'
         + ((it.c&&it.c.length)?'<div class="mt" style="color:#7fb0ff" title="'+escHtml(it.c.join(", "))+'">实况：'+escHtml(it.c.join(", "))+'</div>':'')
         + (it.d===0?'<div class="mt" style="color:#c9a227">无解码器 · 仅精确判重</div>':'')
