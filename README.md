@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.15-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.16-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,9 +10,9 @@
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
-**[👉 前往 Releases 页面下载 v2.15 安装包](https://github.com/lqy072072/image-batch-tool/releases)**
+**[👉 前往 Releases 页面下载 v2.16 安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-本地产物为 `图片批处理工具_v2.15_安装包.exe`（1,220,055,277 字节，约 1.2 GB）；SHA256 与完整测试记录见 [`v2.15_回归测试报告.md`](v2.15_回归测试报告.md)。GitHub Release 资产待上传，当前可先使用本地安装包。
+本地产物为 `图片批处理工具_v2.16_安装包.exe`（1,219,939,450 字节，约 1.2 GB）；SHA256 与完整测试记录见 [`v2.16_回归测试报告.md`](v2.16_回归测试报告.md)。GitHub Release 资产待上传，当前可先使用本地安装包。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -59,6 +59,14 @@
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.16 更新
+- **修复文件夹重复添加**：父目录与子目录先后加入时，不再因路径分隔符/大小写差异重复收录同一张图；拖放、文件/文件夹选择、移除、清空统一按归一化全路径去重
+- **修复断点续跑 0 字节残留**：输出目录存在 0 字节同名文件时直接覆盖重导，不再生成 `_2` 并留下空文件
+- **修复相册全选**：扫描完成后「全选」不再被误判为“扫描还在进行”，可正常选中全部已扫描照片
+- **修复去重完成状态被覆盖**：扫描完成后稳定显示“扫描完成：N 组重复，共处理 M 张”，不再被“后台预分析”文案盖掉
+- **补入图片编辑 `dedup.html`**：修复编辑包缺少去重页面资源的问题，`edit.7z` 文件数 2,559 → 2,560
+- **回归结果**：图片编辑 43/43、相册 27/27，共 70/70 项通过；完整记录见 [`v2.16_回归测试报告.md`](v2.16_回归测试报告.md)
 
 ### v2.15 更新
 - **修复「色温一动就全屏绿」**：统一 GPU / CPU 原生 / C# 兜底三条色彩链路的量纲；色温、色调不再被放大 100 倍，极小步进恢复为温和偏色

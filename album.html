@@ -4248,7 +4248,7 @@ function albSelectAll(on){
     return;
   }
   A.selAllWant=true;
-  if(A.scanTotal>0){ A.selAllWant=false; toastMsg('扫描还在进行，完成后可全选全部已扫描照片'); return; }
+  if(A.scanRunning){ A.selAllWant=false; toastMsg('扫描还在进行，完成后可全选全部已扫描照片'); return; }
   if(A.allPaths){ albApplyAllSelection(); return; }
   if(A.selAllPending) return;
   A.selAllPending=true;

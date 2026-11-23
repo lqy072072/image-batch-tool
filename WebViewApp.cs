@@ -1715,6 +1715,7 @@ namespace ImageBatchTool
         public SplashForm Splash;
         public string StartupMode = AppModule.Id;
         readonly List<string> files = new List<string>();
+        readonly HashSet<string> fileKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly List<string> lutFiles = new List<string>();
         // 字符串参数（输出命名模板等，double 字典放不下）
         readonly Dictionary<string, string> parS = new Dictionary<string, string>();
@@ -2176,6 +2177,20 @@ namespace ImageBatchTool
         }
 
         // 统一入口：把文件/文件夹路径加入列表（拖放与消息共用）
+        static string FileKey(string p)
+        {
+            try { return Path.GetFullPath(p); } catch { return p; }
+        }
+
+        bool AddFileUnique(string p)
+        {
+            if (!IsImageFile(p)) return false;
+            string key = FileKey(p);
+            if (!fileKeys.Add(key)) return false;
+            files.Add(key);
+            return true;
+        }
+
         int AddPaths(System.Collections.Generic.IEnumerable<string> paths)
         {
             int added = 0;
@@ -2186,9 +2201,9 @@ namespace ImageBatchTool
                     if (Directory.Exists(p))
                     {
                         foreach (var f in Directory.GetFiles(p, "*.*", SearchOption.AllDirectories))
-                            if (IsImageFile(f) && !files.Contains(f)) { files.Add(f); added++; }
+                            if (AddFileUnique(f)) added++;
                     }
-                    else if (IsImageFile(p) && !files.Contains(p)) { files.Add(p); added++; }
+                    else if (AddFileUnique(p)) added++;
                 }
                 catch (Exception ex) { Log("添加路径失败 " + p + ": " + ex.Message); }
             }
@@ -2229,11 +2244,7 @@ namespace ImageBatchTool
                             using (var d = new FolderBrowserDialog())
                                 if (d.ShowDialog() == DialogResult.OK)
                                     foreach (var f in Directory.GetFiles(d.SelectedPath, "*.*", SearchOption.AllDirectories))
-                                    {
-                                        string ext = Path.GetExtension(f).ToLower();
-                                        if (ext==".jpg"||ext==".jpeg"||ext==".png"||ext==".bmp"||ext==".tif"||ext==".tiff")
-                                            files.Add(f);
-                                    }
+                                        AddFileUnique(f);
                         });
                         AutoSelectFirst(); SendState();
                         QueuePreview();
@@ -2243,7 +2254,8 @@ namespace ImageBatchTool
                             using (var d = new OpenFileDialog()) {
                                 d.Multiselect = true;
                                 d.Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff";
-                                if (d.ShowDialog() == DialogResult.OK) files.AddRange(d.FileNames);
+                                if (d.ShowDialog() == DialogResult.OK)
+                                    foreach (var f in d.FileNames) AddFileUnique(f);
                             }
                         });
                         AutoSelectFirst(); SendState();
@@ -2266,6 +2278,7 @@ namespace ImageBatchTool
                     case "remove":
                         if (selected >= 0 && selected < files.Count)
                         {
+                            fileKeys.Remove(FileKey(files[selected]));
                             files.RemoveAt(selected);
                             selected = files.Count > 0 ? Math.Min(selected, files.Count - 1) : -1;
                             cachedBase = null;
@@ -2275,7 +2288,7 @@ namespace ImageBatchTool
                         else QueuePreview();
                         break;
                     case "clear":
-                        files.Clear(); selected = -1; cachedBase = null;
+                        files.Clear(); fileKeys.Clear(); selected = -1; cachedBase = null;
                         SendState(); Send("{\"type\":\"clearpreview\"}");
                         break;
                     case "addpath": {
@@ -8998,7 +9011,12 @@ namespace ImageBatchTool
             int mode = par.ContainsKey("dup_mode") ? (int)par["dup_mode"] : 1;
             bool resume = par.ContainsKey("skip_existing") && par["skip_existing"] > 0.5;
             string first = Path.Combine(dir, baseName + ext);
-            if (resume && File.Exists(first) && new FileInfo(first).Length > 0) { skip = true; return first; }
+            if (resume && File.Exists(first))
+            {
+                if (new FileInfo(first).Length > 0) { skip = true; return first; }
+                // 0 字节残留视为未完成导出，直接覆盖重导，不再生成 _2。
+                return first;
+            }
             if (mode == 0) return first;
             if (!File.Exists(first)) return first;
             if (mode == 2) { skip = true; return first; }
