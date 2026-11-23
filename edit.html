@@ -932,7 +932,7 @@ window.addEventListener('mouseup', function(e) {
           <div style="display:flex;gap:6px;margin-bottom:8px">
             <button id="beautyBtn" onclick="toggleBeauty()" style="flex:1;padding:6px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer">AI细节增强</button>
           </div>
-          <div class="slider-row"><span>强度</span><input type="range" min="0" max="100" value="70" id="s_beauty_strength" oninput="document.getElementById('v_beauty_strength').textContent=this.value;setParam('beauty_strength',this.value)"><span class="val" id="v_beauty_strength">70</span></div>
+          <div class="slider-row"><span>强度</span><input type="range" min="0" max="100" value="70" id="s_beauty_strength" oninput="document.getElementById('v_beauty_strength').textContent=this.value;setParam('beauty_strength',this.value)"><span class="val" id="v_beauty_strength">70</span><button class="reset" onclick="resetSlider('beauty_strength',70)">↺</button></div>
           <div style="font-size:11px;color:#888;margin-top:4px">可选：GFPGAN v1.4 细节修复（在美颜之后叠加）</div>
         </div>
         <div class="fx-row">
@@ -5101,6 +5101,7 @@ function albPopup(i, cnt){
 }
 </script>
 </body></html>
+
 
 
 

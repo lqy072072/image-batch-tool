@@ -1413,8 +1413,16 @@ function updateGuide() {
   g.style.transform = 'rotate('+ang+'deg)';
 }
 function doExport() {
+  const A=window._alb;
+  let paths=Object.keys(A.selSet||{}).filter(Boolean);
+  if(!paths.length && A.viewerPath) paths=[A.viewerPath];
+  if(!paths.length){
+    toastMsg('请先勾选要导出的照片，或打开一张照片预览后再点开始');
+    return;
+  }
   document.getElementById('statusBox').textContent = '开始渲染...';
-  post('export');
+  window._albumExportStarted = true;
+  post('albexport|' + paths.join('\n'));
 }
 // 字符串参数（命名模板等）
 function setStr(k, v) { post('setstr|' + k + '|' + v); }
@@ -3270,17 +3278,21 @@ document.addEventListener('keydown', function(e){
 // iOS 风格显隐（fade + 轻微缩放）
 function iosShow(el, disp){
   if(!el) return;
+  if(el._iosHideTimer){ clearTimeout(el._iosHideTimer); el._iosHideTimer=null; }
+  if(el._iosInTimer){ clearTimeout(el._iosInTimer); el._iosInTimer=null; }
   el.style.display = disp || 'flex';
   el.classList.remove('ios-out');
   el.classList.add('ios-in');
-  setTimeout(function(){ el.classList.remove('ios-in'); }, 330);
+  el._iosInTimer=setTimeout(function(){ el.classList.remove('ios-in'); el._iosInTimer=null; }, 330);
 }
 function iosHide(el, cb){
   if(!el){ if(cb) cb(); return; }
+  if(el._iosHideTimer){ clearTimeout(el._iosHideTimer); el._iosHideTimer=null; }
+  if(el._iosInTimer){ clearTimeout(el._iosInTimer); el._iosInTimer=null; }
   el.classList.remove('ios-in');
   if(el.style.display==='none'){ if(cb) cb(); return; }
   el.classList.add('ios-out');
-  setTimeout(function(){ el.style.display='none'; el.classList.remove('ios-out'); if(cb) cb(); }, 230);
+  el._iosHideTimer=setTimeout(function(){ el.style.display='none'; el.classList.remove('ios-out'); el._iosHideTimer=null; if(cb) cb(); }, 230);
 }
 // 缩略图尺寸缩放（− / ＋ 与 Ctrl+滚轮）
 var ALB_CW_STEPS = [90, 110, 130, 150, 180, 200, 220];

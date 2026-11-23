@@ -2695,6 +2695,21 @@ namespace ImageBatchTool
                             catch { }
                         }
                         break;
+                    case "albexport":
+                        {
+                            var exportPaths = new List<string>();
+                            if (parts.Length > 1)
+                            {
+                                foreach (var s in parts[1].Split('\n'))
+                                {
+                                    string t = s.Trim();
+                                    if (t.Length > 0 && File.Exists(t)) exportPaths.Add(t);
+                                }
+                            }
+                            if (exportPaths.Count > 0)
+                                new Thread(() => DoExport(exportPaths)) { IsBackground = true }.Start();
+                        }
+                        break;
                     case "albinlist":
                         SendBinList();
                         break;

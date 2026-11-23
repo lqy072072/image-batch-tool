@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.16-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.17-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,9 +10,9 @@
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
-**[👉 前往 Releases 页面下载 v2.16 安装包](https://github.com/lqy072072/image-batch-tool/releases)**
+**[👉 前往 Releases 页面下载 v2.17 安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-本地产物为 `图片批处理工具_v2.16_安装包.exe`（1,219,939,450 字节，约 1.2 GB）；SHA256 与完整测试记录见 [`v2.16_回归测试报告.md`](v2.16_回归测试报告.md)。GitHub Release 资产待上传，当前可先使用本地安装包。
+本地产物为 `图片批处理工具_v2.17_安装包.exe`（1,219,943,501 字节，约 1.2 GB）；SHA256 与完整测试记录见 [`v2.17_回归测试报告.md`](v2.17_回归测试报告.md)。GitHub Release 资产待上传，当前可先使用本地安装包。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -59,6 +59,14 @@
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.17 更新
+- **修复相册底栏「开始」假导出**：独立相册原先只发送导出消息，后端用于批处理的文件列表为空，界面停在“开始渲染...”且不产出文件。现在按「已勾选照片 → 当前查看器照片 → 提示先选择」的顺序收集路径，并走新的 `albexport` 命令后台导出
+- **修复相册快速开关查看器被旧定时器误关**：`iosShow` / `iosHide` 各自维护可取消的进入 / 退出定时器，快速关闭后再打开不会在 230ms 后被上一次的 hide 定时器重新隐藏
+- **补齐美颜强度复位按钮**：图片编辑 40 个可见滑块现在全部带 ↺ 复位按钮，`beauty_strength` 点击后稳定回到 70
+- **穷举回归**：图片编辑控件套件 22/22、相册控件套件 15/15、去重独立窗口 7/7；另覆盖编辑器与相册的原生对话框、窗口最大化/最小化、右键菜单、回收站浮层、文件夹/设备分组与人物/地图入口
+- **安装与卸载真实闭环**：v2.17 安装包完成双组件静默安装、GUI 向导全流程、仅相册安装、仅图片编辑安装，以及取消卸载 / 确认卸载 / 静默卸载；安装文件、桌面快捷方式、HKCU 卸载项与卸载隔离均通过
+- 完整记录见 [`v2.17_回归测试报告.md`](v2.17_回归测试报告.md)
 
 ### v2.16 更新
 - **修复文件夹重复添加**：父目录与子目录先后加入时，不再因路径分隔符/大小写差异重复收录同一张图；拖放、文件/文件夹选择、移除、清空统一按归一化全路径去重
