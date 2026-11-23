@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.14-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.15-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -10,7 +10,9 @@
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
-**[👉 下载 image-batch-tool_v2.14_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.14/image-batch-tool_v2.14_setup.exe)**
+**[👉 前往 Releases 页面下载 v2.15 安装包](https://github.com/lqy072072/image-batch-tool/releases)**
+
+本地产物为 `图片批处理工具_v2.15_安装包.exe`（1,220,055,277 字节，约 1.2 GB）；SHA256 与完整测试记录见 [`v2.15_回归测试报告.md`](v2.15_回归测试报告.md)。GitHub Release 资产待上传，当前可先使用本地安装包。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -57,6 +59,13 @@
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.15 更新
+- **修复「色温一动就全屏绿」**：统一 GPU / CPU 原生 / C# 兜底三条色彩链路的量纲；色温、色调不再被放大 100 倍，极小步进恢复为温和偏色
+- **色彩调整全量回归**：图片编辑 GPU 34/34、CPU 34/34、C# 34/34；默认自动/AI 模式与全部滑块边界 37/37；相册 GPU 32 项、CPU 27 项通过；PNG/JPEG 导出与 3 张批量导出闭环通过
+- **打包回归修复**：恢复安装器/卸载器的 v2.14 多分辨率图标，避免 v2.15 首次重编译时图标丢失
+- **安装包清理**：构建时排除 WebView2 QA 缓存，安装包不再携带测试缓存
+- 完整记录见 [`v2.15_回归测试报告.md`](v2.15_回归测试报告.md)
 
 ### v2.14 更新
 - **相册重叠根目录去重**：父目录与子目录同时加入相册根时，同一文件只保留一条索引，修复总数虚高、分页缺项以及实况照片类型被覆盖的问题

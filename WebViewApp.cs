@@ -1771,6 +1771,18 @@ namespace ImageBatchTool
         // D3D11 immediate context 不是线程安全的：预览线程与导出线程会同时走 GPU，
         // 并发进入原生 gpu_* 函数会导致 AccessViolation（进程直接崩溃）。
         static readonly object GpuLock = new object();
+        // QA/诊断用：--force-cpu-color / IBT_FORCE_CPU_COLOR=1 跳过 GPU 色彩路径；
+        // --force-csharp-color 继续跳过 imgproc.dll，验证最底层 C# 兜底。
+        // 正常用户不会触发。
+        static readonly bool ForceCpuColor = HasForceColorArg("--force-cpu-color", "IBT_FORCE_CPU_COLOR");
+        static readonly bool ForceCSharpColor = HasForceColorArg("--force-csharp-color", "IBT_FORCE_CSHARP_COLOR");
+        static bool HasForceColorArg(string argName, string envName)
+        {
+            if (Environment.GetEnvironmentVariable(envName) == "1") return true;
+            foreach (string a in Environment.GetCommandLineArgs())
+                if (a == argName) return true;
+            return false;
+        }
         // 预览共享 cachedBase/cachedSmall，多个 QueuePreview 任务不能并行执行。
         readonly object PreviewLock = new object();
         // LUT 分析缓存（按 activeLut 缓存）
@@ -8608,9 +8620,16 @@ namespace ImageBatchTool
             float fc = (float)(par["filmContrast"] / 100.0);
             float sh = par.ContainsKey("shadows") ? (float)par["shadows"] : 0f;
             float hl = par.ContainsKey("highlights") ? (float)par["highlights"] : 0f;
-            bool doVig = vig > 0.001;
-            bool doShadow = sh != 0 || hl != 0;
-            bool doFc = fc > 0;
+            // 统一量纲：temp/tint 滑块 ±100 → 着色器 ±1；暗部/高光滑块 ±10 → ±1。
+            // 旧代码把滑块原值直接传给 GPU 着色器，temp=1 就被放大成 ±0.15（≈±38 级），
+            // 红/蓝迅速饱和，只剩绿色，表现为“调整色温后全屏变绿”。
+            float tpN = tp / 100f;
+            float tiN = ti / 100f;
+            float shN = sh / 10f;
+            float hlN = hl / 10f;
+            bool doVig = vig > 0.001f;
+            bool doShadow = Math.Abs(shN) > 0.001f || Math.Abs(hlN) > 0.001f;
+            bool doFc = fc > 0.001f;
 
             int W = bmp.Width, H = bmp.Height;
             var rect = new Rectangle(0,0,W,H);
@@ -8620,24 +8639,61 @@ namespace ImageBatchTool
             byte[] buf = new byte[bytes];
             Marshal.Copy(data.Scan0, buf, 0, bytes);
 
-            // GPU 优先：D3D11 compute shader
+            // GPU 优先：D3D11 compute shader。暗部/高光交给后面统一的 C# pass，
+            // 避免着色器与 CPU 回退使用不同的暗部公式。
             bool usedNative = false;
-            try {
-                lock (GpuLock) {
-                    usedNative = Native.gpu_color_adjust(buf, W, H, stride,
-                        sat, con, bri, sh, hl, tp, ti, vig) != 0;
-                }
-            } catch { usedNative = false; }
-            // CPU 原生 C++ 回退
-            if (!usedNative) try {
+            if (!ForceCpuColor && !ForceCSharpColor) {
+                try {
+                    lock (GpuLock) {
+                        usedNative = Native.gpu_color_adjust(buf, W, H, stride,
+                            sat, con, bri, 0f, 0f, tpN, tiN, vig) != 0;
+                    }
+                } catch { usedNative = false; }
+            }
+            // CPU 原生 C++ 回退（imgproc.dll 的色温/色调接口以 100 为中性）
+            if (!usedNative && !ForceCSharpColor) try {
                 Native.color_adjust(buf, W, H, stride,
                     sat * 100f, con * 100f, bri * 100f,
-                    100f + sh * 500f, 100f - hl * 500f,
-                    tp * 100f, ti * 100f, 100f + vig * 100f);
+                    100f, 100f,
+                    100f + tp, 100f + ti, 100f + vig * 100f);
                 usedNative = true;
             } catch { usedNative = false; }
-            // 胶片对比（C# 保留）
-            if (usedNative && doFc) {
+
+            // C# 兜底：与 GPU/原生保持同一量纲和运算顺序
+            if (!usedNative)
+            Parallel.For(0, H, y =>
+            {
+                int row = y * stride;
+                for (int x = 0; x < W; x++)
+                {
+                    int i = row + x*4;
+                    double b = buf[i], g = buf[i+1], r = buf[i+2];
+                    if (sat != 1.0) {
+                        double gray = 0.299*r+0.587*g+0.114*b;
+                        r = gray+(r-gray)*sat; g = gray+(g-gray)*sat; b = gray+(b-gray)*sat;
+                    }
+                    if (con != 1.0) {
+                        r = (r-128)*con+128; g = (g-128)*con+128; b = (b-128)*con+128;
+                    }
+                    if (bri != 1.0) { r *= bri; g *= bri; b *= bri; }
+                    if (tpN != 0) { r += tpN*38.25; b -= tpN*38.25; }
+                    if (tiN != 0) { g -= tiN*25.5; }
+                    if (doVig) {
+                        double dx = (x-W/2.0)/(W/2.0);
+                        double dy = (y-H/2.0)/(H/2.0);
+                        double dist = Math.Sqrt(dx*dx+dy*dy);
+                        double f = 1 - vig*dist*dist*0.8;
+                        if (f < 0) f = 0;
+                        r *= f; g *= f; b *= f;
+                    }
+                    buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                    buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                    buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
+                }
+            });
+
+            // 胶片对比（C# 保留，GPU/CPU 两条路径都执行一次）
+            if (doFc) {
                 Parallel.For(0, H, y => {
                     int row = y*stride;
                     for (int x = 0; x < W; x++) {
@@ -8651,47 +8707,24 @@ namespace ImageBatchTool
                 });
             }
 
-            if (!usedNative)
-            Parallel.For(0, H, y =>
-            {
-                int row = y * stride;
-                for (int x = 0; x < W; x++)
-                {
-                    int i = row + x*4;
-                    double b = buf[i], g = buf[i+1], r = buf[i+2];
-                    if (tp != 0) { r += tp*0.6; b -= tp*0.5; }
-                    if (ti != 0) { g += ti*0.4; }
-                    r *= bri; g *= bri; b *= bri;
-                    r = (r-128)*con+128; g = (g-128)*con+128; b = (b-128)*con+128;
-                    if (doFc) {
-                        double t = r/255.0; r = (t + fc*1.6*(t-0.5)*t*(1-t)*2)*255;
-                        t = g/255.0; g = (t + fc*1.6*(t-0.5)*t*(1-t)*2)*255;
-                        t = b/255.0; b = (t + fc*1.6*(t-0.5)*t*(1-t)*2)*255;
-                    }
-                    if (sat != 1.0) {
-                        double gray = 0.299*r+0.587*g+0.114*b;
-                        r = gray+(r-gray)*sat; g = gray+(g-gray)*sat; b = gray+(b-gray)*sat;
-                    }
-                    if (doShadow) {
+            // 暗部/高光：加法亮度调整，按亮度遮罩渐进，避免旧 GPU 公式把色度成倍放大。
+            if (doShadow) {
+                Parallel.For(0, H, y => {
+                    int row = y*stride;
+                    for (int x = 0; x < W; x++) {
+                        int i = row + x*4;
+                        double b = buf[i], g = buf[i+1], r = buf[i+2];
                         double lum = (0.299*r+0.587*g+0.114*b)/255.0;
                         double shMask = Math.Max(0, 1.0 - lum*2.0);
                         double hlMask = Math.Max(0, (lum-0.5)*2.0);
-                        double adj = sh*0.20*shMask*255.0 - hl*0.18*hlMask*255.0;
+                        double adj = shN*0.20*shMask*255.0 - hlN*0.18*hlMask*255.0;
                         r += adj; g += adj; b += adj;
+                        buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
+                        buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
+                        buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
                     }
-                    if (doVig) {
-                        double dx = (x-W/2.0)/(W/2.0);
-                        double dy = (y-H/2.0)/(H/2.0);
-                        double dist = Math.Sqrt(dx*dx+dy*dy);
-                        double f = 1 - vig*Math.Max(0, dist-0.5)*1.2;
-                        if (f < 0) f = 0;
-                        r *= f; g *= f; b *= f;
-                    }
-                    buf[i]   = (byte)Math.Max(0, Math.Min(255, b));
-                    buf[i+1] = (byte)Math.Max(0, Math.Min(255, g));
-                    buf[i+2] = (byte)Math.Max(0, Math.Min(255, r));
-                }
-            });
+                });
+            }
 
             Marshal.Copy(buf, 0, data.Scan0, bytes);
             bmp.UnlockBits(data);
