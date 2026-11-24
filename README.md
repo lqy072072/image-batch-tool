@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.17-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.21-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,11 +8,13 @@
 
 ## 下载安装
 
+> 当前版本 **v2.21**：相册管理、去重引擎、图片编辑专业调整、RAW 预览与 WebDAV 云备份均已落地；安装包保持完整资源，不做裁减。
+
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
-**[👉 下载 image-batch-tool_v2.17_setup.exe](https://github.com/lqy072072/image-batch-tool/releases/download/v2.17/image-batch-tool_v2.17_setup.exe)**
+**[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.17_setup.exe`，本地构建文件名为 `图片批处理工具_v2.17_安装包.exe`（1,219,943,501 字节，约 1.2 GB，两者内容一致）；SHA256 与完整测试记录见 [`v2.17_回归测试报告.md`](v2.17_回归测试报告.md)。直链失效时可在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 下载。
+GitHub Release 资产名计划为 `image-batch-tool_v2.21_setup.exe`；本地构建文件名为 `图片批处理工具_v2.21_安装包.exe`（1,220,061,368 字节，约 1.2 GB）；SHA256 `A539DFCBB61EFB4BEA36175493BC247277093C9E5815728B4B7A5673EB13CF44`，完整测试记录见 [`v2.21_回归测试报告.md`](v2.21_回归测试报告.md)。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -59,6 +61,29 @@ GitHub Release 资产名为 `image-batch-tool_v2.17_setup.exe`，本地构建文
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.21 更新
+
+- **修复私密相册「修改密码」崩溃**：`albPrivateSetDo()` 里用于保存新密码的 `p` 原为 `const`，进入修改密码分支后重新赋值会抛 `Assignment to constant variable`，界面停在原页且密码不生效；已改为 `let p`，并回归「启用 / 两次输入不一致 / 错误密码 / 查看隐藏照片 / 修改密码 / 旧密码失效 / 关闭私密相册 / 关闭后不可隐藏」全流程
+- **修复预设导出文件名版本不一致**：图片编辑导出预设的下载名在 v2.21 里仍写死为 `_v220预设.json`，已改为 `_v221预设.json`；预设 JSON 的 `version` 同步为 2.21，导入/非法文件提示保持正常
+- **回归结果**：相册全控件套件 15/15、图片编辑控件套件 22/22、去重控件 7/7，另补去重阈值 2/14、五种保留优先规则、忽略组显示/隐藏专项；私密相册专项全流程通过；安装器 UI、静默单装相册/单装图片编辑/双组件、含空格中文路径、快捷方式、注册表、卸载确认/取消均通过。完整记录见 [`v2.21_回归测试报告.md`](v2.21_回归测试报告.md)
+- **版本规则**：本轮源码有修改，版本按约定从 2.20 升到 2.21；v2.21 安装包已重新组装并验证载荷 SHA256
+
+### v2.19 更新
+
+- **相册管理全量落地**：根目录文件夹树、手动/智能相册、收藏与 1–5 星评分、☆ 收藏筛选、评分筛选、保存搜索 chips 与搜索历史；顶栏「文件夹」「相册」入口和右键菜单补全
+- **照片整理**：设置菜单/选择菜单加入导入照片与视频、批量重命名、批量移动/复制、隐藏/取消隐藏、加入相册；人物页支持重命名、合并、拆分选中、隐藏/显示隐藏人物
+- **私密相册**：独立密码入口，密码摘要优先走浏览器 `crypto.subtle`，不可用时回退后端 SHA-256；隐藏项通过统一筛选管线生效，浅色皮肤同步适配
+- **导入向导**：来源/目标目录、按拍摄日期建子目录、跳过同名同大小文件、导入后移动原文件，带进度条与统计
+- **去重增强**：支持「相册全部 / 指定文件夹」范围、相似阈值 2–14、保留优先规则（分辨率 / 文件夹层级 / 修改时间新或旧 / 收藏评分）、显示/隐藏忽略组；组头区分「完全重复 / 相似重复」并显示差异位数 N/64，忽略组持久化到 `localStorage.ibt_dup_ignored`
+- **去重引擎**：移除 6000 张桶上限，改为 4×16 位 band 候选索引；后端输出 `k:"exact"|"similar"`、最小汉明距离 `sim` 及修改时间/文件夹/评分字段，阈值 2–14 均可用
+- **图片编辑专业调整**：新增曲线（master + RGB，5 控制点单调三次插值）、HSL（6 色相带）、镜头校正（桶形/枕形、色差、暗角）、水平校正（自动裁最大内接矩形）、1–3 个径向羽化局部蒙版、智能消除（邻近纹理矩形填充 + 羽化）
+- **编辑工作流**：每张独立撤销/重做栈、版本菜单、逐张参数快照与恢复、批量参数下发、预设 JSON 导入导出、曲线画布、蒙版拖动/滚轮调半径、消除框选
+- **素材与交付**：关键词/XMP 读写、视频抽帧与按时间裁剪、WebDAV 云备份（Basic Auth、TLS 1.2、AES-256-CBC 可选加密）
+- **RAW 与格式**：图片识别新增 `.webp` 及 `.cr2/.cr3/.nef/.nrw/.arw/.srf/.sr2/.dng/.orf/.rw2/.raf/.srw/.pef/.raw`；系统解码失败时自动扫描内嵌 JPEG 预览并选最大可解码图（内嵌预览回退，不是完整去马赛克 RAW 解码）
+- **安装包策略**：保留全部模型、Python 运行时与 LUT，不做瘦身；仅替换与 v2.19 功能相关的程序/页面/脚本
+
+> 说明：当前环境没有 ffmpeg，视频裁剪使用 OpenCV mp4v，输出不含原音频；智能消除是纹理填充而非生成式模型；WebDAV 当前提供编辑器备份，暂未提供下载/解密恢复界面。
 
 ### v2.17 更新
 - **修复相册底栏「开始」假导出**：独立相册原先只发送导出消息，后端用于批处理的文件列表为空，界面停在“开始渲染...”且不产出文件。现在按「已勾选照片 → 当前查看器照片 → 提示先选择」的顺序收集路径，并走新的 `albexport` 命令后台导出
@@ -189,13 +214,19 @@ GitHub Release 资产名为 `image-batch-tool_v2.17_setup.exe`，本地构建文
 
 ## 编译
 
-```bash
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /win32icon:app.ico /out:"图片批处理工具.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs Extras.cs
+需要 .NET Framework 4.x 的 `csc.exe`。相册版和图片编辑版用不同编译符号分别输出，两个模块都要带上 `AppModule.cs`、`AlbumMeta.cs`、`Extras.cs`，并引用 `System.Web.Extensions`：
+
+```bat
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /d:ALBUM_BUILD /win32icon:相册.ico /out:"相册.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs AppModule.cs AlbumMeta.cs Extras.cs
+
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /unsafe /nologo /d:EDIT_BUILD /win32icon:相册_编辑.ico /out:"图片编辑.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:Microsoft.Web.WebView2.Core.dll /r:Microsoft.Web.WebView2.WinForms.dll WebViewApp.cs AppModule.cs AlbumMeta.cs Extras.cs
 ```
 
-卸载程序单独编译（使用独立图标）：
+安装程序与卸载程序单独编译（使用独立图标）：
 
-```bash
+```bat
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /nologo /win32icon:app.ico /out:"安装程序.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll installer\Installer.cs
+
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform:x64 /optimize+ /nologo /win32icon:卸载.ico /out:"卸载图片批处理工具.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll Uninstaller.cs
 ```
 
@@ -215,12 +246,21 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 ## 目录结构
 
 ```
-├── WebViewApp.cs          # C# 主程序
-├── ui.html                # WebView2 前端界面
+├── WebViewApp.cs          # C# 主程序（相册 / 图片编辑共用，按编译符号分模块）
+├── AppModule.cs           # 编译期模块标识与版本/图标/配置目录
+├── AlbumMeta.cs           # 相册元数据（收藏/评分/相册/隐藏/人物名）
+├── Extras.cs              # 专业调整算法（曲线/HSL/镜头/局部/消除）
+├── album.html             # 相册前端
+├── edit.html              # 图片编辑前端
+├── dedup.html             # 去重独立窗口
+├── ui.html                # 旧版单程序前端（保留）
 ├── app.ico                # 应用图标
+├── 相册.ico               # 相册模块图标
+├── 相册_编辑.ico          # 图片编辑模块图标
 ├── 卸载.ico               # 卸载程序图标
 ├── Uninstaller.cs         # 卸载程序源码
 ├── ai/
+│   ├── video_tools.py      # 视频抽帧 / 按时间裁剪
 │   ├── ai_process.py       # AI 调色脚本
 │   ├── beauty.py           # GFPGAN 美颜脚本
 │   ├── beauty_pro.py       # 美颜 + 液化主脚本（分割/关键点）

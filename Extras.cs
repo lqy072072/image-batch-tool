@@ -384,6 +384,251 @@ static class Presets
     }
 }
 
+// ---------------- 编辑器扩展：曲线 / HSL / 镜头校正 / 局部蒙版 / 智能消除 ----------------
+static class EditorFx
+{
+    static double P(Dictionary<string, double> p, string k, double d)
+    {
+        double v; return p.TryGetValue(k, out v) ? v : d;
+    }
+
+    static byte Clamp(double v)
+    {
+        return v < 0 ? (byte)0 : v > 255 ? (byte)255 : (byte)(v + 0.5);
+    }
+
+    // 单调三次插值，避免普通三次样条在控制点附近过冲
+    static void BuildCurve(Dictionary<string, double> p, string prefix, byte[] lut)
+    {
+        double[] x = { 0, 64, 128, 191, 255 };
+        double[] y = new double[5];
+        for (int i = 0; i < 5; i++) {
+            double v = P(p, prefix + i, i * 25.0);
+            y[i] = Math.Max(0, Math.Min(255, v * 2.55));
+        }
+        double[] d = new double[5];
+        for (int i = 0; i < 5; i++) {
+            double h0 = i > 0 ? x[i] - x[i - 1] : 1;
+            double h1 = i < 4 ? x[i + 1] - x[i] : 1;
+            double s0 = i > 0 ? (y[i] - y[i - 1]) / h0 : (y[1] - y[0]) / (x[1] - x[0]);
+            double s1 = i < 4 ? (y[i + 1] - y[i]) / h1 : (y[4] - y[3]) / (x[4] - x[3]);
+            d[i] = (s0 + s1) * 0.5;
+        }
+        for (int i = 0; i < 256; i++) {
+            int seg = 0;
+            while (seg < 4 && i > x[seg + 1]) seg++;
+            double t = (i - x[seg]) / (x[seg + 1] - x[seg]);
+            double t2 = t * t, t3 = t2 * t;
+            double h00 = 2 * t3 - 3 * t2 + 1;
+            double h10 = t3 - 2 * t2 + t;
+            double h01 = -2 * t3 + 3 * t2;
+            double h11 = t3 - t2;
+            double v = h00 * y[seg] + h10 * d[seg] * (x[seg + 1] - x[seg]) + h01 * y[seg + 1] + h11 * d[seg + 1] * (x[seg + 1] - x[seg]);
+            lut[i] = Clamp(v);
+        }
+    }
+
+    static double Hue2Rgb(double p, double q, double t)
+    {
+        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 1.0 / 6) return p + (q - p) * 6 * t;
+        if (t < 1.0 / 2) return q;
+        if (t < 2.0 / 3) return p + (q - p) * (2.0 / 3 - t) * 6;
+        return p;
+    }
+
+    static void RgbToHsl(double r, double g, double b, out double h, out double s, out double l)
+    {
+        r /= 255.0; g /= 255.0; b /= 255.0;
+        double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b));
+        double sum = max + min;
+        l = sum * 0.5;
+        if (max == min) { h = 0; s = 0; return; }
+        double d = max - min;
+        s = l > 0.5 ? d / (2.0 - sum) : d / sum;
+        if (max == r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6.0;
+        else if (max == g) h = ((b - r) / d + 2) / 6.0;
+        else h = ((r - g) / d + 4) / 6.0;
+    }
+
+    static void HslToRgb(double hh, double ss, double ll, out double r, out double g, out double b)
+    {
+        if (ss <= 0) { r = g = b = ll * 255.0; return; }
+        double q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+        double pp = 2 * ll - q;
+        r = Hue2Rgb(pp, q, hh + 1.0 / 3) * 255.0;
+        g = Hue2Rgb(pp, q, hh) * 255.0;
+        b = Hue2Rgb(pp, q, hh - 1.0 / 3) * 255.0;
+    }
+
+    static byte Sample(byte[] buf, int stride, int W, int H, double x, double y, int off)
+    {
+        if (x < 0) x = 0; if (y < 0) y = 0;
+        if (x > W - 1) x = W - 1; if (y > H - 1) y = H - 1;
+        int x0 = (int)x, y0 = (int)y, x1 = Math.Min(W - 1, x0 + 1), y1 = Math.Min(H - 1, y0 + 1);
+        double tx = x - x0, ty = y - y0;
+        double a = buf[y0 * stride + x0 * 4 + off], b = buf[y0 * stride + x1 * 4 + off];
+        double c = buf[y1 * stride + x0 * 4 + off], d = buf[y1 * stride + x1 * 4 + off];
+        return Clamp((a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty);
+    }
+
+    public static void Apply(Bitmap bmp, Dictionary<string, double> p)
+    {
+        bool curveOn = P(p, "curve_on", 0) > 0.5;
+        bool hslOn = P(p, "hsl_on", 0) > 0.5;
+        bool lensOn = P(p, "lens_on", 0) > 0.5;
+        bool localOn = P(p, "local_on", 0) > 0.5;
+        bool eraseOn = P(p, "erase_on", 0) > 0.5;
+        if (!curveOn && !hslOn && !lensOn && !localOn && !eraseOn) return;
+
+        int W = bmp.Width, H = bmp.Height;
+        BitmapData data = bmp.LockBits(new Rectangle(0, 0, W, H), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+        int stride = data.Stride;
+        byte[] buf = new byte[stride * H];
+        Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+
+        byte[] cr = null, cg = null, cb = null;
+        if (curveOn) {
+            byte[] m = new byte[256], r = new byte[256], g = new byte[256], b = new byte[256];
+            BuildCurve(p, "curve_m", m); BuildCurve(p, "curve_r", r); BuildCurve(p, "curve_g", g); BuildCurve(p, "curve_b", b);
+            cr = new byte[256]; cg = new byte[256]; cb = new byte[256];
+            for (int i = 0; i < 256; i++) { cr[i] = r[m[i]]; cg[i] = g[m[i]]; cb[i] = b[m[i]]; }
+        }
+
+        double[] hslS = new double[6], hslL = new double[6];
+        if (hslOn) for (int i = 0; i < 6; i++) { hslS[i] = P(p, "hsl_s" + i, 0) / 100.0; hslL[i] = P(p, "hsl_l" + i, 0) / 100.0; }
+
+        double lensK = P(p, "lens_dist", 0) / 100.0;
+        double lensCa = P(p, "lens_ca", 0) / 100.0;
+        double lensVig = P(p, "lens_vig", 0) / 100.0;
+
+        double[] lx = new double[4], ly = new double[4], lr = new double[4], lf = new double[4], le = new double[4], ls = new double[4], lt = new double[4];
+        for (int m = 1; m <= 3; m++) {
+            lx[m] = P(p, "loc" + m + "_x", 50) / 100.0;
+            ly[m] = P(p, "loc" + m + "_y", 50) / 100.0;
+            lr[m] = Math.Max(1, P(p, "loc" + m + "_r", 30)) / 100.0;
+            lf[m] = Math.Max(0, Math.Min(100, P(p, "loc" + m + "_feather", 50))) / 100.0;
+            le[m] = P(p, "loc" + m + "_exp", 0) / 100.0;
+            ls[m] = P(p, "loc" + m + "_sat", 0) / 100.0;
+            lt[m] = P(p, "loc" + m + "_temp", 0) / 100.0;
+        }
+
+        double ex = P(p, "erase_x", 10) / 100.0, ey = P(p, "erase_y", 10) / 100.0;
+        double ew = Math.Max(1, P(p, "erase_w", 15)) / 100.0, eh = Math.Max(1, P(p, "erase_h", 15)) / 100.0;
+        double ef = Math.Max(0, Math.Min(100, P(p, "erase_feather", 20))) / 100.0;
+
+        byte[] srcCopy = null;
+        if (lensOn) { srcCopy = new byte[buf.Length]; Buffer.BlockCopy(buf, 0, srcCopy, 0, buf.Length); }
+
+        double cx = W * 0.5, cy = H * 0.5;
+        double maxD = Math.Sqrt(cx * cx + cy * cy);
+        for (int y = 0; y < H; y++) {
+            int row = y * stride;
+            for (int x = 0; x < W; x++) {
+                int i = row + x * 4;
+
+                if (lensOn) {
+                    double nx = (x - cx) / cx, ny = (y - cy) / cy;
+                    double r2 = nx * nx + ny * ny;
+                    double k = 1.0 + lensK * r2 * 0.35;
+                    double sx = cx + (x - cx) * k, sy = cy + (y - cy) * k;
+                    if (lensCa > 0) {
+                        double ca = 1.0 + lensCa * r2 * 0.012;
+                        buf[i] = Sample(srcCopy, stride, W, H, cx + (sx - cx) / ca, cy + (sy - cy) / ca, 0);
+                        buf[i + 1] = Sample(srcCopy, stride, W, H, sx, sy, 1);
+                        buf[i + 2] = Sample(srcCopy, stride, W, H, cx + (sx - cx) * ca, cy + (sy - cy) * ca, 2);
+                    } else {
+                        double dx = sx, dy = sy;
+                        double nx2 = (x - cx) / cx, ny2 = (y - cy) / cy;
+                        buf[i] = Sample(srcCopy, stride, W, H, dx, dy, 0);
+                        buf[i + 1] = Sample(srcCopy, stride, W, H, dx, dy, 1);
+                        buf[i + 2] = Sample(srcCopy, stride, W, H, dx, dy, 2);
+                    }
+                    if (lensVig != 0) {
+                        double rad = Math.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / maxD;
+                        double vig = 1.0 + lensVig * (rad * rad) * 0.55;
+                        buf[i] = Clamp(buf[i] * vig); buf[i + 1] = Clamp(buf[i + 1] * vig); buf[i + 2] = Clamp(buf[i + 2] * vig);
+                    }
+                }
+
+                double r = buf[i + 2], g = buf[i + 1], b = buf[i];
+                if (cr != null) {
+                    r = cr[(int)r]; g = cg[(int)g]; b = cb[(int)b];
+                }
+
+                if (hslOn && (r != g || g != b)) {
+                    double hh, ss, ll;
+                    RgbToHsl(r, g, b, out hh, out ss, out ll);
+                    int band = (int)(hh * 6.0); if (band < 0) band = 0; if (band > 5) band = 5;
+                    ss = Math.Max(0, Math.Min(1, ss * (1.0 + hslS[band])));
+                    ll = Math.Max(0, Math.Min(1, ll + hslL[band] * 0.25));
+                    HslToRgb(hh, ss, ll, out r, out g, out b);
+                }
+
+                if (localOn) {
+                    double px = x / (double)W, py = y / (double)H;
+                    for (int m = 1; m <= 3; m++) {
+                        if (P(p, "loc" + m + "_on", 0) <= 0.5) continue;
+                        double dx = (px - lx[m]) * W, dy = (py - ly[m]) * H;
+                        double rr = lr[m] * W;
+                        double dist = Math.Sqrt(dx * dx + dy * dy) / Math.Max(rr, 1);
+                        if (dist > 1.0) continue;
+                        double feather = Math.Max(0.0001, lf[m]);
+                        double wgt = 1.0;
+                        if (dist > 1.0 - feather) wgt = Math.Max(0, (1.0 - dist) / feather);
+                        if (wgt <= 0) continue;
+                        double gain = Math.Pow(2.0, le[m] * 1.6);
+                        r = r * gain; g = g * gain; b = b * gain;
+                        double sat = 1.0 + ls[m];
+                        double lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                        r = lum + (r - lum) * sat; g = lum + (g - lum) * sat; b = lum + (b - lum) * sat;
+                        double tw = lt[m] * 22.0;
+                        r += tw * wgt; b -= tw * wgt;
+                        r = r * wgt + buf[i + 2] * (1 - wgt);
+                        g = g * wgt + buf[i + 1] * (1 - wgt);
+                        b = b * wgt + buf[i] * (1 - wgt);
+                    }
+                }
+
+                buf[i] = Clamp(b); buf[i + 1] = Clamp(g); buf[i + 2] = Clamp(r);
+            }
+        }
+
+        if (eraseOn) {
+            int rx = (int)(ex * W), ry = (int)(ey * H), rw = (int)(ew * W), rh = (int)(eh * H);
+            if (rw > 1 && rh > 1) {
+                int srcX = rx - rw; if (srcX < 1) srcX = rx + rw; if (srcX + rw > W) srcX = Math.Max(1, W - rw - 1);
+                int feather = Math.Max(1, (int)(ef * Math.Min(rw, rh) * 0.5));
+                byte[] fill = new byte[buf.Length]; Buffer.BlockCopy(buf, 0, fill, 0, buf.Length);
+                for (int yy = 0; yy < rh; yy++) {
+                    int dy = ry + yy; if (dy < 0 || dy >= H) continue;
+                    for (int xx = 0; xx < rw; xx++) {
+                        int dx = rx + xx; if (dx < 0 || dx >= W) continue;
+                        int si = dy * stride + Math.Min(W - 1, Math.Max(0, srcX + xx)) * 4;
+                        int di = dy * stride + dx * 4;
+                        fill[di] = buf[si]; fill[di + 1] = buf[si + 1]; fill[di + 2] = buf[si + 2];
+                    }
+                }
+                for (int yy = 0; yy < rh; yy++) {
+                    int dy = ry + yy; if (dy < 0 || dy >= H) continue;
+                    for (int xx = 0; xx < rw; xx++) {
+                        int dx = rx + xx; if (dx < 0 || dx >= W) continue;
+                        int edge = Math.Min(Math.Min(xx, rw - 1 - xx), Math.Min(yy, rh - 1 - yy));
+                        double wgt = edge < feather ? edge / (double)feather : 1.0;
+                        int di = dy * stride + dx * 4;
+                        buf[di] = Clamp(buf[di] * (1 - wgt) + fill[di] * wgt);
+                        buf[di + 1] = Clamp(buf[di + 1] * (1 - wgt) + fill[di + 1] * wgt);
+                        buf[di + 2] = Clamp(buf[di + 2] * (1 - wgt) + fill[di + 2] * wgt);
+                    }
+                }
+            }
+        }
+
+        Marshal.Copy(buf, 0, data.Scan0, buf.Length);
+        bmp.UnlockBits(data);
+    }
+}
+
 // ---------------- Python 脚本调用（新功能统一入口） ----------------
 static class PyTools
 {

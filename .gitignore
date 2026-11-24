@@ -33,8 +33,14 @@ crop_debug.log
 debug_*.*
 test_ai.jpg
 test_*.*
+_test_*.exe
 *.tmp
 *.bak
+
+# Runtime data written next to the app
+/album_meta.json
+/dup_threshold.txt
+/cache/
 
 # Python cache
 __pycache__/

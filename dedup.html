@@ -35,6 +35,17 @@
   .dup-cell .fd { font-size:9px; color:#8fa8c8; margin-top:2px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-all; }
   .dup-cell .mt { font-size:9px; color:#888; margin-top:2px; }
   .dup-cell label { display:flex; align-items:center; gap:4px; font-size:10px; color:#bbb; margin-top:4px; cursor:pointer; }
+  .dup-cell .mk { font-size:9px; color:#83c478; margin-top:2px; }
+  .dup-kind { font-size:9px; padding:2px 6px; border-radius:9px; border:1px solid #3d6e49; color:#93d6a2; }
+  .dup-kind.sim { border-color:#6b562c; color:#e0b35a; }
+  .dup-rule { background:#2a2a2a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:10px; padding:3px 5px; }
+  .dup-thr { width:58px; background:#2a2a2a; color:#ddd; border:1px solid #3c3c3c; border-radius:4px; font-size:10px; padding:3px 5px; }
+  .dup-ignore { font-size:9px; color:#8f959d; cursor:pointer; margin-left:8px; border:0; background:transparent; }
+  .dup-ignore:hover { color:#ddd; text-decoration:underline; }
+  body.skin-light .dup-rule, body.skin-light .dup-thr { background:#fff; color:#333; border-color:#d1d1d6; }
+  body.skin-light .dup-kind { color:#2f7d4f; border-color:#9ac9a7; }
+  body.skin-light .dup-kind.sim { color:#9a6a16; border-color:#d8b06a; }
+  body.skin-light .dup-ignore { color:#777; }
   .dup-empty { color:#777; font-size:12px; text-align:center; padding:40px; }
   .dup-light { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; display:none; align-items:center; justify-content:center; }
   .dup-light img { max-width:86vw; max-height:80vh; object-fit:contain; box-shadow:0 10px 40px rgba(0,0,0,.7); }
@@ -68,10 +79,23 @@
     <div><span class="t">照片去重</span><span class="s" id="dupHeadSub"></span></div>
   </div>
   <div class="dup-tools">
+    <button class="mini-btn" onclick="post('dupalbum')">相册全部</button>
+    <button class="mini-btn" onclick="post('dupsrc')">指定文件夹</button>
     <button class="mini-btn" onclick="post('dupscan')">开始扫描</button>
     <button class="mini-btn" id="dupPauseBtn" onclick="post('duppause')">暂停</button>
+    <span style="font-size:10px;color:#9a9a9a">相似阈值</span>
+    <input class="dup-thr" id="dupThr" type="number" min="2" max="14" step="1" value="6" title="越小越严格；2 最严格，14 最宽松" onchange="dupSetThreshold(this.value)">
+    <span style="font-size:10px;color:#9a9a9a">保留优先</span>
+    <select class="dup-rule" id="dupRule" onchange="dupSetRule(this.value)">
+      <option value="resolution">分辨率/体积</option>
+      <option value="folder">文件夹层级</option>
+      <option value="newest">修改时间较新</option>
+      <option value="oldest">修改时间较早</option>
+      <option value="rating">收藏/评分</option>
+    </select>
+    <button class="mini-btn" id="dupIgnoreBtn" onclick="dupToggleIgnored()">显示忽略</button>
     <span style="font-size:11px;color:#9a9a9a" id="dupDstPath">移入：软件回收站</span>
-    <div class="dup-bar" style="flex:0 0 120px;margin:0"><div id="dupBarFill"></div></div>
+    <div class="dup-bar" style="flex:0 0 100px;margin:0"><div id="dupBarFill"></div></div>
     <span style="font-size:11px;color:#9a9a9a;min-width:52px" id="dupStat">未扫描</span>
     <span style="flex:1"></span>
     <button class="mini-btn" onclick="dupSelectAll(true)">全选多余</button>
@@ -100,7 +124,88 @@ function dupFolder(p){
   const i=Math.max(p.lastIndexOf("\\"),p.lastIndexOf("/"));
   return i>=0?p.slice(0,i):"";
 }
-window._dupGroups=[]; window._dupSel={}; window._dupUserSel={}; window._dupThumbs={}; window._dupMoveList=[]; window._dupSrc=""; window._dupDst=""; window._dupRunning=false; window._dupPaused=false; window._dupScanning=false; window._dupScanDone=false;
+window._dupGroups=[]; window._dupSel={}; window._dupUserSel={}; window._dupThumbs={}; window._dupMoveList=[]; window._dupSrc=""; window._dupDst=""; window._dupRunning=false; window._dupPaused=false; window._dupScanning=false; window._dupScanDone=false; window._dupRule="resolution"; window._dupShowIgnored=false;
+try{ window._dupRule=localStorage.getItem("ibt_dup_rule")||"resolution"; }catch(e){}
+try{ window._dupIgnored=JSON.parse(localStorage.getItem("ibt_dup_ignored")||"{}"); }catch(e){ window._dupIgnored={}; }
+function dupSaveIgnored(){ try{ localStorage.setItem("ibt_dup_ignored",JSON.stringify(window._dupIgnored||{})); }catch(e){} }
+function dupGroupKey(g){ return (g.items||[]).map(function(x){return String(x.p||"").toLowerCase();}).sort().join("\n"); }
+function dupSortGroup(g){
+  const arr=g.items||[];
+  const rule=window._dupRule||"resolution";
+  arr.sort(function(a,b){
+    if(rule==="folder"){
+      const da=String(a.fp||"").length, db=String(b.fp||"").length;
+      if(da!==db) return da-db;
+      return String(a.fp||"").localeCompare(String(b.fp||""));
+    }
+    if(rule==="newest") return (b.mt||0)-(a.mt||0);
+    if(rule==="oldest") return (a.mt||0)-(b.mt||0);
+    if(rule==="rating"){
+      const ra=Number(a.m&&a.m.r)||0, rb=Number(b.m&&b.m.r)||0;
+      if(ra!==rb) return rb-ra;
+      const fa=(a.m&&a.m.f)?1:0, fb=(b.m&&b.m.f)?1:0;
+      if(fa!==fb) return fb-fa;
+    }
+    const pa=(a.w||0)*(a.h||0), pb=(b.w||0)*(b.h||0);
+    if(pa!==pb) return pb-pa;
+    if((b.s||0)!==(a.s||0)) return (b.s||0)-(a.s||0);
+    return (b.mt||0)-(a.mt||0);
+  });
+}
+function dupApplyRule(resetSel){
+  const gs=window._dupGroups||[];
+  for(let i=0;i<gs.length;i++) dupSortGroup(gs[i]);
+  if(resetSel){
+    window._dupSel={}; window._dupUserSel={};
+    for(let i=0;i<gs.length;i++){
+      const g=gs[i].items||[];
+      if(window._dupIgnored[dupGroupKey(gs[i])] && !window._dupShowIgnored) continue;
+      for(let k=1;k<g.length;k++){ window._dupSel[g[k].p]=true; window._dupUserSel[g[k].p]=true; }
+    }
+    dupUpdateSelInfo();
+  }
+}
+function dupSetRule(v){
+  window._dupRule=v||"resolution";
+  try{ localStorage.setItem("ibt_dup_rule",window._dupRule); }catch(e){}
+  window._dupUserSel={};
+  dupApplyRule(true); renderDupGroups();
+}
+function dupSetThreshold(v){
+  let n=Math.max(2,Math.min(14,parseInt(v,10)||6));
+  const el=document.getElementById("dupThr"); if(el) el.value=n;
+  post("dupset|"+n);
+  window._dupPendingThreshold=n;
+  if(window._dupRunning){
+    window._dupNeedRescan=true;
+    const st=document.getElementById("dupStat");
+    if(st) st.textContent="阈值已改为 "+n+"，本轮扫描结束后请重新扫描";
+    return;
+  }
+  dupClearForThreshold(n);
+}
+function dupClearForThreshold(n){
+  window._dupNeedRescan=false;
+  window._dupGroups=[]; window._dupSel={}; window._dupUserSel={}; window._dupMoveList=[];
+  window._dupScanDone=false; window._dupScanning=false;
+  const st=document.getElementById("dupStat"); if(st) st.textContent="阈值已改为 "+n+"，请重新扫描";
+  const sub=document.getElementById("dupHeadSub"); if(sub) sub.textContent="阈值已改变 · 未扫描";
+  const bar=document.getElementById("dupBarFill"); if(bar) bar.style.width="0%";
+  renderDupGroups();
+}
+function dupToggleIgnored(){ window._dupShowIgnored=!window._dupShowIgnored; const b=document.getElementById("dupIgnoreBtn"); if(b) b.textContent=window._dupShowIgnored?'隐藏忽略':'显示忽略'; renderDupGroups(); }
+function dupIgnoreGroup(gi){
+  const g=(window._dupGroups||[])[gi]; if(!g) return;
+  const k=dupGroupKey(g);
+  if(window._dupIgnored[k]) delete window._dupIgnored[k]; else window._dupIgnored[k]=1;
+  if(window._dupIgnored[k]){
+    // 被忽略的组不可见，必须同时从选择集合移除，防止「移入回收站」误操作隐藏文件。
+    const items=g.items||[];
+    for(let i=0;i<items.length;i++){ delete window._dupSel[items[i].p]; delete window._dupUserSel[items[i].p]; }
+    const ml=window._dupMoveList||[]; window._dupMoveList=ml.filter(function(p){ return items.every(function(it){ return it.p!==p; }); });
+  }
+  dupSaveIgnored(); if(!window._dupIgnored[k]) { dupApplyRule(false); } renderDupGroups();
+}
 let _dupLightG=null,_dupLightK=0;
 function dupUpdateSelInfo(){
   const n=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];}).length;
@@ -109,14 +214,17 @@ function dupUpdateSelInfo(){
 function renderDupGroups(){
   const list=document.getElementById("dupList"); if(!list) return;
   const gs=window._dupGroups||[];
-  if(!gs.length){ list.innerHTML='<div class="dup-empty">'+(window._dupScanning?'扫描中，发现重复后会立即显示…':'没有发现重复照片')+'</div>'; dupUpdateSelInfo(); return; }
+  const visible=gs.filter(function(g){ return !(window._dupIgnored&&window._dupIgnored[dupGroupKey(g)]&&!window._dupShowIgnored); });
+  if(!visible.length){ list.innerHTML='<div class="dup-empty">'+(window._dupScanning?'扫描中，发现重复后会立即显示…':'没有发现重复照片')+'</div>'; dupUpdateSelInfo(); return; }
   const keepScroll=list.scrollTop||0;
   let html="";
-  for(let gi=0;gi<gs.length;gi++){
-    const g=gs[gi].items||[];
-    html+='<div class="dup-group"><div class="dup-group-h"><span>第 '+(gi+1)+' 组 · '+g.length+' 张</span><span>组内按分辨率排序，第 1 张默认保留</span></div><div class="dup-cells">';
-    for(let k=0;k<g.length;k++){
-      const it=g[k]; const ck=!!window._dupSel[it.p];
+  for(let vi=0;vi<visible.length;vi++){
+    const g=visible[vi], gi=gs.indexOf(g), g2=g.items||[];
+    const kind=g.k==="exact"?"完全重复":"相似重复";
+    const extra=g.k==="exact"?"哈希一致":"差异 "+Number(g.sim||0)+"/64";
+    html+='<div class="dup-group"><div class="dup-group-h"><span>第 '+(vi+1)+' 组 · '+g2.length+' 张 <span class="dup-kind'+(g.k==="exact"?"":" sim")+'">'+kind+' · '+extra+'</span></span><span>第 1 张按当前规则保留<button class="dup-ignore" onclick="dupIgnoreGroup('+gi+')">'+(window._dupIgnored&&window._dupIgnored[dupGroupKey(g)]?'取消忽略':'忽略本组')+'</button></span></div><div class="dup-cells">';
+    for(let k=0;k<g2.length;k++){
+      const it=g2[k]; const ck=!!window._dupSel[it.p];
       const dt=window._dupThumbs&&window._dupThumbs[it.p];
       const folder=dupFolder(it.p);
       html+='<div class="dup-cell '+(k===0?"keep":"")+(ck?" out":"")+'" data-dp="'+escHtml(it.p)+'">'
@@ -124,6 +232,7 @@ function renderDupGroups(){
         + '<div class="nm" title="'+escHtml(it.n)+'">'+escHtml(it.n)+'</div>'
         + '<div class="fd" title="所在文件夹：'+escHtml(folder||it.p)+'">'+escHtml(folder||"—")+'</div>'
         + '<div class="mt">'+(it.w?it.w+"×"+it.h:"—")+' · '+fmtSize(it.s)+'</div>'
+        + '<div class="mk">'+(it.m&&it.m.f?'★ 收藏 · ':'')+(it.m&&it.m.r?'评分 '+it.m.r+'/5':'')+'</div>'
         + ((it.c&&it.c.length)?'<div class="mt" style="color:#7fb0ff" title="'+escHtml(it.c.join(", "))+'">实况：'+escHtml(it.c.join(", "))+'</div>':'')
         + (it.d===0?'<div class="mt" style="color:#c9a227">无解码器 · 仅精确判重</div>':'')
         + '<label><input type="checkbox" data-p="'+escHtml(it.p)+'" '+(ck?"checked":"")+' onchange="dupToggle(this)"> 移入回收站'+(k===0?'（保留项）':'')+'</label>'
@@ -175,12 +284,16 @@ function dupToggle(cb){
 }
 function dupSelectAll(v){
   const gs=window._dupGroups||[];
-  window._dupSel={};
-  window._dupUserSel=window._dupUserSel||{};
-  for(let gi=0;gi<gs.length;gi++){ const g=gs[gi].items||[]; for(let k=0;k<g.length;k++){
-    const on=!!(v&&k>0);
-    window._dupSel[g[k].p]=on; window._dupUserSel[g[k].p]=on;
-  } }
+  window._dupSel={}; window._dupUserSel={};
+  for(let gi=0;gi<gs.length;gi++){
+    if(window._dupIgnored&&window._dupIgnored[dupGroupKey(gs[gi])]&&!window._dupShowIgnored) continue;
+    dupSortGroup(gs[gi]);
+    const g=gs[gi].items||[];
+    for(let k=0;k<g.length;k++){
+      const on=!!(v&&k>0);
+      window._dupSel[g[k].p]=on; window._dupUserSel[g[k].p]=on;
+    }
+  }
   renderDupGroups();
 }
 function dupOpenLightByPath(path){
@@ -191,7 +304,17 @@ function dupOpenLightByPath(path){
   }
 }
 function dupMoveSelected(){
-  const sel=Object.keys(window._dupSel||{}).filter(function(k){return window._dupSel[k];});
+  const sel=Object.keys(window._dupSel||{}).filter(function(k){
+    if(!window._dupSel[k]) return false;
+    // 只允许移动当前可见组里的勾选项，忽略组/已隐藏组一律跳过。
+    const gs=window._dupGroups||[];
+    for(let gi=0;gi<gs.length;gi++){
+      const g=gs[gi];
+      if(window._dupIgnored&&window._dupIgnored[dupGroupKey(g)]&&!window._dupShowIgnored) continue;
+      if((g.items||[]).some(function(it){ return it.p===k; })) return true;
+    }
+    return false;
+  });
   if(!sel.length){ alert("还没有勾选要移出的照片。"); return; }
   const dst=window._dupDst||"软件回收站";
   if(!confirm("将把 "+sel.length+" 张照片移入回收站：\n"+dst+"\n\n不会直接删除文件，可在相册「回收站」里还原或彻底删除。")) return;
@@ -228,7 +351,11 @@ function handleMessage(m){
     if(dp) dp.textContent='移入：'+(m.dst?'回收站 '+m.dst:'软件回收站');
     if(sp) sp.title=m.src||''; if(dp) dp.title=m.dst||'';
     window._dupRunning=!!m.running; window._dupPaused=!!m.paused; window._dupScanning=!!m.running;
+    if(window._dupNeedRescan && !window._dupRunning){
+      dupClearForThreshold(window._dupPendingThreshold||6);
+    }
     const pb=document.getElementById('dupPauseBtn'); if(pb) pb.textContent=m.paused?'继续':'暂停';
+    const th=document.getElementById('dupThr'); if(th && m.threshold) th.value=m.threshold;
   } else if(m.type==='dup'){
     const bar=document.getElementById('dupBarFill'), st=document.getElementById('dupStat');
     if(m.phase==='pause'){ window._dupScanning=true; if(st) st.textContent='已暂停 '+m.done+' / '+m.total; }
@@ -246,6 +373,7 @@ function handleMessage(m){
     }
   } else if(m.type==='dupgroups'){
     window._dupGroups=m.items||[];
+    for(let gi=0;gi<window._dupGroups.length;gi++) dupSortGroup(window._dupGroups[gi]);
     window._dupUserSel=window._dupUserSel||{};
     const valid={};
     for(let gi=0;gi<window._dupGroups.length;gi++){
