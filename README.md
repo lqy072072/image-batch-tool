@@ -1,20 +1,20 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.21-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.22-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）、美颜与液化，并内置本地相册管理。v2.12 起，相册与图片编辑拆分为两个可独立安装、独立运行的程序。
+批量图片处理工具，支持 LUT 滤镜套用、AI 调色、AI 人像增强（GFPGAN）、美颜与液化、HDR/堆栈合成、AI 修复与专业输出，并内置本地相册管理。v2.12 起，相册与图片编辑拆分为两个可独立安装、独立运行的程序。
 
 ## 下载安装
 
-> 当前版本 **v2.21**：相册管理、去重引擎、图片编辑专业调整、RAW 预览与 WebDAV 云备份均已落地；安装包保持完整资源，不做裁减。
+> 当前版本 **v2.22**：内置全部在用 AI 模型，新增 HDR/焦点/降噪堆栈、AI 修复中心、专业输出与相册智能策展；安装包仍保持完整资源，不做裁减。
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名计划为 `image-batch-tool_v2.21_setup.exe`；本地构建文件名为 `图片批处理工具_v2.21_安装包.exe`（1,220,061,368 字节，约 1.2 GB）；SHA256 `A539DFCBB61EFB4BEA36175493BC247277093C9E5815728B4B7A5673EB13CF44`，完整测试记录见 [`v2.21_回归测试报告.md`](v2.21_回归测试报告.md)。
+GitHub Release 资产名计划为 `image-batch-tool_v2.22_setup.exe`；本地构建文件名为 `图片批处理工具_v2.22_安装包.exe`（1,220,089,060 字节，约 1.2 GB）；SHA256 `1648A66B1DDF5630A312978A48FB2221C02631FE837EE1B08DC67E60215EFB84`，完整测试记录见 [`v2.22_回归测试报告.md`](v2.22_回归测试报告.md)。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -30,6 +30,9 @@ GitHub Release 资产名计划为 `image-batch-tool_v2.21_setup.exe`；本地构
   - 「AI 细节增强」为独立开关：GFPGAN 只提供干净低频，原图高频按边缘门控回注，避免传统 AI 修复常见的「越修越糊」
   - 瘦脸/瘦鼻带刚性保护区（眼/眉/唇），液化不会连带挤压五官
 - **胶片质感**：颗粒（按亮度加权）、漏光、halation 三件套，可叠加现有 LUT 风格
+- **HDR / 堆栈**：自动识别曝光包围、焦点堆栈、降噪连拍素材，给出分组与置信度；HDR 用 OpenCV AlignMTB + Mertens 融合，焦点堆栈按拉普拉斯清晰度加权，降噪堆栈用对齐后中位数；支持逐组/一键批量合成
+- **AI 修复中心**：GFPGAN 人脸修复、2×/4× 超分、降噪、污点/划痕修复、自动影调，批量处理后可预览
+- **专业输出中心**：联系表、批量水印、ICC 软打样预览
 - **景深虚化**：Depth Anything V2 Small 出深度图 + 人像解析保护主体，背景虚化、人脸始终清晰
 - **全图放大/超分**：分块重叠融合的 2× 放大；`ai/models/` 放入任意 Real-ESRGAN 系列 `.onnx` 即自动切换为 AI 超分，否则走 Lanczos+细节回注兜底
 - **证件照**：YuNet 定位 + 人脸解析抠像，白/蓝/红/浅灰换底，一寸/二寸/护照尺寸，可选六寸相纸排版
@@ -61,6 +64,24 @@ GitHub Release 资产名计划为 `image-batch-tool_v2.21_setup.exe`；本地构
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.22 更新
+
+![HDR/堆栈自动分组](docs/screenshots/v222_pro_hdr.png)
+
+![相册主界面与策展入口](docs/screenshots/v222_album_home.png)
+
+- **AI 模型全部内置**：相册端 CLIP 图像/文本编码、YOLOX、OCR、SFace、YuNet，编辑器端 GFPGAN v1.4、Swin2SR x4、Depth Anything V2、BiSeNet、FaceMesh、YuNet 均随安装包释放；首次启动无需联网下载模型
+- **HDR / 堆栈**：新增 `ai/hdr_stack.py`。HDR 使用 OpenCV `AlignMTB + Mertens` 曝光融合，按中位曝光做去鬼影与自动影调；焦点堆栈按拉普拉斯清晰度加权融合；降噪堆栈使用对齐后的中位数。自动分析会按 EXIF 曝光/拍摄时间、目录、尺寸、文件名族、亮度差、清晰度差把素材分成 HDR / 焦点 / 降噪组，并给出置信度；支持逐组「合成此组」与多组「一键合成」批量输出
+- **AI 修复中心**：新增 `ai/restore_center.py`，复用包内 GFPGAN、YuNet、Swin2SR，提供人脸细节修复、人脸修复强度、2×/4× 超分、降噪、污点/划痕修复、自动影调；批量处理后可预览结果
+- **专业输出中心**：新增 `ai/output_center.py`，支持联系表（含中文标题/文件名标签）、批量水印（九宫格位置/透明度/字号/白边/可选 logo）、ICC 软打样（先转目标 ICC 再回 sRGB 生成预览，不改原片），并可打开输出目录
+- **编辑器 UI 重排**：顶部工具栏新增「⚙ 专业」入口；右侧栏改为「调整 / 人像 / 专业」三个 sticky 分组，按原有 `.right-section` 标题归类，分组只控制显隐，不移除 section、不修改事件处理器
+- **相册智能策展**：顶栏「相册」旁新增「策展」，可按全部照片、收藏精选、评分 ≥4 星、当前搜索、年度/月份创建智能相册；规则写入 `meta.albums` 的 `smart/rule`，复用现有过滤与保存逻辑，不移动/删除照片
+- **相册导入自动化**：设置菜单「照片管理」新增「导入自动化…」，集中展示既有 `FileSystemWatcher` 的监视根目录、索引条目、AI 标签数量/状态，并提供添加监视文件夹、重新扫描、打开设置
+- **功能归位**：修图类功能（AI 修复、人脸/超分/降噪/划痕、专业输出）归入图片编辑端；相册策展、智能相册、导入自动化归入相册端；两端入口互不混用
+- **HDR 技术说明**：本轮调研了 AHDRNet、DeepHDR 等 AI HDR 方案，但其 PyTorch 权重与当前便携 onnxruntime 包不兼容，因此采用成熟的 OpenCV 融合 + 启发式自动分组；界面标为「HDR 使用 OpenCV AlignMTB + Mertens 曝光融合」，没有把启发式分组宣称为 AI 模型
+- **安装器**：安装向导补齐图标；卸载器支持 `/S`（等价 `--quiet`）静默卸载，静默模式仍执行目录、桌面快捷方式、HKCU 卸载项与配置清理
+- **回归结果**：干净全量 stage 与最终安装包均完成编辑器加载/撤销重做/批量导出、HDR 自动分组与批量合成、AI 修复 6/6、联系表/水印/ICC、相册 AI 索引 9/9 + 语义搜索、智能策展、导入监听、双组件/单组件安装、含空格路径、静默卸载与 GUI 向导验收。完整记录见 [`v2.22_回归测试报告.md`](v2.22_回归测试报告.md)
 
 ### v2.21 更新
 

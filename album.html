@@ -1193,7 +1193,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="alb-quick">
       <button class="mini-btn alb-dedup-btn" id="albDedupBtn" onclick="albDedup()" title="查找重复照片，确认后移入回收站"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 4h8a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 9h6M9 12h6M9 15h4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>去重</button>
       <button class="mini-btn" onclick="albToggleTree()" title="显示/隐藏文件夹树">文件夹</button>
-      <button class="mini-btn" onclick="albAlbumsOpen()" title="自定义相册与智能相册">相册</button>
+      <button class="mini-btn" onclick="albAlbumsOpen()" title="自定义相册与智能相册">相册</button><button class="mini-btn" onclick="albCurateOpen('curate')" title="智能策展、自动相册与导入自动化">策展</button>
       <button class="mini-btn alb-search-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.2 15.2l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>搜索</button>
     </div>
     <div class="alb-right">
@@ -1239,7 +1239,7 @@ window.addEventListener('mouseup', function(e) {
             <div class="alb-opt-item" onclick="albBatchRenameOpen()">批量重命名…</div>
             <div class="alb-opt-item" onclick="albBatchMoveOpen()">批量移动 / 复制…</div>
             <div class="alb-opt-item" onclick="albPrivateOpen()">私密相册…</div>
-            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div>
+            <div class="alb-opt-item" onclick="albOptDo('bin')">回收站</div><div class="alb-opt-item" onclick="albCurateOpen('auto')">导入自动化…</div>
           </div>
           <div class="alb-opt-sec">
             <div class="alb-opt-sec-title">缓存</div>
@@ -5663,6 +5663,124 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
+<style>
+#albCurateOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:24px}
+#albCurateOverlay.on{display:flex}
+.alb-curate-box{width:min(620px,94vw);max-height:86vh;overflow:auto;background:#24262b;color:#e6e9ee;border:1px solid #41454e;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+body.skin-light .alb-curate-box{background:#fff;color:#25282e;border-color:#d8dbe2}
+.alb-curate-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #393d46;background:#1e2024}
+body.skin-light .alb-curate-head{background:#f5f6f9;border-color:#e2e4e9}
+.alb-curate-head b{font-size:15px}
+.alb-curate-head .sub{font-size:11px;color:#8e96a2;flex:1}
+.alb-curate-x{border:0;background:transparent;color:#9aa0aa;font-size:22px;cursor:pointer}
+.alb-curate-tabs{display:flex;gap:4px;padding:10px 16px 0;background:#202226;border-bottom:1px solid #393d46}
+body.skin-light .alb-curate-tabs{background:#fafbfc;border-color:#e2e4e9}
+.alb-curate-tab{padding:7px 13px;font-size:12px;color:#9299a5;cursor:pointer;border-radius:6px 6px 0 0}
+.alb-curate-tab.on{background:#2d3138;color:#fff}
+body.skin-light .alb-curate-tab.on{background:#fff;color:#12558f;border:1px solid #d8dbe2;border-bottom:0}
+.alb-curate-body{padding:16px 18px 20px}
+.alb-curate-pane{display:none}
+.alb-curate-pane.on{display:block}
+.alb-curate-note{font-size:11px;line-height:1.7;color:#929aa6;background:#1c1e22;border:1px solid #343840;border-radius:7px;padding:9px 11px;margin-bottom:12px}
+body.skin-light .alb-curate-note{background:#f7f8fa;border-color:#e2e4e9;color:#5c6470}
+.alb-curate-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:520px){.alb-curate-grid{grid-template-columns:1fr}}
+.alb-curate-card{border:1px solid #3c414a;border-radius:8px;padding:10px;background:#202226;cursor:pointer}
+body.skin-light .alb-curate-card{background:#fafbfc;border-color:#dde0e6}
+.alb-curate-card:hover{border-color:#4e7da8}
+.alb-curate-card b{display:block;font-size:12px;margin-bottom:3px}
+.alb-curate-card span{font-size:10px;color:#8e96a2}
+.alb-curate-stat{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#a9b1bd;margin:8px 0}
+.alb-curate-stat b{color:#e6e9ee}
+body.skin-light .alb-curate-stat b{color:#222}
+.alb-curate-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}
+.alb-curate-row input{background:#17191d;color:#e6e8ed;border:1px solid #464b55;border-radius:5px;padding:5px 7px;font-size:11px;outline:none;width:90px}
+body.skin-light .alb-curate-row input{background:#fff;color:#222;border-color:#cfd3db}
+.alb-curate-btn{border:1px solid #4b6c93;background:#2f5f8f;color:#fff;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer}
+.alb-curate-btn.alt{background:#3a3e46;border-color:#555b66}
+.alb-curate-btn.green{background:#2d7a50;border-color:#3e9a66}
+.alb-curate-status{font-size:11px;color:#b6bec9;background:#1a1c20;border:1px solid #30343b;border-radius:6px;padding:8px 10px;white-space:pre-wrap;margin-top:10px}
+</style>
+<div id="albCurateOverlay" onclick="if(event.target===this)albCurateClose()">
+  <div class="alb-curate-box" role="dialog" aria-modal="true" aria-label="智能策展与自动化">
+    <div class="alb-curate-head"><b>智能策展</b><span class="sub">相册整理 · 自动相册 · 导入自动化</span><button class="alb-curate-x" onclick="albCurateClose()">×</button></div>
+    <div class="alb-curate-tabs">
+      <div class="alb-curate-tab on" data-tab="curate" onclick="albCurateTab('curate')">一键策展</div>
+      <div class="alb-curate-tab" data-tab="auto" onclick="albCurateTab('auto')">导入自动化</div>
+    </div>
+    <div class="alb-curate-body">
+      <div class="alb-curate-pane on" data-pane="curate">
+        <div class="alb-curate-note">策展只创建「智能相册」规则，不改动照片、不移动文件。规则跟随当前索引实时更新；可随时在相册侧栏删除。</div>
+        <div class="alb-curate-stat" id="albCurateStat"></div>
+        <div class="alb-curate-grid">
+          <div class="alb-curate-card" onclick="albCurateMake('all')"><b>全部照片</b><span>按时间归档，适合作为总览入口</span></div>
+          <div class="alb-curate-card" onclick="albCurateMake('fav')"><b>收藏精选</b><span>只收录已点收藏的照片</span></div>
+          <div class="alb-curate-card" onclick="albCurateMake('rating')"><b>评分 ≥ 4 星</b><span>只收录高评分照片</span></div>
+          <div class="alb-curate-card" onclick="albCurateMake('search')"><b>当前搜索</b><span>把当前搜索词固化成智能相册</span></div>
+        </div>
+        <div class="alb-curate-row"><label style="font-size:11px;color:#a9b1bd">年度/月份</label><input id="albCurateYear" type="text" placeholder="2026 或 2026-11"><button class="alb-curate-btn alt" onclick="albCurateMake('year')">生成时间相册</button></div>
+        <div class="alb-curate-status" id="albCurateStatus">选择一种策展方式，或直接输入年份。创建后会自动跳到该智能相册。</div>
+      </div>
+      <div class="alb-curate-pane" data-pane="auto">
+        <div class="alb-curate-note">相册根目录已启用文件系统监视：新增、删除、改名、覆盖都会自动刷新索引和缩略图；AI 标签索引在后台按当前性能档位运行。</div>
+        <div class="alb-curate-stat" id="albAutoStat"></div>
+        <div class="alb-curate-row">
+          <button class="alb-curate-btn green" onclick="post('albaddpath')">添加监视文件夹</button>
+          <button class="alb-curate-btn alt" onclick="albScanCtl('restart')">重新扫描全部</button>
+          <button class="alb-curate-btn alt" onclick="albCurateClose(); albToggleOpt ? albToggleOpt() : 0">打开设置</button>
+        </div>
+        <div class="alb-curate-status" id="albAutoStatus">监视在相册路径添加后自动生效，无需额外开关。移除路径即停止监视。</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  function A(){ return window._alb; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function stat(id,html){ var e=document.getElementById(id); if(e)e.innerHTML=html; }
+  window.albCurateOpen=function(tab){
+    var ov=document.getElementById('albCurateOverlay'); if(!ov)return;
+    ov.classList.add('on'); albCurateTab(tab||'curate'); albCurateSync();
+  };
+  window.albCurateClose=function(){ var ov=document.getElementById('albCurateOverlay'); if(ov)ov.classList.remove('on'); };
+  window.albCurateTab=function(tab){
+    document.querySelectorAll('.alb-curate-tab').forEach(function(t){t.classList.toggle('on',t.getAttribute('data-tab')===tab);});
+    document.querySelectorAll('.alb-curate-pane').forEach(function(p){p.classList.toggle('on',p.getAttribute('data-pane')===tab);});
+    if(tab==='auto') albCurateSync();
+  };
+  window.albCurateSync=function(){
+    var a=A(); if(!a)return;
+    stat('albCurateStat','<span>照片 <b>'+((a.items||[]).length)+'</b></span><span>搜索 <b>'+esc(a.search||'无')+'</b></span><span>收藏筛选 <b>'+(a.favOnly?'开':'关')+'</b></span><span>最低评分 <b>'+(a.minRating||0)+'</b></span><span>智能相册 <b>'+((a.meta.albums||[]).filter(function(x){return x.smart;}).length)+'</b></span>');
+    stat('albAutoStat','<span>监视根目录 <b>'+((a.roots||[]).length)+'</b></span><span>索引条目 <b>'+((a.items||[]).length)+'</b></span><span>AI 标签 <b>'+(a.aiCount||0)+'</b></span><span>AI 状态 <b>'+(a.aiIndexing?'运行中':(a.aiReady?'就绪':'未开始'))+'</b></span>');
+  };
+  window.albCurateMake=function(kind){
+    var a=A(); if(!a){ return; }
+    var rule={q:'',fav:false,minRating:0}, name='';
+    if(kind==='all'){ name='全部照片 · 智能'; }
+    else if(kind==='fav'){ rule.fav=true; name='收藏精选 · 智能'; if(!(a.items||[]).some(function(i){return !!albItemM(i).f;})){ toastMsg('还没有收藏照片，先点☆收藏'); return; } }
+    else if(kind==='rating'){ rule.minRating=4; name='评分 ≥4 星 · 智能'; }
+    else if(kind==='search'){ rule.q=a.search||''; if(!rule.q){ toastMsg('当前没有搜索词'); return; } name='搜索：'+rule.q; }
+    else if(kind==='year'){
+      var y=(document.getElementById('albCurateYear').value||'').trim();
+      if(!y){ toastMsg('请输入年份，例如 2026'); return; }
+      rule.q=y; name='时间：'+y;
+    }
+    var albums=a.meta.albums=a.meta.albums||[];
+    var dup=albums.filter(function(x){return x.name===name;})[0];
+    if(dup){ a.albumId=dup.id; albRenderAlbums(); albRender(); toastMsg('已存在同名智能相册，已直接打开'); albCurateClose(); return; }
+    var id='s'+Date.now();
+    albums.push({id:id,name:name,smart:true,rule:rule});
+    albums.sort(function(x,y){return (y.smart?1:0)-(x.smart?1:0);});
+    a.albumId=id; albSaveState(); albRenderAlbums(); albRender();
+    var st=document.getElementById('albCurateStatus'); if(st)st.textContent='已创建「'+name+'」，共 '+((a.items||[]).length)+' 张索引，规则会实时更新。';
+    toastMsg('已创建智能相册：'+name);
+    albCurateSync();
+    albCurateClose();
+  };
+})();
+</script>
+
 </body></html>
 
 

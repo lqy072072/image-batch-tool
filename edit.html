@@ -858,7 +858,7 @@ window.addEventListener('mouseup', function(e) {
       <div class="tool-btn" onclick="edxUndo()" title="撤销 (Ctrl+Z)">↶</div>
       <div class="tool-btn" onclick="edxRedo()" title="重做 (Ctrl+Shift+Z)">↷</div>
       <div class="tool-btn" onclick="edxVersionMenu()" title="非破坏性编辑版本栈">版本 <span class="edx-badge" id="edxVerBadge">0</span></div>
-      <span class="zoom-label" id="edxPerBadge" title="当前照片的参数独立保存">逐张</span>
+      <span class="zoom-label" id="edxPerBadge" title="当前照片的参数独立保存">逐张</span><div class="tool-btn" onclick="proOpen('hdr')" title="HDR/堆栈、AI 修复、专业输出">⚙ 专业</div>
       <div class="spacer"></div>
       <div class="tool-btn" onclick="zoomOut()">−</div>
       <span class="zoom-label" id="zoomLabel">适应</span>
@@ -894,6 +894,22 @@ window.addEventListener('mouseup', function(e) {
   </div>
 
   <div class="right">
+    <div class="edx-groups" id="edxGroups">
+      <span class="edx-gr on" data-g="basic" onclick="edxGroup('basic')">调整</span>
+      <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
+      <span class="edx-gr" data-g="create" onclick="edxGroup('create')">专业</span>
+    </div>
+    <div class="right-section" id="proHubSection">
+      <div class="section-header"><span>专业工作台 <span style="font-weight:400;color:#888;font-size:10px">HDR / AI 修复 / 输出</span></span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div class="pro-hub-grid">
+          <button class="pro-btn" onclick="proOpen('hdr')">HDR / 堆栈</button>
+          <button class="pro-btn" onclick="proOpen('restore')">AI 修复中心</button>
+          <button class="pro-btn" onclick="proOpen('output')">专业输出中心</button>
+        </div>
+        <div class="edx-tip" style="margin-top:8px">独立窗口，不改动现有调整参数；输出写到 _pro/_restored 文件夹。</div>
+      </div>
+    </div>
     <div class="right-section" id="histSection">
       <div class="section-header"><span>直方图</span><span class="arrow">▼</span></div>
       <div class="section-body">
@@ -2329,6 +2345,9 @@ if (window.chrome && chrome.webview) {
   } catch(e) {}
   chrome.webview.addEventListener('message', e => {
     const m = e.data;
+    if (m.type === 'protool') { try{ if(window.proOnResult) proOnResult(m); }catch(e){ try{ post('log|proOnResult '+e); }catch(_){} } return; }
+    if (m.type === 'pro_preview') { try{ if(window.proOnPreview) proOnPreview(m); }catch(e){} return; }
+    if (m.type === 'iccpath') { var pi=document.getElementById('proProofIcc'); if(pi)pi.value=m.path||''; return; }
     if (m.type === 'setparam') {
       const sl = document.getElementById('s_'+m.key);
       const vl = document.getElementById('v_'+m.key);
@@ -2340,6 +2359,7 @@ if (window.chrome && chrome.webview) {
       const fl = document.getElementById('fileList');
       if (window._selIdx !== m.selected) { _origSrc = null; }
       window._files = m.files || [];
+      try{ if(window.proSync) proSync(); }catch(e){}
       window._selIdx = (typeof m.selected === 'number') ? m.selected : -1;
       renderFileList();
       document.getElementById('fileCount').textContent = (m.files?m.files.length:0)+' 项';
@@ -5686,6 +5706,323 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
+<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(/美颜|证件照|移轴/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } }
+try{ edxGroup('basic'); }catch(e){}
+</script>
+<style>
+#proOverlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;padding:24px}
+#proOverlay.on{display:flex}
+.pro-box{width:min(980px,94vw);max-height:90vh;background:#232529;color:#e7e9ee;border:1px solid #42464f;border-radius:12px;box-shadow:0 22px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+body.skin-light .pro-box{background:#fff;color:#25282e;border-color:#d7d9df}
+.pro-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid #383c44;background:#1d1f23}
+body.skin-light .pro-head{background:#f4f5f8;border-color:#e3e4e8}
+.pro-head b{font-size:15px}
+.pro-head .sub{font-size:11px;color:#8f96a3;flex:1}
+.pro-close{border:0;background:transparent;color:#9aa0aa;font-size:22px;line-height:1;cursor:pointer}
+.pro-tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid #383c44;background:#202226}
+body.skin-light .pro-tabs{background:#fafafa;border-color:#e3e4e8}
+.pro-tab{padding:8px 14px;border-radius:7px 7px 0 0;font-size:12px;color:#9aa0aa;cursor:pointer;border:1px solid transparent;border-bottom:0}
+.pro-tab.on{background:#2c3037;color:#fff;border-color:#42464f}
+body.skin-light .pro-tab.on{background:#fff;color:#12558f;border-color:#d7d9df}
+.pro-body{padding:16px 18px 20px;overflow:auto;min-height:280px}
+.pro-pane{display:none}
+.pro-pane.on{display:block}
+.pro-note{font-size:11px;line-height:1.7;color:#9299a5;margin:0 0 12px;padding:9px 11px;background:#1c1e22;border:1px solid #343840;border-radius:7px}
+body.skin-light .pro-note{background:#f6f7fa;border-color:#e1e3e9;color:#5b6270}
+.pro-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.pro-row label{font-size:11px;color:#b9bec8;white-space:nowrap}
+body.skin-light .pro-row label{color:#3b414c}
+.pro-row input[type=text],.pro-row select{background:#17191d;color:#e6e8ed;border:1px solid #464b55;border-radius:5px;padding:5px 7px;font-size:11px;outline:none}
+body.skin-light .pro-row input[type=text],body.skin-light .pro-row select{background:#fff;color:#222;border-color:#cfd3db}
+.pro-row input[type=text]{min-width:130px;flex:1}
+.pro-btn{border:1px solid #4b6c93;background:#2f5f8f;color:#fff;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer}
+.pro-btn:hover{background:#386f9f}
+.pro-btn.alt{background:#3b3f47;border-color:#555b66}
+.pro-btn.alt:hover{background:#464b54}
+.pro-btn.green{background:#2d7a50;border-color:#3e9a66}
+.pro-btn:disabled{opacity:.45;cursor:not-allowed}
+.pro-list{margin:10px 0;max-height:160px;overflow:auto;border:1px solid #383c44;border-radius:7px}
+.pro-file{display:flex;align-items:center;gap:8px;padding:6px 9px;font-size:11px;border-bottom:1px solid #30343b;color:#c7ccd5}
+.pro-file:last-child{border-bottom:0}
+.pro-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.pro-file .tp{font-size:10px;color:#7e8795}
+.pro-group{border:1px solid #3b414a;border-radius:8px;padding:9px 11px;margin:8px 0;background:#1e2025}
+body.skin-light .pro-group{background:#fafbfc;border-color:#dde0e6}
+.pro-group-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
+.pro-group .tag{font-size:10px;font-weight:400;color:#8fc7ff;background:#243d55;border-radius:4px;padding:2px 6px}
+body.skin-light .pro-group .tag{background:#e8f2ff;color:#0b62b8}
+.pro-group .paths{font-size:10px;color:#88919e;margin-top:4px;line-height:1.5}
+.pro-status{font-size:11px;line-height:1.6;color:#b9c0cc;margin:10px 0;padding:8px 10px;border-radius:6px;background:#1a1c20;border:1px solid #30343b;white-space:pre-wrap}
+.pro-status.err{color:#ffb4b4;border-color:#6b3333;background:#2a1d1d}
+.pro-preview{display:none;margin-top:12px;text-align:center}
+.pro-preview img{max-width:100%;max-height:360px;border-radius:8px;border:1px solid #414650;background:#111}
+.pro-sec{border:1px solid #3a3f48;border-radius:8px;padding:10px 12px;margin:10px 0;background:#202226}
+body.skin-light .pro-sec{background:#fafbfc;border-color:#dde0e6}
+.pro-sec h4{margin:0 0 6px;font-size:12px;color:#e2e6ed}
+body.skin-light .pro-sec h4{color:#222}
+.pro-split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:760px){.pro-split{grid-template-columns:1fr}}
+.pro-kv{font-size:11px;color:#9299a5}
+.pro-badge{display:inline-block;font-size:10px;color:#9dd4a8;border:1px solid #376a47;background:#1d3525;border-radius:4px;padding:1px 5px;margin-left:6px}
+.edx-groups{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #33363d;background:#202226;position:sticky;top:0;z-index:5}
+.edx-gr{font-size:11px;padding:5px 11px;border-radius:5px;color:#9299a5;cursor:pointer;border:1px solid transparent}
+.edx-gr.on{color:#fff;background:#365a7c;border-color:#4d769c}
+body.skin-light .edx-groups{background:#f4f5f8;border-color:#e2e4e9}
+body.skin-light .edx-gr{color:#555}
+body.skin-light .edx-gr.on{color:#12558f;background:#dceaf8;border-color:#b8d3ec}
+.pro-hub-grid{display:grid;grid-template-columns:1fr;gap:6px}
+.pro-hub-grid .pro-btn{padding:9px}
+</style>
+<div id="proOverlay" onclick="if(event.target===this)proClose()">
+  <div class="pro-box" role="dialog" aria-modal="true" aria-label="专业工具">
+    <div class="pro-head"><b>专业工具</b><span class="sub">HDR / 堆栈 · AI 修复 · 专业输出</span><button class="pro-close" onclick="proClose()" title="关闭">×</button></div>
+    <div class="pro-tabs">
+      <div class="pro-tab on" data-tab="hdr" onclick="proTab('hdr')">HDR / 堆栈</div>
+      <div class="pro-tab" data-tab="restore" onclick="proTab('restore')">AI 修复中心</div>
+      <div class="pro-tab" data-tab="output" onclick="proTab('output')">专业输出中心</div>
+    </div>
+    <div class="pro-body">
+      <div class="pro-pane on" data-pane="hdr">
+        <div class="pro-note">自动识别曝光包围 / 焦点堆栈 / 降噪连拍：依据 EXIF 曝光、拍摄时间、文件名族、尺寸和清晰度差分组。<br>HDR 使用 OpenCV <b>AlignMTB + Mertens 曝光融合</b>，并做中位曝光去鬼影与自动影调；焦点堆栈使用拉普拉斯清晰度权重；降噪堆栈使用对齐后中位数。</div>
+        <div class="pro-row">
+          <button class="pro-btn" onclick="proHdrAnalyze()">① 自动分析分组</button>
+          <label>模式</label>
+          <select id="proHdrMode"><option value="auto">自动</option><option value="hdr">HDR 曝光融合</option><option value="focus">焦点堆栈</option><option value="noise">降噪堆栈</option></select>
+          <label><input type="checkbox" id="proHdrAlign" checked> 对齐</label>
+          <label><input type="checkbox" id="proHdrDeghost" checked> 去鬼影</label>
+          <label><input type="checkbox" id="proHdrTone" checked> 自动影调</label>
+        </div>
+        <div class="pro-row">
+          <label>输出</label>
+          <input id="proHdrOut" type="text" placeholder="留空自动输出到 _pro 文件夹">
+          <label>长边上限</label>
+          <select id="proHdrMax"><option value="0">原尺寸</option><option value="6000">6000</option><option value="4000">4000</option><option value="2400">2400</option></select>
+        </div>
+        <div id="proHdrGroups" class="pro-kv">尚未分析。当前文件列表：<span id="proHdrCount">0</span> 张。</div>
+        <div id="proHdrStatus" class="pro-status">等待操作。建议先点「自动分析分组」；也可以直接按当前模式合成全部文件。</div>
+        <div class="pro-row"><button class="pro-btn green" onclick="proHdrMerge()">② 一键合成</button><button class="pro-btn alt" onclick="proHdrOpenOut()">打开输出文件夹</button></div>
+        <div id="proHdrPreview" class="pro-preview"><img id="proHdrImg" alt="合成结果预览"></div>
+      </div>
+
+      <div class="pro-pane" data-pane="restore">
+        <div class="pro-note">复用安装包内模型：GFPGAN v1.4（人脸细节修复）、YuNet（人脸检测）、Swin2SR x4（超分）、OpenCV 降噪与污点修复。<br>划痕/污点修复只处理小面积高对比缺陷，不会把眼睛、文字和树枝一起抹掉。超分在 CPU 上较慢，建议先小批量试。</div>
+        <div class="pro-row">
+          <label><input type="checkbox" id="proAirFace" checked> GFPGAN 人脸修复</label>
+          <label>强度</label><select id="proAirStrength"><option value="0.5">轻 50%</option><option value="0.7" selected>标准 70%</option><option value="0.85">强 85%</option></select>
+          <label>超分</label><select id="proAirSr"><option value="0">不超分</option><option value="2">2×</option><option value="4">4×</option></select>
+          <label>降噪</label><select id="proAirDenoise"><option value="0">关</option><option value="8">轻</option><option value="16" selected>中</option><option value="28">强</option></select>
+          <label>划痕</label><select id="proAirScratch"><option value="0">关</option><option value="10" selected>轻</option><option value="20">中</option><option value="32">强</option></select>
+          <label><input type="checkbox" id="proAirTone" checked> 自动影调</label>
+        </div>
+        <div class="pro-row"><label>输出目录</label><input id="proAirOut" type="text" placeholder="留空自动输出到 _restored"><button class="pro-btn green" onclick="proAirStart()">开始批量修复</button></div>
+        <div id="proAirStatus" class="pro-status">等待操作。当前文件列表：<span id="proAirCount">0</span> 张。</div>
+        <div id="proAirResults" class="pro-kv"></div>
+        <div id="proAirPreview" class="pro-preview"><img id="proAirImg" alt="修复结果预览"></div>
+      </div>
+
+      <div class="pro-pane" data-pane="output">
+        <div class="pro-note">输出中心把「选片 / 交付 / 打样」分开：联系表用于快速审片，水印用于交付，ICC 软打样用于打印前预览。所有输出写到独立文件夹，不覆盖原片。</div>
+        <div class="pro-split">
+          <div class="pro-sec">
+            <h4>联系表 Contact Sheet</h4>
+            <div class="pro-row"><label>列数</label><select id="proCtCols"><option>3</option><option selected>4</option><option>5</option><option>6</option></select><label>缩略图</label><select id="proCtCell"><option>260</option><option selected>360</option><option>480</option></select></div>
+            <div class="pro-row"><label>标题</label><input id="proCtTitle" type="text" value="联系表"></div>
+            <div class="pro-row"><label>输出</label><input id="proCtOut" type="text" placeholder="留空输出到 _pro\contact.jpg"></div>
+            <button class="pro-btn" onclick="proContact()">生成联系表</button>
+          </div>
+          <div class="pro-sec">
+            <h4>批量水印 / 边框</h4>
+            <div class="pro-row"><label>文字</label><input id="proWmText" type="text" value="图片批处理工具"></div>
+            <div class="pro-row"><label>位置</label><select id="proWmPos"><option value="bottom-right" selected>右下</option><option value="bottom-left">左下</option><option value="bottom-center">底部居中</option><option value="top-right">右上</option><option value="center">居中</option></select><label>透明度</label><select id="proWmOpacity"><option value="0.4">40%</option><option value="0.55" selected>55%</option><option value="0.7">70%</option><option value="0.85">85%</option></select></div>
+            <div class="pro-row"><label>白边</label><select id="proWmBorder"><option value="0">无</option><option value="10">10 px</option><option value="20">20 px</option><option value="40">40 px</option></select><button class="pro-btn" onclick="proWatermark()">批量加水印</button></div>
+          </div>
+        </div>
+        <div class="pro-sec">
+          <h4>ICC 软打样 / 打印预览</h4>
+          <div class="pro-row"><label>当前照片</label><span id="proProofPath" class="pro-kv">未选择</span><button class="pro-btn alt" onclick="proProofPick()">用当前照片</button></div>
+          <div class="pro-row"><label>ICC</label><input id="proProofIcc" type="text" value="C:\Windows\System32\spool\drivers\color\sRGB Color Space Profile.icm"><button class="pro-btn alt" onclick="post('chooseicc')">选择 ICC</button></div>
+          <div class="pro-row"><label>意图</label><select id="proProofIntent"><option value="relative" selected>相对比色</option><option value="perceptual">感知</option></select><label>输出</label><input id="proProofOut" type="text" placeholder="留空输出到 _pro\proof.jpg"><button class="pro-btn" onclick="proProof()">生成软打样</button></div>
+        </div>
+        <div id="proOutStatus" class="pro-status">等待操作。</div>
+        <div id="proOutPreview" class="pro-preview"><img id="proOutImg" alt="输出预览"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  function files(){ return (window._files||[]).map(function(f){ return (typeof f==='object') ? (f.path||f.name) : f; }).filter(Boolean); }
+  function dirOf(p){ p=String(p||'').replace(/\\/g,'/'); var i=p.lastIndexOf('/'); return i>=0?p.slice(0,i):''; }
+  function defOut(name){ var fs=files(); var d=fs.length?dirOf(fs[0]):''; return (d?d+'\\':'')+name; }
+  function status(id,msg,err){ var e=document.getElementById(id); if(!e)return; e.textContent=msg||''; e.classList.toggle('err',!!err); }
+  function preview(id,url){ var box=document.getElementById(id); if(!box)return; var img=box.querySelector('img'); if(img)img.src=url||''; box.style.display=url?'block':'none'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function baseName(p){ p=String(p||'').replace(/\\/g,'/'); return p.slice(p.lastIndexOf('/')+1); }
+  function toast(s){ try{ toastMsg(s); }catch(e){ console.log(s); } }
+
+  window.proOpen=function(tab){
+    var ov=document.getElementById('proOverlay'); if(!ov)return;
+    ov.classList.add('on'); proTab(tab||'hdr'); proSync();
+  };
+  window.proClose=function(){ var ov=document.getElementById('proOverlay'); if(ov)ov.classList.remove('on'); };
+  window.proTab=function(tab){
+    document.querySelectorAll('.pro-tab').forEach(function(t){ t.classList.toggle('on',t.getAttribute('data-tab')===tab); });
+    document.querySelectorAll('.pro-pane').forEach(function(p){ p.classList.toggle('on',p.getAttribute('data-pane')===tab); });
+  };
+  window.proSync=function(){
+    var fs=files();
+    var hc=document.getElementById('proHdrCount'); if(hc)hc.textContent=fs.length;
+    var ac=document.getElementById('proAirCount'); if(ac)ac.textContent=fs.length;
+    var pp=document.getElementById('proProofPath'); if(pp)pp.textContent=fs[window._selIdx]||'未选择';
+    if(!document.getElementById('proHdrOut').value) document.getElementById('proHdrOut').placeholder='留空输出到 '+(fs.length?dirOf(fs[0])+'\\_pro':'当前目录\\_pro');
+  };
+  window.proHdrAnalyze=function(){
+    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
+    var obj={paths:fs};
+    window._proGroup=null;
+    var o=document.getElementById('proHdrOut'); if(o)o.value='';
+    status('proHdrStatus','正在分析 EXIF、文件名族、亮度与清晰度差…');
+    document.getElementById('proHdrGroups').innerHTML='<span class="pro-kv">分析中…</span>';
+    post('hdr_analyze|'+edxB64(JSON.stringify(obj)));
+  };
+  function hdrIn(){
+    var mode=document.getElementById('proHdrMode').value;
+    return {paths:files(),mode:mode,align:document.getElementById('proHdrAlign').checked,
+      deghost:document.getElementById('proHdrDeghost').checked,deghost_strength:0.35,
+      auto_tone:document.getElementById('proHdrTone').checked,
+      max_dim:parseInt(document.getElementById('proHdrMax').value||'0',10)||0};
+  }
+  window.proHdrMerge=function(){
+    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
+    if(window._proGroup){ fs=window._proGroup.paths.slice(); }
+    else if((window._proHdrGroups||[]).length>1){
+      window._proQueue=(window._proHdrGroups||[]).map(function(g){ return {paths:g.paths.slice(),mode:g.suggested_mode,kind:g.kind}; });
+      window._proQueueTotal=window._proQueue.length;
+      window._proBatch=[];
+      proHdrMergeNext();
+      return;
+    }
+    var obj=hdrIn(); obj.paths=fs;
+    var out=document.getElementById('proHdrOut').value.trim();
+    if(!out) out=defOut('_pro\\hdr_'+obj.mode+'_'+Date.now()+'.jpg');
+    obj.output=out;
+    status('proHdrStatus','正在对齐并合成 '+fs.length+' 张（'+obj.mode+'）…大图可能需要几十秒');
+    post('hdr_merge|'+edxB64(JSON.stringify(obj)));
+  };
+  window.proHdrMergeNext=function(){
+    var q=window._proQueue||[]; if(!q.length)return;
+    var job=q.shift(); var total=window._proQueueTotal||1;
+    var dir=dirOf(files()[0]||job.paths[0]||'');
+    var out=(dir?dir+'\\':'')+'_pro\\hdr_'+job.mode+'_'+(total-q.length)+'_'+Date.now()+'.jpg';
+    var obj=hdrIn(); obj.paths=job.paths; obj.mode=job.mode||'auto'; obj.output=out;
+    status('proHdrStatus','正在合成第 '+(total-q.length)+'/'+total+' 组（'+(job.kind||job.mode)+'）…');
+    post('hdr_merge|'+edxB64(JSON.stringify(obj)));
+  };
+  window.proHdrUseGroup=function(i){
+    var g=(window._proHdrGroups||[])[i]; if(!g)return;
+    window._proGroup=g;
+    var o=document.getElementById('proHdrOut'); if(o)o.value='';
+    status('proHdrStatus','已选中分组：'+g.kind+' · '+g.paths.length+' 张。点「一键合成」只合成这一组。');
+  };
+  window.proHdrOpenOut=function(){
+    var p=document.getElementById('proHdrOut').value.trim();
+    if(p) post('proopenfolder|'+edxB64(dirOf(p)));
+    else { var fs=files(); if(fs.length) post('proopenfolder|'+edxB64(dirOf(fs[0])+'\\_pro')); }
+  };
+  window.proAirStart=function(){
+    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
+    var obj={paths:fs,outdir:document.getElementById('proAirOut').value.trim(),
+      face:document.getElementById('proAirFace').checked?1:0,
+      face_strength:parseFloat(document.getElementById('proAirStrength').value),
+      superres:parseInt(document.getElementById('proAirSr').value,10)||0,
+      denoise:parseInt(document.getElementById('proAirDenoise').value,10)||0,
+      scratch:parseInt(document.getElementById('proAirScratch').value,10)||0,
+      auto_tone:document.getElementById('proAirTone').checked?1:0,quality:95,suffix:'_restored'};
+    if(!obj.outdir) obj.outdir=defOut('_restored');
+    status('proAirStatus','AI 修复中：'+fs.length+' 张。'+(obj.superres?'超分在 CPU 上较慢，请耐心等待。':''));
+    document.getElementById('proAirResults').innerHTML='<span class="pro-kv">处理中…</span>';
+    post('airestore|'+edxB64(JSON.stringify(obj)));
+  };
+  window.proContact=function(){
+    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
+    var out=document.getElementById('proCtOut').value.trim()||defOut('_pro\\contact_'+Date.now()+'.jpg');
+    var obj={paths:fs,output:out,cols:parseInt(document.getElementById('proCtCols').value,10)||4,
+      cell:parseInt(document.getElementById('proCtCell').value,10)||360,title:document.getElementById('proCtTitle').value||'联系表',labels:true};
+    status('proOutStatus','正在生成联系表…');
+    post('procontact|'+edxB64(JSON.stringify(obj)));
+  };
+  window.proWatermark=function(){
+    var fs=files(); if(!fs.length){ toast('请先添加照片'); return; }
+    var obj={paths:fs,text:document.getElementById('proWmText').value||'图片批处理工具',
+      position:document.getElementById('proWmPos').value,opacity:parseFloat(document.getElementById('proWmOpacity').value),
+      border:parseInt(document.getElementById('proWmBorder').value,10)||0,border_color:'#ffffff',outdir:defOut('_pro\\watermark'),quality:95};
+    status('proOutStatus','正在批量加水印…');
+    post('prowatermark|'+edxB64(JSON.stringify(obj)));
+  };
+  window.proProofPick=function(){
+    var fs=files(); var idx=window._selIdx;
+    if(idx<0||idx>=fs.length){ if(fs.length){ idx=0; } else { toast('请先添加照片'); return; } }
+    window._proProofPath=fs[idx];
+    document.getElementById('proProofPath').textContent=fs[idx];
+  };
+  window.proProof=function(){
+    var p=window._proProofPath||files()[window._selIdx]||files()[0];
+    if(!p){ toast('请先选择照片'); return; }
+    var out=document.getElementById('proProofOut').value.trim()||defOut('_pro\\proof_'+Date.now()+'.jpg');
+    var obj={path:p,output:out,icc:document.getElementById('proProofIcc').value.trim(),intent:document.getElementById('proProofIntent').value};
+    status('proOutStatus','正在做 ICC 软打样…');
+    post('proof|'+edxB64(JSON.stringify(obj)));
+  };
+  window.proOnResult=function(m){
+    var d=m.data||{}; var ok=!!d.ok;
+    if(m.kind==='hdr_analyze'){
+      window._proHdrGroups=d.groups||[];
+      var box=document.getElementById('proHdrGroups');
+      if(!window._proHdrGroups.length){ box.innerHTML='<span class="pro-kv">没有识别到可分组的多张照片；可直接选模式合成。</span>'; status('proHdrStatus',d.error||'分析完成，但没有分组',!ok); return; }
+      var html=''; window._proHdrGroups.forEach(function(g,i){
+        html+='<div class="pro-group"><div class="pro-group-h">组 '+(i+1)+' · '+esc(g.kind||'?')+'<span class="tag">'+esc(g.suggested_mode||'')+' · 置信度 '+esc(g.confidence||'')+'</span><button class="pro-btn alt" style="margin-left:auto;padding:3px 8px" onclick="proHdrUseGroup('+i+')">合成此组</button></div><div class="paths">'+g.paths.map(function(p){ return esc(baseName(p)); }).join(' · ')+'</div><div class="paths">'+esc(g.reason||'')+'</div></div>';
+      });
+      box.innerHTML=html;
+      status('proHdrStatus','分析完成：'+window._proHdrGroups.length+' 组。可点「合成此组」，或直接「一键合成」全部。',!ok);
+    } else if(m.kind==='hdr_merge'){
+      if(ok&&d.output){
+        if(window._proQueue){
+          (window._proBatch=window._proBatch||[]).push(d.output);
+          if(window._proQueue.length){
+            status('proHdrStatus','第 '+window._proBatch.length+'/'+(window._proQueueTotal||'?')+' 组完成：'+d.output+'，继续下一组…');
+            proHdrMergeNext();
+            return;
+          }
+          status('proHdrStatus','全部合成完成：'+window._proBatch.length+' 组。最后输出：'+d.output);
+          window._proQueue=null;
+          preview('proHdrPreview',null); post('propreview|'+edxB64(d.output));
+          document.getElementById('proHdrOut').value=d.output;
+          return;
+        }
+        status('proHdrStatus','合成完成（'+esc(d.mode||'auto')+'）：'+d.output+'（'+d.w+'×'+d.h+'）'); preview('proHdrPreview',null); post('propreview|'+edxB64(d.output)); document.getElementById('proHdrOut').value=d.output;
+      }
+      else { window._proQueue=null; status('proHdrStatus','合成失败：'+(d.error||'未知错误'),true); }
+    } else if(m.kind==='airestore'){
+      if(ok){
+        var rr=d.results||[]; var oks=rr.filter(function(x){return x.ok;});
+        status('proAirStatus','修复完成：'+d.ok_count+'/'+d.count+' 张。输出：'+d.outdir);
+        document.getElementById('proAirResults').innerHTML=rr.map(function(x){ return '<div class="pro-file"><span class="nm">'+esc(x.input?baseName(x.input):'')+'</span><span class="tp">'+esc((x.actions||[]).join(' / ')||'失败')+'</span>'+(x.ok?'<span class="pro-badge">OK</span>':'<span class="tp" style="color:#ff9d9d">'+esc(x.error||'失败')+'</span>')+'</div>'; }).join('');
+        if(oks.length) post('propreview|'+edxB64(oks[0].output));
+      } else status('proAirStatus','修复失败：'+(d.error||'未知错误'),true);
+    } else if(m.kind==='procontact'||m.kind==='prowatermark'||m.kind==='proof'){
+      if(ok&&d.output){ status('proOutStatus','输出完成：'+d.output); post('propreview|'+edxB64(d.output)); }
+      else status('proOutStatus','输出失败：'+(d.error||'未知错误'),true);
+    }
+  };
+  window.proOnPreview=function(m){
+    if(!m.data)return;
+    var map={hdr:'proHdrPreview',restore:'proAirPreview',output:'proOutPreview'};
+    var active=document.querySelector('.pro-pane.on'); var pane=active?active.getAttribute('data-pane'):'hdr';
+    preview(map[pane]||'proHdrPreview',m.data);
+  };
+})();
+</script>
+
 </body></html>
 
 

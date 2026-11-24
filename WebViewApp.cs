@@ -2058,6 +2058,63 @@ namespace ImageBatchTool
             } catch {}
         }
 
+        // ---- v2.22 专业工具：HDR/堆栈、AI 修复、专业输出 ----
+        void ProRun(string kind, string script, string command, string json, int timeoutMs)
+        {
+            new Thread(() =>
+            {
+                string inFile = Path.Combine(Path.GetTempPath(), "ibt_pro_" + Guid.NewGuid().ToString("N") + ".json");
+                string outFile = Path.Combine(Path.GetTempPath(), "ibt_pro_" + Guid.NewGuid().ToString("N") + ".out.json");
+                try
+                {
+                    File.WriteAllText(inFile, json ?? "{}", new UTF8Encoding(false));
+                    string err;
+                    string stdout = PyTools.Run(BeautyRunner.PythonExe, script,
+                        new string[] { command, inFile, outFile }, timeoutMs, out err);
+                    if (!File.Exists(outFile))
+                        throw new Exception("工具没有返回结果：" + (err ?? stdout ?? ""));
+                    string result = File.ReadAllText(outFile, Encoding.UTF8);
+                    Send("{\"type\":\"protool\",\"kind\":" + JsonStr(kind) + ",\"data\":" + result + "}");
+                    Log("专业工具 " + kind + " 完成: " + (stdout ?? "").Trim());
+                }
+                catch (Exception ex)
+                {
+                    string e = (ex.Message ?? "").Replace("\\", "\\\\").Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
+                    Send("{\"type\":\"protool\",\"kind\":" + JsonStr(kind) + ",\"data\":{\"ok\":false,\"error\":" + JsonStr(e) + "}}");
+                    Log("专业工具 " + kind + " 失败: " + e);
+                }
+                finally
+                {
+                    try { if (File.Exists(inFile)) File.Delete(inFile); } catch { }
+                    try { if (File.Exists(outFile)) File.Delete(outFile); } catch { }
+                }
+            }) { IsBackground = true }.Start();
+        }
+
+        void ProPreview(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) { Send("{\"type\":\"toast\",\"msg\":\"预览文件不存在\"}"); return; }
+                using (var bmp = new Bitmap(path))
+                {
+                    int w = bmp.Width, h = bmp.Height, max = 1000;
+                    if (w > max) { h = h * max / w; w = max; }
+                    using (var small = new Bitmap(w, h))
+                    {
+                        using (var g = Graphics.FromImage(small))
+                            g.DrawImage(bmp, 0, 0, w, h);
+                        using (var ms = new MemoryStream())
+                        {
+                            small.Save(ms, ImageFormat.Jpeg);
+                            Send("{\"type\":\"pro_preview\",\"path\":" + JsonStr(path) + ",\"data\":\"data:image/jpeg;base64," + Convert.ToBase64String(ms.ToArray()) + "\"}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"预览失败：" + ex.Message.Replace("\"", "'") + "\"}"); }
+        }
+
         void OpenDupWindow()
         {
             try
@@ -2809,6 +2866,18 @@ namespace ImageBatchTool
                             catch { }
                         }
                         break;
+                    case "proopenfolder":
+                        if (parts.Length > 1)
+                        {
+                            try
+                            {
+                                string f = B64Text(parts[1]);
+                                if (File.Exists(f)) System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + f + "\"");
+                                else if (Directory.Exists(f)) System.Diagnostics.Process.Start("explorer.exe", "\"" + f + "\"");
+                            }
+                            catch { }
+                        }
+                        break;
                     case "albexport":
                         {
                             var exportPaths = new List<string>();
@@ -2913,6 +2982,39 @@ namespace ImageBatchTool
                         break;
                     case "videotrim":
                         if (parts.Length > 1) VideoTool("trim", B64Text(parts[1]));
+                        break;
+                    case "hdr_analyze":
+                        if (parts.Length > 1) ProRun("hdr_analyze", "hdr_stack.py", "analyze", B64Text(parts[1]), 180000);
+                        break;
+                    case "hdr_merge":
+                        if (parts.Length > 1) ProRun("hdr_merge", "hdr_stack.py", "merge", B64Text(parts[1]), 900000);
+                        break;
+                    case "airestore":
+                        if (parts.Length > 1) ProRun("airestore", "restore_center.py", "batch", B64Text(parts[1]), 2400000);
+                        break;
+                    case "procontact":
+                        if (parts.Length > 1) ProRun("procontact", "output_center.py", "contact", B64Text(parts[1]), 300000);
+                        break;
+                    case "prowatermark":
+                        if (parts.Length > 1) ProRun("prowatermark", "output_center.py", "watermark", B64Text(parts[1]), 600000);
+                        break;
+                    case "proof":
+                        if (parts.Length > 1) ProRun("proof", "output_center.py", "proof", B64Text(parts[1]), 300000);
+                        break;
+                    case "propreview":
+                        if (parts.Length > 1) ProPreview(B64Text(parts[1]));
+                        break;
+                    case "chooseicc": {
+                            string picked = null;
+                            InvokeUi(() => {
+                                using (var d = new OpenFileDialog()) {
+                                    d.Filter = "ICC 配置文件|*.icc;*.icm|所有文件|*.*";
+                                    d.Title = "选择打印机/显示器 ICC 配置文件";
+                                    if (d.ShowDialog() == DialogResult.OK) picked = d.FileName;
+                                }
+                            });
+                            if (picked != null) Send("{\"type\":\"iccpath\",\"path\":" + JsonStr(picked) + "}");
+                        }
                         break;
                     case "webdav":
                         if (parts.Length > 1) WebDavBackup(B64Text(parts[1]));

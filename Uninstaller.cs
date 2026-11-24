@@ -25,7 +25,7 @@ static class Uninstaller
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--cleanup" && i + 1 < args.Length) cleanupRoot = args[++i];
-            else if (args[i] == "--quiet") quiet = true;
+            else if (args[i] == "--quiet" || string.Equals(args[i], "/S", StringComparison.OrdinalIgnoreCase)) quiet = true;
             else if (args[i] == "--test") testMode = true;
             else if (args[i] == "--waitpid" && i + 1 < args.Length) int.TryParse(args[++i], out waitPid);
         }
@@ -45,15 +45,19 @@ static class Uninstaller
             return;
         }
 
-        DialogResult answer = MessageBox.Show(
-            "确定卸载「" + AppTitle + "」？\n\n" +
-            "将删除当前安装目录中的程序、缓存和缩略图，以及已安装组件的配置与快捷方式。\n\n" +
-            "如果相册和图片编辑安装在同一目录，两者会一起卸载；\n" +
-            "如果只安装了其中一个，不会碰另一个独立安装目录。\n\n" +
-            "你的照片文件、视频文件以及相册回收站中尚未彻底删除的文件不会被删除。\n\n" +
-            "卸载前请先保存正在进行的编辑。",
-            "卸载 " + AppTitle,
-            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        DialogResult answer = DialogResult.Yes;
+        if (!quiet)
+        {
+            answer = MessageBox.Show(
+                "确定卸载「" + AppTitle + "」？\n\n" +
+                "将删除当前安装目录中的程序、缓存和缩略图，以及已安装组件的配置与快捷方式。\n\n" +
+                "如果相册和图片编辑安装在同一目录，两者会一起卸载；\n" +
+                "如果只安装了其中一个，不会碰另一个独立安装目录。\n\n" +
+                "你的照片文件、视频文件以及相册回收站中尚未彻底删除的文件不会被删除。\n\n" +
+                "卸载前请先保存正在进行的编辑。",
+                "卸载 " + AppTitle,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        }
         if (answer != DialogResult.Yes) return;
 
         try
