@@ -267,7 +267,7 @@ body.skin-light .slider-row input[type=range]::-webkit-slider-thumb {
 .swatch { display:inline-block; width:18px; height:18px; border-radius:3px; margin-right:4px; border:1px solid #444; }
 
 /* ---- 效果示例缩略图 ---- */
-.fx-row { display:flex; gap:6px; margin-top:10px; padding-top:8px; border-top:1px solid #262626; flex-wrap:wrap; }
+.fx-row { display:none !important; gap:6px; margin-top:10px; padding-top:8px; border-top:1px solid #262626; flex-wrap:wrap; }
 .fx-thumb { position:relative; flex:1 1 64px; min-width:56px; height:56px; border-radius:6px; overflow:hidden;
             border:1px solid #3a3a3a; background:#101010; cursor:zoom-in; }
 .fx-thumb img { width:100%; height:100%; object-fit:cover; display:block; opacity:.92;
@@ -897,6 +897,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="edx-groups" id="edxGroups">
       <span class="edx-gr on" data-g="basic" onclick="edxGroup('basic')">调整</span>
       <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
+      <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
       <span class="edx-gr" data-g="create" onclick="edxGroup('create')">专业</span>
     </div>
     <div class="right-section" id="proHubSection">
@@ -5706,7 +5707,7 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
-<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(/美颜|证件照|移轴/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } }
+<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(s.id==='tsPanel') grp='fx'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
 try{ edxGroup('basic'); }catch(e){}
 </script>
 <style>

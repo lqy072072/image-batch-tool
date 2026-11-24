@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.22-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.23-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.22**：内置全部在用 AI 模型，新增 HDR/焦点/降噪堆栈、AI 修复中心、专业输出与相册智能策展；安装包仍保持完整资源，不做裁减。
+> 当前版本 **v2.23**：编辑器示例缩略图全部移除，「特效」标签独立承载移轴效果；v2.22 的 HDR/堆栈、AI 修复、专业输出与相册策展功能保持不变。
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名计划为 `image-batch-tool_v2.22_setup.exe`；本地构建文件名为 `图片批处理工具_v2.22_安装包.exe`（1,220,089,060 字节，约 1.2 GB）；SHA256 `1648A66B1DDF5630A312978A48FB2221C02631FE837EE1B08DC67E60215EFB84`，完整测试记录见 [`v2.22_回归测试报告.md`](v2.22_回归测试报告.md)。
+GitHub Release 资产名计划为 `image-batch-tool_v2.23_setup.exe`；本地构建文件名为 `图片批处理工具_v2.23_安装包.exe`（1,220,039,160 字节，约 1.2 GB）；SHA256 `8B2256DC1F1AF6C8DB989F594AFD4529AF2E1D4CCFF68ECAB6DF6C03082CBC0A`，完整测试记录见 [`v2.23_回归测试报告.md`](v2.23_回归测试报告.md)。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -64,6 +64,16 @@ GitHub Release 资产名计划为 `image-batch-tool_v2.22_setup.exe`；本地构
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.23 更新
+
+![编辑器主界面](docs/screenshots/v223_edit_home.png)
+
+![「特效」标签与移轴效果](docs/screenshots/v223_edit_fx.png)
+
+- **示例缩略图全部移除**：编辑器 AI 增强下的「超分 2× / 景深」、辅助工具区「自动挑片 / 配色提取 / 参考图→LUT」、以及「8bit 抖动」等 `.fx-row` 缩略示意卡不再显示；相册等其他页面的同类图卡同步隐藏。只做视觉隐藏，`showFx()` 与图卡 DOM 保留，不改业务逻辑和事件。
+- **新增「特效」标签**：编辑器右侧分组改为「调整 / 人像 / 特效 / 专业」；「移轴效果」从「人像」移入「特效」，参数、开关、参考线与合成逻辑保持原样，仅调整 UI 归类。
+- **回归结果**：源码与安装后编辑器标签顺序均为 `调整 → 人像 → 特效 → 专业`，7 个 `.fx-row` 全部 `display:none`、可见示例图为 0；移轴启用/参数仍可用。相册页面 7 个 `.fx-row` 同样隐藏。安装包通过双组件、仅相册、仅编辑器、含空格路径安装与 `/S` 静默卸载。完整记录见 [`v2.23_回归测试报告.md`](v2.23_回归测试报告.md)
 
 ### v2.22 更新
 
