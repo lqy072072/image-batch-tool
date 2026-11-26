@@ -1,4 +1,4 @@
-@import url("eva-core.css?v=2374");
+@import url("eva-core.css?v=2387");
 
 /* ==========================================================================
    EVA 初号机 · Unit-01 / 碇真嗣
@@ -8,8 +8,11 @@ html.skin-eva01-html { background: #07050d !important; }
 
 body.skin-eva01 {
   --eva-bg-solid: #07050d;
-  --eva-hud-label: "EVA-01 // 初号机 · 碇真嗣";
+  --eva-hud-label: "紫夜 · 紫黑 / 荧光绿";
   --eva-body:
+    repeating-linear-gradient(0deg, rgba(185,255,61,.030) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(90deg, rgba(138,92,255,.040) 0 1px, transparent 1px 46px),
+    linear-gradient(118deg, transparent 0 63%, rgba(185,255,61,.10) 63% 63.45%, transparent 63.45% 78%, rgba(138,92,255,.09) 78% 78.45%, transparent 78.45%),
     radial-gradient(980px 680px at 6% -12%, rgba(120,62,255,.30) 0%, rgba(120,62,255,0) 64%),
     radial-gradient(760px 540px at 98% 2%, rgba(185,255,61,.10) 0%, rgba(185,255,61,0) 62%),
     radial-gradient(760px 620px at 78% 112%, rgba(91,33,180,.22) 0%, rgba(91,33,180,0) 66%),

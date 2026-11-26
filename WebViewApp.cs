@@ -2127,8 +2127,9 @@ namespace ImageBatchTool
         // v2.33：WebView2 透明页不能用 TransparencyKey（会把整层鼠标命中测试跳过），
         // 改用整窗 LWA_ALPHA 半透明；页面仍透明，窗口可正常点击。
         // IBT_AURORA_GLASS=0 可退回完全不透明的液态玻璃（仍可点击）。
-        static readonly bool AuroraWindowGlass = !string.Equals(
-            Environment.GetEnvironmentVariable("IBT_AURORA_GLASS"), "0", StringComparison.OrdinalIgnoreCase);
+        // v2.38 起液态玻璃使用固定磨砂玻璃底图，页面完全不透明，无需桌面抓屏，
+        // 也不再启用整窗 alpha / 鼠标桥接；窗口按普通不透明窗口呈现。
+        static readonly bool AuroraWindowGlass = false;
         int auroraAlpha = AppModule.IsAlbum ? 244 : 238;
         bool webPageReady = false;
         volatile bool allowMinimizeOnce = false;
@@ -2274,9 +2275,9 @@ namespace ImageBatchTool
             // 透明色键 + 分层窗口与 Opacity/DoubleBuffer 混用会丢掉色键合成。
             if (startupSkin == "aurora") DoubleBuffered = false;
             if (startupSkin != "aurora") Opacity = 0;
-            // 液态玻璃不再使用 TransparencyKey：WebView2 透明页会让整窗鼠标穿透。
-            // 改用整窗 alpha，窗口下方内容仍能实时透出，且所有控件可点击。
-            BackColor = startupSkin == "aurora" ? Color.FromArgb(8, 18, 32) : OpaqueBackFor(startupSkin);
+            // v2.38：液态玻璃改用固定磨砂玻璃贴图，窗口保持普通不透明合成，
+            // 不再抓取桌面、不再推送 glassbg 帧，因此也不会出现底图帧率与合成卡顿。
+            BackColor = startupSkin == "aurora" ? Color.FromArgb(214, 230, 243) : OpaqueBackFor(startupSkin);
             TransparencyKey = Color.Empty;
             auroraAlpha = AppModule.IsAlbum ? 244 : 238;
 
@@ -2285,9 +2286,8 @@ namespace ImageBatchTool
             web.Dock = DockStyle.Fill;
             Controls.Add(web);
             mainGlass = new GlassBackdrop(this, web);
-            // v2.34：液态玻璃改为“窗口内桌面模糊底图 + 页面玻璃层”。
-            // 底图在窗口显示前抓取，之后只补窗口四周；页面照片/缩略图保持完全不透明。
-            try { mainGlass.PrimeDesktop(); } catch { }
+            // 静态底图模式不再预抓桌面；GlassBackdrop 保留仅为兼容旧配置，不进入 Enable 状态。
+            try { if (startupSkin != "aurora") mainGlass.PrimeDesktop(); } catch { }
             try { MainForm.Log("构造 startupSkin=" + startupSkin); } catch { }
             // WebView2 的透明合成必须等窗体真正显示后再初始化；在构造函数里提前初始化时，
             // DWM 毛玻璃与 WebView2 的 DirectComposition 会互相顶掉，页面会整层不可见。
@@ -2649,11 +2649,11 @@ namespace ImageBatchTool
                 try { Log("原生皮肤=" + skin + " aurora=" + aurora + " key=" + targetForm.TransparencyKey + " back=" + targetForm.BackColor + " op=" + targetForm.Opacity); } catch { }
                 if (aurora)
                 {
-                    // v2.34：窗口不再整窗 alpha。背景改为窗口内“桌面模糊底图”，
-                    // 页面只叠半透明玻璃层；照片像素保持 100% 不透明。
+                    // v2.38：固定磨砂玻璃底图。窗口使用与页面同色系的浅蓝实底，
+                    // 页面加载后直接显示 skins/aurora-bg.jpg；不再抓屏、不推帧。
                     GlassBackdrop glass0 = targetForm == this ? mainGlass : (targetForm == dedupForm ? dedupGlass : null);
                     targetForm.TransparencyKey = Color.Empty;
-                    targetForm.BackColor = Color.FromArgb(8, 18, 32);
+                    targetForm.BackColor = Color.FromArgb(214, 230, 243);
                     targetForm.Opacity = 1;
                     try { Native.ClearLayered(targetForm.Handle); } catch { }
                     try
@@ -2666,16 +2666,16 @@ namespace ImageBatchTool
                     catch { }
                     if (targetWeb != null)
                     {
-                        // 页面自身绘制模糊底图；WebView2 背景必须透明。
-                        targetWeb.DefaultBackgroundColor = Color.Transparent;
+                        // 页面自身是不透明静态底图，WebView 不能透明，否则会先露出窗口底色。
+                        targetWeb.DefaultBackgroundColor = Color.FromArgb(214, 230, 243);
                     }
                     if (glass0 != null)
                     {
                         try { glass0.ClearFrame(); } catch { }
-                        try { glass0.Enable(); } catch { }
+                        try { glass0.Disable(); } catch { }
                     }
                     bool webReady = webPageReady && targetWeb != null && targetWeb.CoreWebView2 != null;
-                    try { Log("Aurora 模糊底图模式 key=" + targetForm.TransparencyKey + " alpha=255 webReady=" + webReady + " glass=" + (glass0 != null && glass0.Enabled)); } catch { }
+                    try { Log("Aurora 静态磨砂底图模式 key=" + targetForm.TransparencyKey + " alpha=255 webReady=" + webReady + " glass=disabled"); } catch { }
                 }
                 else
                 {

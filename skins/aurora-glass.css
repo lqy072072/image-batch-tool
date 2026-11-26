@@ -1587,16 +1587,16 @@ body.skin-aurora .bin-cell:hover::after {
    深色薄雾保证亮背景上的对比度，白色乳玻璃 + 冷色描边 + 高光边缘做出厚度。
    ========================================================================== */
 
+/* v2.38: 改为固定的高级磨砂玻璃底图，不再读取宿主桌面截图帧。
+   底图只负责材质与光感，页面上的面板仍是可读的玻璃层。 */
 body.skin-aurora {
   background:
-    radial-gradient(1100px 760px at 8% -16%, rgba(78,205,255,.30) 0%, rgba(78,205,255,0) 62%),
-    radial-gradient(1000px 760px at 102% -8%, rgba(255,143,230,.22) 0%, rgba(255,143,230,0) 64%),
-    radial-gradient(900px 700px at 82% 108%, rgba(150,125,255,.24) 0%, rgba(150,125,255,0) 66%),
-    radial-gradient(110% 90% at 50% 48%, rgba(12,34,62,.03) 0%, rgba(8,26,50,.22) 82%, rgba(4,16,34,.34) 100%),
-    linear-gradient(135deg, rgba(8,26,52,.20) 0%, rgba(14,38,68,.09) 38%, rgba(22,18,52,.20) 100%),
-    var(--live-glass, linear-gradient(135deg, #0a2038 0%, #061426 100%)) !important;
-  background-color: #071426 !important;
-  background-size: cover !important;
+    linear-gradient(180deg, rgba(6,26,48,.14) 0%, rgba(8,30,54,.06) 38%, rgba(10,24,46,.20) 100%),
+    radial-gradient(1100px 760px at 8% -16%, rgba(255,255,255,.30) 0%, rgba(255,255,255,0) 62%),
+    radial-gradient(900px 700px at 92% 104%, rgba(142,164,255,.12) 0%, rgba(142,164,255,0) 66%),
+    url("aurora-bg.jpg") !important;
+  background-color: #dceaf6 !important;
+  background-size: cover, cover, cover, cover !important;
   background-repeat: no-repeat !important;
   background-position: center center !important;
   background-attachment: scroll !important;
@@ -1896,11 +1896,11 @@ body.skin-aurora .alb-dedup-btn {
    - 相册覆盖层不再画深色底，只留极薄乳白膜，让真实桌面从卡片四周透出。
    ========================================================================== */
 html.skin-aurora-html {
-  /* 真透明：根背景必须完全透明，不能再垫 #071426 或静态桌面图。 */
+  /* 静态磨砂玻璃底图由 body 绘制；根节点保持透明以免遮住 WebView 底色。 */
   background: transparent !important;
   background-image: none !important;
 }
-html.skin-aurora-html body.skin-aurora { background: transparent !important; }
+html.skin-aurora-html body.skin-aurora { background-color: transparent !important; }
 
 body.skin-aurora .alb-overlay {
   background:
@@ -2382,16 +2382,15 @@ body.skin-aurora .alb-body {
    4) 不改任何 DOM、事件、协议与业务函数，只覆盖 body.skin-aurora 下的样式。
    ========================================================================== */
 
-/* 窗口底色：桌面模糊图 + 冷蓝薄雾，避免整窗发白 */
+/* v2.38 窗口底色：固定磨砂玻璃图 + 冷蓝薄雾，不再依赖桌面截图帧 */
 body.skin-aurora {
   background:
-    radial-gradient(960px 620px at 4% -14%, rgba(70,146,198,.18) 0%, rgba(70,146,198,0) 64%),
-    radial-gradient(860px 600px at 100% 0%, rgba(84,178,226,.16) 0%, rgba(84,178,226,0) 66%),
-    radial-gradient(820px 700px at 78% 108%, rgba(112,126,210,.14) 0%, rgba(112,126,210,0) 70%),
-    linear-gradient(155deg, rgba(3,15,30,.42) 0%, rgba(7,27,50,.26) 44%, rgba(3,18,36,.40) 100%),
-    var(--live-glass, linear-gradient(135deg, #0a2038 0%, #061426 100%)) !important;
-  background-color: #07182a !important;
-  background-size: cover !important;
+    linear-gradient(155deg, rgba(3,15,30,.30) 0%, rgba(7,27,50,.14) 44%, rgba(3,18,36,.30) 100%),
+    radial-gradient(960px 620px at 4% -14%, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 64%),
+    radial-gradient(820px 700px at 78% 108%, rgba(112,126,210,.12) 0%, rgba(112,126,210,0) 70%),
+    url("aurora-bg.jpg") !important;
+  background-color: #dceaf6 !important;
+  background-size: cover, cover, cover, cover !important;
   background-repeat: no-repeat !important;
   background-position: center center !important;
   background-attachment: scroll !important;

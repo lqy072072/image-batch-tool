@@ -40,31 +40,31 @@
     {
       id: 'aurora',
       name: '液态玻璃',
-      desc: '实时透明 · 液态高光',
+      desc: '静态磨砂 · 雾蓝玻璃',
       cls: 'skin-aurora',
       css: 'aurora-glass.css',
       swatch: 'linear-gradient(145deg,#d9fbff 0%,#8fe7ff 24%,#b7a1ff 52%,#ff9edb 76%,#f7fbff 100%)'
     },
     {
       id: 'eva01',
-      name: 'EVA 初号机',
-      desc: '紫黑装甲 · 荧光绿暴走',
+      name: '紫夜',
+      desc: '紫黑配色 · 荧光绿点缀',
       cls: 'skin-eva01',
       css: 'eva-unit01.css',
       swatch: 'linear-gradient(145deg,#b9ff3d 0%,#8a5cff 34%,#3a1b6e 68%,#0b0712 100%)'
     },
     {
       id: 'eva00',
-      name: 'EVA 零号机',
-      desc: '蓝白试作 · 琥珀同步',
+      name: '霜蓝',
+      desc: '蓝黑配色 · 琥珀点缀',
       cls: 'skin-eva00',
       css: 'eva-unit00.css',
       swatch: 'linear-gradient(145deg,#eaf5ff 0%,#4f9dff 30%,#1e4a78 66%,#07111d 100%)'
     },
     {
       id: 'eva02',
-      name: 'EVA 二号机',
-      desc: '赤红装甲 · 橙色强攻',
+      name: '赤霞',
+      desc: '红黑配色 · 橙光点缀',
       cls: 'skin-eva02',
       css: 'eva-unit02.css',
       swatch: 'linear-gradient(145deg,#ffc45c 0%,#ff9f1a 24%,#ff3b30 58%,#1b0506 100%)'
@@ -199,7 +199,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-css', def.id);
-      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2374';
+      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2387';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -219,7 +219,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-core', '1');
-      link.href = base + 'skin-core.css?v=2374';
+      link.href = base + 'skin-core.css?v=2387';
       document.head.appendChild(link);
     } catch (e) {}
   }

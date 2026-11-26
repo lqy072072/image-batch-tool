@@ -556,7 +556,9 @@ body[class*="skin-eva"] .gen-tab {
   color: var(--eva-muted) !important;
 }
 body[class*="skin-eva"] .pro-tab.active,
-body[class*="skin-eva"] .gen-tab.active {
+body[class*="skin-eva"] .pro-tab.on,
+body[class*="skin-eva"] .gen-tab.active,
+body[class*="skin-eva"] .gen-tab.on {
   background: var(--eva-accent) !important;
   border-color: var(--eva-accent-2) !important;
   color: var(--eva-accent-ink) !important;
@@ -739,9 +741,352 @@ body[class*="skin-eva"] .right::before {
   opacity: .55;
 }
 
-/* 无动画偏好时，只保留静态配色 */
+/* ==========================================================================
+   v2.38 · 装甲形状系统
+   只加强视觉形状：切角、装甲槽、内嵌刻度、标签斜切、转场快门。
+   不改任何布局尺寸、DOM、事件、协议或业务函数。
+   ========================================================================== */
+
+/* 工程感字体：拉丁数字用窄体，中文回落到系统黑体，保持原行高 */
+body[class*="skin-eva"] {
+  font-family: "Bahnschrift SemiCondensed", "Bahnschrift", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif !important;
+  font-variant-numeric: tabular-nums;
+}
+body[class*="skin-eva"] * {
+  font-family: "Bahnschrift SemiCondensed", "Bahnschrift", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif !important;
+}
+
+/* 所有次级按钮补统一硬边，窗控三键继续沿用上面的斜切块 */
+body[class*="skin-eva"] button:not(.light) {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
+}
+
+/* 皮肤面板也切成装甲板，色卡从圆点改成斜切小方块 */
+body[class*="skin-eva"] #skinMenu.skin-menu {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+body[class*="skin-eva"] #skinMenu .skin-swatch {
+  border-radius: 1px !important;
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
+}
+
+/* 滑块：薄装甲轨 + 竖向切角推子，替换原来的圆形亮珠 */
+body[class*="skin-eva"] .slider-row input[type=range] {
+  height: 3px !important;
+  border-radius: 1px !important;
+  background: var(--eva-track) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 0 0 1px rgba(0,0,0,.45) !important;
+}
+body[class*="skin-eva"] .slider-row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 8px !important;
+  height: 16px !important;
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 3px 100%, 0 calc(100% - 3px));
+  background: linear-gradient(180deg, var(--eva-accent-2) 0%, var(--eva-accent) 100%) !important;
+  border: 1px solid var(--eva-accent-3, var(--eva-accent-2)) !important;
+  box-shadow: 0 0 0 2px var(--eva-accent-soft), 0 0 9px var(--eva-accent-glow) !important;
+}
+
+/* 顶部装甲槽：在原有导轨上压一层斜向刻槽，不改高度 */
+body[class*="skin-eva"] .titlebar,
+body[class*="skin-eva"] .alb-titlebar {
+  background-image:
+    linear-gradient(112deg, transparent 0 72%, rgba(255,255,255,.055) 72% 72.5%, transparent 72.5% 86%, var(--eva-accent-soft) 86% 86.4%, transparent 86.4%),
+    var(--eva-rail) !important;
+  background-size: 100% 100%, 100% 100% !important;
+  border-bottom: 2px solid var(--eva-line-strong) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), inset 0 -8px 18px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.26) !important;
+}
+body[class*="skin-eva"] .titlebar::before,
+body[class*="skin-eva"] .alb-titlebar::before {
+  font-family: "Bahnschrift SemiCondensed", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif !important;
+  font-size: 9px !important;
+  letter-spacing: .17em !important;
+}
+
+/* 顶部窗口键：从圆形改成斜切装甲块，只改外观，点击区域仍由原 div 承担 */
+body[class*="skin-eva"] .light {
+  width: 11px !important;
+  height: 11px !important;
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  border: 1px solid rgba(0,0,0,.34) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.42) !important;
+}
+body[class*="skin-eva"] .light.red { background: var(--eva-danger) !important; }
+body[class*="skin-eva"] .light.yellow { background: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .light.green { background: var(--eva-accent) !important; }
+body[class*="skin-eva"] .top-right span {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+}
+
+/* 左右装甲板：直角、顶部装甲线、右下角回字形角标 */
+body[class*="skin-eva"] .left,
+body[class*="skin-eva"] .right {
+  border-radius: 0 !important;
+  border-top: 1px solid var(--eva-line-strong) !important;
+  border-bottom: 1px solid var(--eva-line) !important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.045) 0 8px, transparent 8.5px),
+    linear-gradient(180deg, var(--eva-subhead) 0 58px, transparent 58px),
+    var(--eva-panel) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), inset 0 0 0 1px rgba(0,0,0,.18), 0 18px 44px rgba(0,0,0,.32) !important;
+}
+body[class*="skin-eva"] .left::after,
+body[class*="skin-eva"] .right::after {
+  content: "";
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 18px;
+  height: 2px;
+  background: var(--eva-accent-2);
+  box-shadow: 0 -7px 0 -1px var(--eva-accent-2);
+  opacity: .48;
+  pointer-events: none;
+}
+
+/* 按钮：统一斜切右上 / 左下角，阴影改为内嵌高光，避免被 clip-path 裁掉 */
+body[class*="skin-eva"] .btn,
+body[class*="skin-eva"] .tool-btn,
+body[class*="skin-eva"] .mini-btn,
+body[class*="skin-eva"] .lut-mode-btn,
+body[class*="skin-eva"] .hist-tab,
+body[class*="skin-eva"] .edx-gr,
+body[class*="skin-eva"] .edx-tab,
+body[class*="skin-eva"] .pro-tab,
+body[class*="skin-eva"] .alb-ctl,
+body[class*="skin-eva"] .alb-search-btn,
+body[class*="skin-eva"] .alb-dedup-btn,
+body[class*="skin-eva"] .alb-curate-btn,
+body[class*="skin-eva"] .alb-favbtn,
+body[class*="skin-eva"] .alb-zoom button,
+body[class*="skin-eva"] .bin-btn,
+body[class*="skin-eva"] .dup-btn,
+body[class*="skin-eva"] .pro-btn,
+body[class*="skin-eva"] .gen-primary,
+body[class*="skin-eva"] .ai-primary-sm,
+body[class*="skin-eva"] .ai-run,
+body[class*="skin-eva"] .alb-opt-item,
+body[class*="skin-eva"] .alb-ctx-item,
+body[class*="skin-eva"] .lut-menu-item,
+body[class*="skin-eva"] .gen-tab {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+  font-family: "Bahnschrift SemiCondensed", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: .035em !important;
+  box-shadow: inset 2px 0 0 var(--eva-accent), inset 0 1px 0 var(--eva-hi), inset 0 -1px 0 rgba(0,0,0,.34) !important;
+}
+body[class*="skin-eva"] .btn-start,
+body[class*="skin-eva"] #colorAutoBtn,
+body[class*="skin-eva"] #aiOptBtn,
+body[class*="skin-eva"] #beautyBtn {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  text-transform: uppercase;
+  letter-spacing: .06em !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.58), inset 0 -10px 20px rgba(0,0,0,.18) !important;
+}
+
+/* 输入框：左侧状态槽 + 右下切角 + 内嵌刻度；不改变 padding 与宽度 */
+body[class*="skin-eva"] input,
+body[class*="skin-eva"] select,
+body[class*="skin-eva"] .bottom-select,
+body[class*="skin-eva"] .crop-row select,
+body[class*="skin-eva"] .crop-row input,
+body[class*="skin-eva"] .mini-input,
+body[class*="skin-eva"] .mini-sel,
+body[class*="skin-eva"] .alb-search-box,
+body[class*="skin-eva"] .alb-search-box input,
+body[class*="skin-eva"] .alb-sel-wrap,
+body[class*="skin-eva"] .gen-prompt {
+  border-radius: 0 !important;
+  border-left: 3px solid var(--eva-accent-2) !important;
+  font-family: inherit !important;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,255,255,.045) 22px 23px),
+    linear-gradient(90deg, var(--eva-accent-soft) 0 3px, transparent 3px),
+    var(--eva-input) !important;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.38), inset 0 -1px 0 rgba(255,255,255,.06) !important;
+}
+body[class*="skin-eva"] textarea {
+  border-radius: 0 !important;
+  border-left: 3px solid var(--eva-accent-2) !important;
+}
+body[class*="skin-eva"] #currentLut {
+  border-radius: 0 !important;
+  border-left: 3px solid var(--eva-accent-2) !important;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,255,255,.045) 22px 23px),
+    linear-gradient(90deg, var(--eva-accent-soft) 0 3px, transparent 3px),
+    var(--eva-input) !important;
+  color: var(--eva-muted) !important;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.38), inset 0 -1px 0 rgba(255,255,255,.06) !important;
+}
+body[class*="skin-eva"] input:focus,
+body[class*="skin-eva"] select:focus,
+body[class*="skin-eva"] textarea:focus,
+body[class*="skin-eva"] .alb-search-box:focus-within {
+  border-left-color: var(--eva-accent-3, var(--eva-accent-2)) !important;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,255,255,.06) 22px 23px),
+    linear-gradient(90deg, var(--eva-accent) 0 3px, transparent 3px),
+    var(--eva-input) !important;
+  box-shadow: inset 3px 0 0 var(--eva-accent-2), inset 0 1px 0 rgba(0,0,0,.38) !important;
+}
+
+/* 标签 / 分段：右上斜切，统一更硬的字距 */
+body[class*="skin-eva"] .alb-tab,
+body[class*="skin-eva"] .alb-curate-tab,
+body[class*="skin-eva"] .alb-perf-seg span,
+body[class*="skin-eva"] .alb-chip,
+body[class*="skin-eva"] .alb-search-hints span,
+body[class*="skin-eva"] .ai-tag,
+body[class*="skin-eva"] .pro-badge,
+body[class*="skin-eva"] .gen-badge,
+body[class*="skin-eva"] .alb-cell .badge {
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  text-transform: uppercase;
+  letter-spacing: .075em !important;
+}
+
+/* 卡片：直角 + 左上装甲刻线 + 左侧识别边 */
+body[class*="skin-eva"] .alb-cell,
+body[class*="skin-eva"] .bin-cell,
+body[class*="skin-eva"] .dup-cell {
+  position: relative;
+  border-radius: 0 !important;
+  border-left: 2px solid var(--eva-line-strong) !important;
+}
+body[class*="skin-eva"] .alb-cell::before,
+body[class*="skin-eva"] .bin-cell::before,
+body[class*="skin-eva"] .dup-cell::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  width: 30px;
+  height: 3px;
+  background: var(--eva-accent-2);
+  box-shadow: 8px 0 0 -1px var(--eva-accent);
+  opacity: .72;
+  pointer-events: none;
+  z-index: 3;
+}
+body[class*="skin-eva"] .alb-cell img,
+body[class*="skin-eva"] .dup-cell img,
+body[class*="skin-eva"] .dup-cell .ph,
+body[class*="skin-eva"] .bin-thumb { border-radius: 0 !important; }
+
+/* 弹窗 / 菜单：顶部装甲条 + 直角，保持原尺寸和定位 */
+body[class*="skin-eva"] .alb-modal,
+body[class*="skin-eva"] .alb-opt-menu,
+body[class*="skin-eva"] .alb-ctx,
+body[class*="skin-eva"] .bin-panel,
+body[class*="skin-eva"] .dup-panel,
+body[class*="skin-eva"] .pro-box,
+body[class*="skin-eva"] .fx-box,
+body[class*="skin-eva"] .gen-result-box,
+body[class*="skin-eva"] #skinMenu.skin-menu {
+  border-radius: 0 !important;
+  border-top: 3px solid var(--eva-accent-2) !important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.05) 0 16px, transparent 16.5px),
+    repeating-linear-gradient(90deg, transparent 0 34px, rgba(255,255,255,.025) 34px 35px),
+    var(--eva-modal) !important;
+  box-shadow: 0 26px 72px rgba(0,0,0,.60), 0 0 0 1px var(--eva-line-strong), 0 0 28px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] #skinMenu.skin-menu {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.05) 0 16px, transparent 16.5px),
+    repeating-linear-gradient(90deg, transparent 0 34px, rgba(255,255,255,.025) 34px 35px),
+    var(--eva-menu) !important;
+}
+body[class*="skin-eva"] #skinMenu .skin-item {
+  border-radius: 0 !important;
+  border-left: 3px solid transparent !important;
+}
+body[class*="skin-eva"] #skinMenu .skin-item.on {
+  border-left-color: var(--eva-accent-2) !important;
+}
+body[class*="skin-eva"] .alb-opt-item,
+body[class*="skin-eva"] .alb-ctx-item,
+body[class*="skin-eva"] .lut-menu-item {
+  border-left: 2px solid transparent !important;
+}
+body[class*="skin-eva"] .alb-opt-item:hover,
+body[class*="skin-eva"] .alb-ctx-item:hover,
+body[class*="skin-eva"] .lut-menu-item:hover { border-left-color: var(--eva-accent-2) !important; }
+
+/* 标签页 / 设置分组：底部装甲条 */
+body[class*="skin-eva"] .alb-tab.on,
+body[class*="skin-eva"] .alb-tab.active,
+body[class*="skin-eva"] .alb-curate-tab.on,
+body[class*="skin-eva"] .alb-curate-tab.active,
+body[class*="skin-eva"] .alb-perf-seg span.on,
+body[class*="skin-eva"] .edx-tab.on,
+body[class*="skin-eva"] .edx-gr.on,
+body[class*="skin-eva"] .pro-tab.on,
+body[class*="skin-eva"] .pro-tab.active,
+body[class*="skin-eva"] .gen-tab.on,
+body[class*="skin-eva"] .gen-tab.active {
+  border-bottom-width: 3px !important;
+  border-bottom-color: var(--eva-accent-3, var(--eva-accent-2)) !important;
+}
+
+/* 滚动条也收硬：直角滑块，保留可点击宽度 */
+body[class*="skin-eva"] ::-webkit-scrollbar-thumb {
+  border-radius: 0 !important;
+  border-width: 2px !important;
+}
+
+/* 转场：斜切光闸 + 装甲片 + 扫描线，不改变原有 1.18s 生命周期 */
+body[class*="skin-eva"] .skin-transition .st-veil {
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 0 100%);
+}
+body[class*="skin-eva"] .skin-transition .st-prism {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 10% 100%);
+}
+body[class*="skin-eva"] .skin-transition .st-streak {
+  height: 4px !important;
+  clip-path: polygon(0 0, 100% 0, 94% 100%, 0 100%);
+}
+body[class*="skin-eva"] .skin-transition .st-shard {
+  border-radius: 0 !important;
+}
+body[class*="skin-eva"] .skin-transition .st-grain {
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.16) 0 1px, transparent 1px 4px) !important;
+  opacity: .28 !important;
+}
+body[class*="skin-eva"].skin-switching::before {
+  content: "";
+  position: fixed;
+  inset: -14% -20%;
+  z-index: 10025;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(112deg, transparent 0 32px, rgba(255,255,255,.10) 32px 35px),
+    linear-gradient(112deg, transparent 24%, var(--eva-accent-soft) 46%, transparent 72%);
+  animation: evaShutter .74s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes evaShutter {
+  0% { opacity: 0; transform: translateX(-28%) skewX(-14deg); }
+  20% { opacity: .88; }
+  100% { opacity: 0; transform: translateX(20%) skewX(8deg); }
+}
+
+/* 无动画偏好时，只保留静态配色与形状，不再播放转场 / 快门 */
 @media (prefers-reduced-motion: reduce) {
   body[class*="skin-eva"] .skin-transition { display: none !important; }
+  body[class*="skin-eva"].skin-switching::before { display: none !important; }
   body[class*="skin-eva"].lg-page-enter::after { display: none !important; }
   body[class*="skin-eva"] .alb-modal,
   body[class*="skin-eva"] .alb-opt-menu,
@@ -757,3 +1102,4 @@ body[class*="skin-eva"] .right::before {
   body[class*="skin-eva"].lg-page-enter .left,
   body[class*="skin-eva"].lg-page-enter .right { animation: none !important; }
 }
+
