@@ -2896,3 +2896,56 @@ html.skin-aurora-html body.skin-aurora *::after {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* ==========================================================================
+   v2.37 相册性能补丁
+   原因：相册页一次生成几百个 .alb-cell，旧版给每个格子套 auroraCardIn
+   （opacity + transform + filter:blur），并且整页 .alb-overlay 还会做一次
+   auroraEnter，WebView2 在缩略图解码时会被迫反复合成大图层，表现为开相册
+   时闪白/抖动/滚动掉帧。这里只关闭高开销的入场动画和无限扫光，不改布局、
+   不改点击逻辑；弹窗仍保留轻量入场。
+   ========================================================================== */
+body.skin-aurora .alb-cell,
+body.skin-aurora .bin-cell,
+body.skin-aurora .dup-group,
+body.skin-aurora .alb-view,
+body.skin-aurora .alb-overlay,
+body.skin-aurora .bin-panel,
+body.skin-aurora .dup-panel,
+body.skin-aurora .left,
+body.skin-aurora .right {
+  animation: none !important;
+}
+body.skin-aurora .titlebar::after,
+body.skin-aurora .alb-titlebar::after,
+body.skin-aurora .alb-head::after,
+body.skin-aurora .dup-head::after,
+body.skin-aurora .pro-head::after {
+  animation: none !important;
+  opacity: .22 !important;
+}
+body.skin-aurora.lg-page-enter::after { display: none !important; }
+body.skin-aurora.lg-page-enter .titlebar,
+body.skin-aurora.lg-page-enter .toolbar,
+body.skin-aurora.lg-page-enter .alb-overlay,
+body.skin-aurora.lg-page-enter .bottombar,
+body.skin-aurora.lg-page-enter .bin-panel,
+body.skin-aurora.lg-page-enter .dup-panel,
+body.skin-aurora.lg-page-enter .left,
+body.skin-aurora.lg-page-enter .right,
+body.skin-aurora.lg-page-enter .center {
+  animation: none !important;
+}
+body.skin-aurora.skin-switching .alb-overlay,
+body.skin-aurora.skin-switching .dup-panel,
+body.skin-aurora.skin-switching .bin-panel,
+body.skin-aurora.skin-switching .main,
+body.skin-aurora.skin-switching .titlebar,
+body.skin-aurora.skin-switching .toolbar,
+body.skin-aurora.skin-switching .bottombar {
+  animation: none !important;
+}
+/* 缩略图只保留 hover 高光，去掉每格的横向光带过渡，减少重绘 */
+body.skin-aurora .alb-cell::after,
+body.skin-aurora .bin-cell::after { display: none !important; }
+

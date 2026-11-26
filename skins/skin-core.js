@@ -44,6 +44,30 @@
       cls: 'skin-aurora',
       css: 'aurora-glass.css',
       swatch: 'linear-gradient(145deg,#d9fbff 0%,#8fe7ff 24%,#b7a1ff 52%,#ff9edb 76%,#f7fbff 100%)'
+    },
+    {
+      id: 'eva01',
+      name: 'EVA 初号机',
+      desc: '紫黑装甲 · 荧光绿暴走',
+      cls: 'skin-eva01',
+      css: 'eva-unit01.css',
+      swatch: 'linear-gradient(145deg,#b9ff3d 0%,#8a5cff 34%,#3a1b6e 68%,#0b0712 100%)'
+    },
+    {
+      id: 'eva00',
+      name: 'EVA 零号机',
+      desc: '蓝白试作 · 琥珀同步',
+      cls: 'skin-eva00',
+      css: 'eva-unit00.css',
+      swatch: 'linear-gradient(145deg,#eaf5ff 0%,#4f9dff 30%,#1e4a78 66%,#07111d 100%)'
+    },
+    {
+      id: 'eva02',
+      name: 'EVA 二号机',
+      desc: '赤红装甲 · 橙色强攻',
+      cls: 'skin-eva02',
+      css: 'eva-unit02.css',
+      swatch: 'linear-gradient(145deg,#ffc45c 0%,#ff9f1a 24%,#ff3b30 58%,#1b0506 100%)'
     }
   ];
 
@@ -61,6 +85,18 @@
     'new-liquid': 'aurora',
     'realtime-liquid': 'aurora',
     'clear-glass': 'aurora',
+    eva01: 'eva01',
+    'eva-01': 'eva01',
+    unit01: 'eva01',
+    'unit-01': 'eva01',
+    eva00: 'eva00',
+    'eva-00': 'eva00',
+    unit00: 'eva00',
+    'unit-00': 'eva00',
+    eva02: 'eva02',
+    'eva-02': 'eva02',
+    unit02: 'eva02',
+    'unit-02': 'eva02',
     frostwhite: 'frost',
     'frosted-white': 'frost',
     white: 'light',
@@ -163,8 +199,18 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-css', def.id);
-      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2360';
+      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2374';
       document.head.appendChild(link);
+    } catch (e) {}
+  }
+  // v2.37: 切肤后移除其他皮肤样式，避免多套主题 CSS 同时驻留造成串色和额外合成开销。
+  function pruneCss(def) {
+    try {
+      var keep = def && def.css ? def.id : '';
+      var links = document.querySelectorAll('link[data-skin-css]');
+      for (var i = links.length - 1; i >= 0; i--) {
+        if (links[i].getAttribute('data-skin-css') !== keep && links[i].parentNode) links[i].parentNode.removeChild(links[i]);
+      }
     } catch (e) {}
   }
   function injectCoreCss() {
@@ -173,7 +219,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-core', '1');
-      link.href = base + 'skin-core.css?v=2360';
+      link.href = base + 'skin-core.css?v=2374';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -221,16 +267,22 @@
     var def = defFor(id);
     var previous = current;
     ensureCss(def);
+    pruneCss(def);
     current = id;
     try {
       document.documentElement.setAttribute('data-skin', id);
-      document.documentElement.classList.toggle('skin-light-html', id === 'light');
-      document.documentElement.classList.toggle('skin-frost-html', id === 'frost');
-      document.documentElement.classList.toggle('skin-smoke-html', id === 'smoke');
-      document.documentElement.classList.toggle('skin-aurora-html', id === 'aurora');
+      var htmlClasses = ['skin-light-html', 'skin-frost-html', 'skin-smoke-html', 'skin-aurora-html', 'skin-eva01-html', 'skin-eva00-html', 'skin-eva02-html'];
+      for (var hc = 0; hc < htmlClasses.length; hc++) document.documentElement.classList.remove(htmlClasses[hc]);
+      if (id === 'light') document.documentElement.classList.add('skin-light-html');
+      if (id === 'frost') document.documentElement.classList.add('skin-frost-html');
+      if (id === 'smoke') document.documentElement.classList.add('skin-smoke-html');
+      if (id === 'aurora') document.documentElement.classList.add('skin-aurora-html');
+      if (id === 'eva01') document.documentElement.classList.add('skin-eva01-html');
+      if (id === 'eva00') document.documentElement.classList.add('skin-eva00-html');
+      if (id === 'eva02') document.documentElement.classList.add('skin-eva02-html');
     } catch (e) {}
     try {
-      document.body.classList.remove('skin-dark', 'skin-light', 'skin-frost', 'skin-smoke', 'skin-aurora');
+      document.body.classList.remove('skin-dark', 'skin-light', 'skin-frost', 'skin-smoke', 'skin-aurora', 'skin-eva01', 'skin-eva00', 'skin-eva02');
       document.body.classList.add(def.cls);
     } catch (e) {}
     setInlineSurface(id);
@@ -239,7 +291,7 @@
       try {
         document.body.classList.add('skin-fade');
         if (previous && previous !== id) playSkinTransition(previous, id);
-        if (id === 'smoke' || id === 'frost' || id === 'aurora') document.body.classList.add('skin-switching', 'skin-entering');
+        if (id === 'smoke' || id === 'frost' || id === 'aurora' || id === 'eva01' || id === 'eva00' || id === 'eva02') document.body.classList.add('skin-switching', 'skin-entering');
         clearTimeout(switchTimer);
         clearTimeout(fadeTimer);
         switchTimer = setTimeout(function () {
@@ -397,6 +449,9 @@
     if (early === 'frost') document.documentElement.classList.add('skin-frost-html');
     if (early === 'smoke') document.documentElement.classList.add('skin-smoke-html');
     if (early === 'aurora') document.documentElement.classList.add('skin-aurora-html');
+    if (early === 'eva01') document.documentElement.classList.add('skin-eva01-html');
+    if (early === 'eva00') document.documentElement.classList.add('skin-eva00-html');
+    if (early === 'eva02') document.documentElement.classList.add('skin-eva02-html');
   } catch (e) {}
 
   window.SkinCore = {

@@ -1,0 +1,106 @@
+@import url("eva-core.css?v=2374");
+
+/* ==========================================================================
+   EVA 初号机 · Unit-01 / 碇真嗣
+   紫黑装甲 + 荧光绿同步率；紧张、锐利、带一点暴走前的过曝感。
+   ========================================================================== */
+html.skin-eva01-html { background: #07050d !important; }
+
+body.skin-eva01 {
+  --eva-bg-solid: #07050d;
+  --eva-hud-label: "EVA-01 // 初号机 · 碇真嗣";
+  --eva-body:
+    radial-gradient(980px 680px at 6% -12%, rgba(120,62,255,.30) 0%, rgba(120,62,255,0) 64%),
+    radial-gradient(760px 540px at 98% 2%, rgba(185,255,61,.10) 0%, rgba(185,255,61,0) 62%),
+    radial-gradient(760px 620px at 78% 112%, rgba(91,33,180,.22) 0%, rgba(91,33,180,0) 66%),
+    linear-gradient(138deg, #09060f 0%, #100a1c 46%, #05040a 100%);
+  --eva-text: #f0eaff;
+  --eva-muted: #b9acd6;
+  --eva-placeholder: rgba(216,203,240,.48);
+  --eva-accent: #8a5cff;
+  --eva-accent-2: #b9ff3d;
+  --eva-accent-3: #d4ff86;
+  --eva-accent-ink: #10061c;
+  --eva-accent-soft: rgba(138,92,255,.22);
+  --eva-accent-glow: rgba(185,255,61,.22);
+  --eva-line: rgba(178,148,255,.30);
+  --eva-line-strong: rgba(206,184,255,.58);
+  --eva-hi: rgba(255,255,255,.12);
+  --eva-rail: linear-gradient(180deg, rgba(34,19,58,.96) 0%, rgba(12,8,22,.92) 100%);
+  --eva-panel: linear-gradient(158deg, rgba(30,17,51,.90) 0%, rgba(14,9,26,.94) 100%);
+  --eva-subhead: linear-gradient(180deg, rgba(58,33,92,.58) 0%, rgba(26,15,44,.48) 100%);
+  --eva-preview:
+    radial-gradient(circle at 50% 32%, rgba(112,72,190,.32) 0%, rgba(28,18,48,.82) 48%, rgba(5,4,10,.94) 100%);
+  --eva-btn: linear-gradient(145deg, rgba(53,31,86,.72) 0%, rgba(20,13,34,.64) 100%);
+  --eva-btn-hover: linear-gradient(145deg, rgba(80,48,122,.82) 0%, rgba(31,19,49,.72) 100%);
+  --eva-hover: rgba(138,92,255,.14);
+  --eva-input: rgba(9,7,18,.92);
+  --eva-track: rgba(255,255,255,.12);
+  --eva-scroll-track: #0b0814;
+  --eva-card: linear-gradient(158deg, rgba(40,24,66,.90) 0%, rgba(11,8,20,.94) 100%);
+  --eva-card-2: linear-gradient(150deg, rgba(54,32,84,.62) 0%, rgba(16,10,28,.86) 100%);
+  --eva-modal: linear-gradient(158deg, rgba(26,15,44,.98) 0%, rgba(8,6,15,.98) 100%);
+  --eva-menu: linear-gradient(158deg, rgba(24,14,40,.98) 0%, rgba(8,6,15,.98) 100%);
+  --eva-badge: rgba(24,14,40,.78);
+  --eva-thumb-bg: #06040c;
+  --eva-danger: #ff4d6d;
+  --eva-danger-bg: rgba(108,18,40,.38);
+  --eva-danger-text: #ffd7de;
+  --eva-disabled: rgba(219,207,240,.42);
+  --eva-title-line: repeating-linear-gradient(90deg, #b9ff3d 0 11px, transparent 11px 21px);
+  --eva-veil:
+    radial-gradient(36% 48% at 24% 30%, rgba(185,255,61,.20) 0%, transparent 72%),
+    radial-gradient(38% 46% at 78% 18%, rgba(138,92,255,.46) 0%, transparent 74%),
+    radial-gradient(40% 48% at 56% 98%, rgba(70,30,140,.36) 0%, transparent 72%),
+    conic-gradient(from 212deg at 52% 48%, rgba(138,92,255,.26), rgba(185,255,61,.10) 34%, rgba(112,52,220,.20) 62%, rgba(138,92,255,.26));
+  --eva-lens:
+    radial-gradient(circle at var(--st-x, 50%) var(--st-y, 50%), rgba(232,255,196,.52) 0%, rgba(138,92,255,.26) 24%, rgba(185,255,61,.12) 44%, transparent 64%),
+    conic-gradient(from 210deg at var(--st-x, 50%) var(--st-y, 50%), rgba(138,92,255,.22), transparent 28%, rgba(185,255,61,.16) 58%, transparent 84%);
+  --eva-prism: linear-gradient(108deg, transparent 24%, rgba(185,255,61,.34) 38%, rgba(138,92,255,.30) 48%, transparent 68%);
+  --eva-blob: radial-gradient(circle at 38% 34%, rgba(185,255,61,.58), rgba(138,92,255,.30) 48%, transparent 72%);
+  --eva-streak: linear-gradient(90deg, transparent, rgba(185,255,61,.78), rgba(138,92,255,.62), transparent);
+  --eva-shard: linear-gradient(132deg, rgba(185,255,61,.34) 0%, rgba(138,92,255,.30) 42%, rgba(52,20,96,.52) 100%);
+  --eva-enter:
+    repeating-linear-gradient(112deg, transparent 0 26px, rgba(185,255,61,.10) 26px 28px),
+    linear-gradient(112deg, transparent 30%, rgba(185,255,61,.24) 42%, rgba(138,92,255,.32) 54%, transparent 72%);
+}
+
+/* 初号机识别线：荧光绿间歇刻度 + 紫色装甲边 */
+body.skin-eva01 .titlebar,
+body.skin-eva01 .alb-titlebar,
+body.skin-eva01 .alb-head {
+  border-bottom: 1px solid rgba(185,255,61,.34) !important;
+}
+body.skin-eva01 .titlebar::after,
+body.skin-eva01 .alb-titlebar::after,
+body.skin-eva01 .alb-head::after {
+  height: 3px !important;
+  background: repeating-linear-gradient(90deg, #b9ff3d 0 12px, rgba(138,92,255,.75) 12px 15px, transparent 15px 24px) !important;
+  opacity: .72 !important;
+}
+body.skin-eva01 .section-header {
+  border-left: 3px solid var(--eva-accent-2) !important;
+  padding-left: 10px !important;
+}
+body.skin-eva01 .left { border-right: 1px solid rgba(185,255,61,.22) !important; }
+body.skin-eva01 .right { border-left: 1px solid rgba(138,92,255,.36) !important; }
+body.skin-eva01 .preview-area {
+  box-shadow: inset 0 0 0 1px rgba(185,255,61,.22), inset 0 20px 80px rgba(0,0,0,.48) !important;
+}
+body.skin-eva01 .btn-start {
+  box-shadow: 0 0 0 1px rgba(0,0,0,.40), 0 0 24px rgba(185,255,61,.30), inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+body.skin-eva01 .alb-cell.sel,
+body.skin-eva01 .alb-cell:hover { box-shadow: 0 0 0 1px #b9ff3d, 0 8px 22px rgba(0,0,0,.34), 0 0 22px rgba(185,255,61,.18) !important; }
+body.skin-eva01 .alb-cell .badge { color: #d9ff9a !important; }
+body.skin-eva01 .alb-dedup-btn { border-color: rgba(185,255,61,.42) !important; }
+
+/* 初号机转场：绿色六边形装甲片 + 紫色暴走光 */
+body.skin-eva01 .skin-transition .st-shard {
+  clip-path: polygon(50% 0%, 96% 25%, 96% 75%, 50% 100%, 4% 75%, 4% 25%);
+  border-width: 1px;
+}
+body.skin-eva01 .skin-transition .st-ring { border-style: double; border-width: 2px; }
+body.skin-eva01 .skin-transition .st-core { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+body.skin-eva01 .skin-transition .st-streak { height: 3px; }
+body.skin-eva01 .skin-transition .st-veil { filter: blur(20px) saturate(160%) !important; }

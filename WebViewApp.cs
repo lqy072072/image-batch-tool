@@ -446,8 +446,20 @@ namespace ImageBatchTool
         {
             this.host = host;
             this.web = web;
-            timer = new System.Windows.Forms.Timer { Interval = 420 };
-            timer.Tick += (s, e) => Capture();
+            // v2.37 性能修复：不再每 420ms 抓屏 + 推 JPEG。底图改为“按需刷新”：
+            // 只在窗口移动结束、尺寸调整结束、重新激活时补一帧，平时保持静态。
+            timer = new System.Windows.Forms.Timer { Interval = 520 };
+            timer.Tick += (s, e) => { timer.Stop(); Capture(); };
+            try { host.LocationChanged += (s, e) => ScheduleRefresh(); } catch { }
+            try { host.ResizeEnd += (s, e) => ScheduleRefresh(); } catch { }
+            try { host.Activated += (s, e) => ScheduleRefresh(); } catch { }
+        }
+
+        // 拖动/缩放期间不抓屏，停下来 0.52 秒后再取一帧，避免整窗反复重绘。
+        void ScheduleRefresh()
+        {
+            if (!enabled || failed || host == null || host.IsDisposed || !host.Visible) return;
+            try { timer.Stop(); timer.Start(); } catch { }
         }
 
         public bool Enabled { get { return enabled; } }
@@ -482,8 +494,8 @@ namespace ImageBatchTool
             {
                 enabled = true;
                 host.BackgroundImageLayout = ImageLayout.Stretch;
+                // v2.37：只取一帧静态底图，不启动持续抓屏定时器。
                 Capture();
-                timer.Start();
                 return true;
             }
             catch { failed = true; return false; }
@@ -551,7 +563,7 @@ namespace ImageBatchTool
                 lastBounds = b;
                 hasLastBounds = true;
 
-                int sw = Math.Max(240, Math.Min(640, b.Width / 2));
+                int sw = Math.Max(240, Math.Min(560, b.Width / 2));
                 int sh = Math.Max(100, (int)Math.Round(sw * (double)b.Height / b.Width));
                 if (small == null || small.Width != sw || small.Height != sh)
                 {
@@ -814,33 +826,67 @@ namespace ImageBatchTool
             bool aurora = skin == "aurora";
             bool glass = skin == "liquid" || skin == "smoke";
             bool pale = light || frost || aurora;
-            BackColor = glass ? Color.FromArgb(19,21,49) : frost ? Color.FromArgb(246,244,250) : light ? Color.FromArgb(245,245,247) : aurora ? Color.FromArgb(245,250,255) : Color.FromArgb(43,43,43);
+            bool eva01 = skin == "eva01" || skin == "eva-01" || skin == "unit01" || skin == "unit-01";
+            bool eva00 = skin == "eva00" || skin == "eva-00" || skin == "unit00" || skin == "unit-00";
+            bool eva02 = skin == "eva02" || skin == "eva-02" || skin == "unit02" || skin == "unit-02";
+            BackColor = eva01 ? Color.FromArgb(7, 5, 13)
+                : eva00 ? Color.FromArgb(7, 17, 29)
+                : eva02 ? Color.FromArgb(16, 5, 7)
+                : glass ? Color.FromArgb(19, 21, 49)
+                : frost ? Color.FromArgb(246, 244, 250)
+                : light ? Color.FromArgb(245, 245, 247)
+                : aurora ? Color.FromArgb(245, 250, 255)
+                : Color.FromArgb(43, 43, 43);
 
             var t = new Label();
             t.Text = AppModule.DisplayName;
-            t.ForeColor = glass ? Color.FromArgb(246,250,255) : pale ? Color.FromArgb(29,29,31) : Color.FromArgb(220,220,220);
+            t.ForeColor = eva01 ? Color.FromArgb(240, 234, 255)
+                : eva00 ? Color.FromArgb(234, 245, 255)
+                : eva02 ? Color.FromArgb(255, 240, 233)
+                : glass ? Color.FromArgb(246, 250, 255)
+                : pale ? Color.FromArgb(29, 29, 31)
+                : Color.FromArgb(220, 220, 220);
             t.Font = new Font("Microsoft YaHei UI", 14f);
             t.AutoSize = false; t.Size = new Size(360, 40); t.Location = new Point(0, 70);
             t.TextAlign = ContentAlignment.MiddleCenter;
 
             var sub = new Label();
             sub.Text = AppModule.SplashSubtitle;
-            sub.ForeColor = glass ? Color.FromArgb(183,205,237) : pale ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
+            sub.ForeColor = eva01 ? Color.FromArgb(185, 172, 214)
+                : eva00 ? Color.FromArgb(169, 196, 220)
+                : eva02 ? Color.FromArgb(223, 174, 159)
+                : glass ? Color.FromArgb(183, 205, 237)
+                : pale ? Color.FromArgb(142, 142, 147)
+                : Color.FromArgb(140, 140, 140);
             sub.Font = new Font("Microsoft YaHei UI", 9f);
             sub.AutoSize = false; sub.Size = new Size(360, 20); sub.Location = new Point(0, 120);
             sub.TextAlign = ContentAlignment.MiddleCenter;
 
             var bar = new Panel();
             bar.Size = new Size(200, 3); bar.Location = new Point(80, 160);
-            bar.BackColor = glass ? Color.FromArgb(61,72,111) : pale ? Color.FromArgb(229,229,234) : Color.FromArgb(60,60,60);
+            bar.BackColor = eva01 ? Color.FromArgb(42, 24, 64)
+                : eva00 ? Color.FromArgb(22, 50, 77)
+                : eva02 ? Color.FromArgb(58, 16, 18)
+                : glass ? Color.FromArgb(61, 72, 111)
+                : pale ? Color.FromArgb(229, 229, 234)
+                : Color.FromArgb(60, 60, 60);
             var fill = new Panel();
             fill.Size = new Size(0, 3); fill.Location = new Point(0, 0);
-            fill.BackColor = glass ? Color.FromArgb(98,197,255) : Color.FromArgb(9,105,218);
+            fill.BackColor = eva01 ? Color.FromArgb(185, 255, 61)
+                : eva00 ? Color.FromArgb(255, 201, 74)
+                : eva02 ? Color.FromArgb(255, 159, 26)
+                : glass ? Color.FromArgb(98, 197, 255)
+                : Color.FromArgb(9, 105, 218);
             bar.Controls.Add(fill);
 
             var pct = new Label();
             pct.Text = "0%";
-            pct.ForeColor = glass ? Color.FromArgb(196,218,248) : pale ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
+            pct.ForeColor = eva01 ? Color.FromArgb(185, 172, 214)
+                : eva00 ? Color.FromArgb(169, 196, 220)
+                : eva02 ? Color.FromArgb(223, 174, 159)
+                : glass ? Color.FromArgb(196, 218, 248)
+                : pale ? Color.FromArgb(142, 142, 147)
+                : Color.FromArgb(140, 140, 140);
             pct.Font = new Font("Microsoft YaHei UI", 9f);
             pct.AutoSize = false; pct.Size = new Size(360, 18); pct.Location = new Point(0, 168);
             pct.TextAlign = ContentAlignment.MiddleCenter;
@@ -2230,7 +2276,7 @@ namespace ImageBatchTool
             if (startupSkin != "aurora") Opacity = 0;
             // 液态玻璃不再使用 TransparencyKey：WebView2 透明页会让整窗鼠标穿透。
             // 改用整窗 alpha，窗口下方内容仍能实时透出，且所有控件可点击。
-            BackColor = startupSkin == "aurora" ? Color.FromArgb(8, 18, 32) : Color.FromArgb(32, 32, 36);
+            BackColor = startupSkin == "aurora" ? Color.FromArgb(8, 18, 32) : OpaqueBackFor(startupSkin);
             TransparencyKey = Color.Empty;
             auroraAlpha = AppModule.IsAlbum ? 244 : 238;
 
@@ -2551,6 +2597,9 @@ namespace ImageBatchTool
             if (s == "liquid" || s == "glass" || s == "liquid-glass" || s == "liquidglass"
                 || s == "old-liquid" || s == "dark-glass" || s == "ink") return "smoke";
             if (s == "liquid2" || s == "new-liquid" || s == "realtime-liquid" || s == "clear-glass") return "aurora";
+            if (s == "eva-01" || s == "unit01" || s == "unit-01") return "eva01";
+            if (s == "eva-00" || s == "unit00" || s == "unit-00") return "eva00";
+            if (s == "eva-02" || s == "unit02" || s == "unit-02") return "eva02";
             if (s == "frostwhite" || s == "frosted-white") return "frost";
             if (s == "white") return "light";
             if (s == "black") return "dark";
@@ -2561,6 +2610,9 @@ namespace ImageBatchTool
         {
             if (skin == "light") return Color.FromArgb(245, 245, 247);
             if (skin == "frost") return Color.FromArgb(246, 244, 250);
+            if (skin == "eva00") return Color.FromArgb(7, 17, 29);
+            if (skin == "eva02") return Color.FromArgb(16, 5, 7);
+            if (skin == "eva01") return Color.FromArgb(7, 5, 13);
             return Color.FromArgb(32, 32, 36);
         }
 
@@ -2637,7 +2689,7 @@ namespace ImageBatchTool
                     try { int v = 1; Native.DwmSetWindowAttribute(targetForm.Handle, 38, ref v, sizeof(int)); } catch { }
                     try { int v = 2; Native.DwmSetWindowAttribute(targetForm.Handle, 33, ref v, sizeof(int)); } catch { }
                     if (targetWeb != null)
-                        targetWeb.DefaultBackgroundColor = skin == "light" ? Color.FromArgb(255, 255, 255) : skin == "frost" ? Color.FromArgb(250, 250, 252) : Color.FromArgb(32, 32, 36);
+                        targetWeb.DefaultBackgroundColor = skin == "light" ? Color.FromArgb(255, 255, 255) : skin == "frost" ? Color.FromArgb(250, 250, 252) : OpaqueBackFor(skin);
                     Native.SetAlpha(targetForm.Handle, 255);
                 }
                 targetForm.Invalidate(true);

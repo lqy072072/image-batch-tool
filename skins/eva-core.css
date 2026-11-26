@@ -1,0 +1,759 @@
+/* ==========================================================================
+   EVA 机体主题 · 共用外壳
+   三套配色分别由 eva-unit01.css / eva-unit00.css / eva-unit02.css 提供变量。
+   本文件只做视觉层：不改变任何布局、按钮尺寸、点击区域或页面逻辑。
+   ========================================================================== */
+
+/* ---------- 根节点：先铺底色，避免首帧闪白 ---------- */
+html[class*="skin-eva-html"] { background: #07060c !important; }
+
+body[class*="skin-eva"] {
+  --eva-radius: 8px;
+  --eva-card-radius: 6px;
+  --eva-cut: 10px;
+  color-scheme: dark;
+  background: var(--eva-body) !important;
+  background-color: var(--eva-bg-solid) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  color: var(--eva-text) !important;
+}
+
+body[class*="skin-eva"] .titlebar,
+body[class*="skin-eva"] .toolbar,
+body[class*="skin-eva"] .bottombar,
+body[class*="skin-eva"] .alb-titlebar,
+body[class*="skin-eva"] .alb-head,
+body[class*="skin-eva"] .alb-foot,
+body[class*="skin-eva"] .dup-head,
+body[class*="skin-eva"] .dup-tools,
+body[class*="skin-eva"] .bin-head,
+body[class*="skin-eva"] .bin-foot,
+body[class*="skin-eva"] .pro-head,
+body[class*="skin-eva"] .pro-tabs {
+  background: var(--eva-rail) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-text) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 8px 24px rgba(0,0,0,.28) !important;
+}
+
+body[class*="skin-eva"] .titlebar,
+body[class*="skin-eva"] .alb-titlebar {
+  position: relative;
+  overflow: hidden;
+  background: var(--eva-bg-solid) !important;
+}
+body[class*="skin-eva"] .titlebar,
+body[class*="skin-eva"] .alb-titlebar {
+  background-image: var(--eva-rail) !important;
+  background-size: 100% 100% !important;
+}
+body[class*="skin-eva"] .titlebar::before,
+body[class*="skin-eva"] .alb-titlebar::before {
+  content: var(--eva-hud-label);
+  position: absolute;
+  left: 78px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--eva-accent-2);
+  font: 700 9px/1.2 "Segoe UI", "Microsoft YaHei", sans-serif;
+  letter-spacing: .16em;
+  opacity: .72;
+  text-shadow: 0 0 10px var(--eva-accent-glow);
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* 相册顶栏里的“设置”下拉必须能伸出顶栏，不能被装饰线裁掉 */
+body[class*="skin-eva"] .alb-head {
+  position: relative;
+  overflow: visible !important;
+}
+body[class*="skin-eva"] .dup-head,
+body[class*="skin-eva"] .bin-head,
+body[class*="skin-eva"] .pro-head {
+  position: relative;
+  overflow: hidden;
+}
+
+body[class*="skin-eva"] .main,
+body[class*="skin-eva"] .alb-overlay,
+body[class*="skin-eva"] .alb-body,
+body[class*="skin-eva"] .alb-view,
+body[class*="skin-eva"] .alb-view-body { background: transparent !important; }
+
+body[class*="skin-eva"] .left,
+body[class*="skin-eva"] .right {
+  background: var(--eva-panel) !important;
+  border-color: var(--eva-line) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 18px 44px rgba(0,0,0,.30) !important;
+}
+
+body[class*="skin-eva"] .center { background: transparent !important; }
+
+body[class*="skin-eva"] .preview-area {
+  background: var(--eva-preview) !important;
+  box-shadow: inset 0 0 0 1px var(--eva-line), inset 0 20px 70px rgba(0,0,0,.42) !important;
+}
+
+body[class*="skin-eva"] .left-section,
+body[class*="skin-eva"] .right-section,
+body[class*="skin-eva"] .left-footer,
+body[class*="skin-eva"] .lut-header,
+body[class*="skin-eva"] .panel-divider,
+body[class*="skin-eva"] .alb-vtags,
+body[class*="skin-eva"] .alb-paths { border-color: var(--eva-line) !important; }
+
+body[class*="skin-eva"] .section-header {
+  background: var(--eva-subhead) !important;
+  border-bottom: 1px solid var(--eva-line) !important;
+  color: var(--eva-accent-2) !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.35) !important;
+}
+
+body[class*="skin-eva"] .ruler-row,
+body[class*="skin-eva"] .ruler-v-col {
+  background: var(--eva-subhead) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-muted) !important;
+}
+
+body[class*="skin-eva"] .ruler-corner { border-color: var(--eva-line) !important; }
+body[class*="skin-eva"] .vsplitter { background: var(--eva-line) !important; }
+body[class*="skin-eva"] .vsplitter:hover,
+body[class*="skin-eva"] .vsplitter.dragging { background: var(--eva-accent) !important; }
+
+/* ---------- 通用文字 ---------- */
+body[class*="skin-eva"] .left,
+body[class*="skin-eva"] .right,
+body[class*="skin-eva"] .center,
+body[class*="skin-eva"] .titlebar,
+body[class*="skin-eva"] .toolbar,
+body[class*="skin-eva"] .bottombar,
+body[class*="skin-eva"] .alb-overlay,
+body[class*="skin-eva"] .alb-head,
+body[class*="skin-eva"] .alb-foot,
+body[class*="skin-eva"] .dup-panel,
+body[class*="skin-eva"] .bin-panel { color: var(--eva-text) !important; }
+
+body[class*="skin-eva"] .left-header,
+body[class*="skin-eva"] .left-header .count,
+body[class*="skin-eva"] .lut-header,
+body[class*="skin-eva"] .sub-title,
+body[class*="skin-eva"] .lut-group-title,
+body[class*="skin-eva"] .panel-title { color: var(--eva-accent-2) !important; }
+
+body[class*="skin-eva"] .row-line,
+body[class*="skin-eva"] .slider-row label,
+body[class*="skin-eva"] .crop-row label,
+body[class*="skin-eva"] .bottom-label,
+body[class*="skin-eva"] .zoom-label,
+body[class*="skin-eva"] .status-pct,
+body[class*="skin-eva"] .output-info,
+body[class*="skin-eva"] .preview-empty,
+body[class*="skin-eva"] .file-list,
+body[class*="skin-eva"] .hist-labels,
+body[class*="skin-eva"] .lut-item,
+body[class*="skin-eva"] .file-item,
+body[class*="skin-eva"] .alb-empty,
+body[class*="skin-eva"] .alb-vhint,
+body[class*="skin-eva"] .alb-foot,
+body[class*="skin-eva"] .alb-search-count,
+body[class*="skin-eva"] .dup-head .s,
+body[class*="skin-eva"] .dup-group-h,
+body[class*="skin-eva"] .dup-empty,
+body[class*="skin-eva"] .bin-sub,
+body[class*="skin-eva"] .bin-dir,
+body[class*="skin-eva"] .bin-empty { color: var(--eva-muted) !important; }
+
+body[class*="skin-eva"] .top-right { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] .top-right span:hover {
+  background: var(--eva-hover) !important;
+  color: var(--eva-accent-2) !important;
+  box-shadow: inset 0 0 0 1px var(--eva-line) !important;
+}
+
+body[class*="skin-eva"] .status-pct,
+body[class*="skin-eva"] .output-info b,
+body[class*="skin-eva"] .slider-row .val,
+body[class*="skin-eva"] .render-name { color: var(--eva-accent-2) !important; }
+
+body[class*="skin-eva"] .output-info b,
+body[class*="skin-eva"] .alb-title,
+body[class*="skin-eva"] .alb-vname,
+body[class*="skin-eva"] .pro-box b { color: var(--eva-text) !important; }
+
+/* ---------- 按钮 / 控件 ---------- */
+body[class*="skin-eva"] .btn,
+body[class*="skin-eva"] .tool-btn,
+body[class*="skin-eva"] .mini-btn,
+body[class*="skin-eva"] .lut-mode-btn,
+body[class*="skin-eva"] .hist-tab,
+body[class*="skin-eva"] .edx-gr,
+body[class*="skin-eva"] .edx-tab,
+body[class*="skin-eva"] .pro-tab,
+body[class*="skin-eva"] .alb-ctl,
+body[class*="skin-eva"] .alb-search-btn,
+body[class*="skin-eva"] .alb-dedup-btn,
+body[class*="skin-eva"] .alb-curate-btn,
+body[class*="skin-eva"] .alb-favbtn,
+body[class*="skin-eva"] .alb-zoom button,
+body[class*="skin-eva"] .bin-btn,
+body[class*="skin-eva"] .dup-btn,
+body[class*="skin-eva"] .pro-btn,
+body[class*="skin-eva"] .gen-primary,
+body[class*="skin-eva"] .ai-primary-sm,
+body[class*="skin-eva"] .ai-run,
+body[class*="skin-eva"] .alb-tab,
+body[class*="skin-eva"] .alb-curate-tab,
+body[class*="skin-eva"] .alb-perf-seg span,
+body[class*="skin-eva"] .alb-opt-item,
+body[class*="skin-eva"] .alb-ctx-item,
+body[class*="skin-eva"] .lut-menu-item {
+  background: var(--eva-btn) !important;
+  border: 1px solid var(--eva-line) !important;
+  color: var(--eva-text) !important;
+  border-radius: var(--eva-radius) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 2px 8px rgba(0,0,0,.20) !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.25) !important;
+}
+
+body[class*="skin-eva"] .btn:hover,
+body[class*="skin-eva"] .tool-btn:hover,
+body[class*="skin-eva"] .mini-btn:hover,
+body[class*="skin-eva"] .lut-mode-btn:hover,
+body[class*="skin-eva"] .hist-tab:hover,
+body[class*="skin-eva"] .edx-gr:hover,
+body[class*="skin-eva"] .edx-tab:hover,
+body[class*="skin-eva"] .pro-tab:hover,
+body[class*="skin-eva"] .alb-ctl:hover,
+body[class*="skin-eva"] .alb-search-btn:hover,
+body[class*="skin-eva"] .alb-dedup-btn:hover,
+body[class*="skin-eva"] .alb-curate-btn:hover,
+body[class*="skin-eva"] .alb-favbtn:hover,
+body[class*="skin-eva"] .alb-zoom button:hover,
+body[class*="skin-eva"] .bin-btn:hover,
+body[class*="skin-eva"] .dup-btn:hover,
+body[class*="skin-eva"] .pro-btn:hover,
+body[class*="skin-eva"] .gen-primary:hover,
+body[class*="skin-eva"] .ai-primary-sm:hover,
+body[class*="skin-eva"] .ai-run:hover,
+body[class*="skin-eva"] .alb-tab:hover,
+body[class*="skin-eva"] .alb-curate-tab:hover,
+body[class*="skin-eva"] .alb-opt-item:hover,
+body[class*="skin-eva"] .alb-ctx-item:hover,
+body[class*="skin-eva"] .lut-menu-item:hover {
+  background: var(--eva-btn-hover) !important;
+  border-color: var(--eva-accent) !important;
+  color: var(--eva-accent-2) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 0 0 1px var(--eva-accent-soft), 0 6px 16px rgba(0,0,0,.24) !important;
+}
+
+body[class*="skin-eva"] .btn:active,
+body[class*="skin-eva"] .tool-btn:active,
+body[class*="skin-eva"] .mini-btn:active,
+body[class*="skin-eva"] .alb-ctl:active,
+body[class*="skin-eva"] .alb-curate-btn:active,
+body[class*="skin-eva"] .bin-btn:active,
+body[class*="skin-eva"] .pro-btn:active { transform: translateY(1px) !important; }
+
+body[class*="skin-eva"] .btn.active,
+body[class*="skin-eva"] .btn.on,
+body[class*="skin-eva"] .tool-btn.active,
+body[class*="skin-eva"] .tool-btn.on,
+body[class*="skin-eva"] .lut-mode-btn.active,
+body[class*="skin-eva"] .lut-mode-btn.on,
+body[class*="skin-eva"] .hist-tab.active,
+body[class*="skin-eva"] .hist-tab.on,
+body[class*="skin-eva"] .edx-gr.on,
+body[class*="skin-eva"] .edx-tab.on,
+body[class*="skin-eva"] .pro-tab.on,
+body[class*="skin-eva"] .alb-ctl.on,
+body[class*="skin-eva"] .alb-curate-tab.active,
+body[class*="skin-eva"] .alb-curate-tab.on,
+body[class*="skin-eva"] .alb-tab.active,
+body[class*="skin-eva"] .alb-tab.on,
+body[class*="skin-eva"] .alb-perf-seg span.on,
+body[class*="skin-eva"] .alb-opt-item.active,
+body[class*="skin-eva"] .alb-ctx-item.active,
+body[class*="skin-eva"] .lut-item.sel,
+body[class*="skin-eva"] .file-item.sel,
+body[class*="skin-eva"] .tab.active,
+body[class*="skin-eva"] .tab.on {
+  background: var(--eva-accent) !important;
+  border-color: var(--eva-accent-2) !important;
+  color: var(--eva-accent-ink) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 1px var(--eva-accent), 0 0 18px var(--eva-accent-glow) !important;
+}
+
+body[class*="skin-eva"] .btn-start {
+  background: var(--eva-accent-2) !important;
+  border: 1px solid var(--eva-accent-2) !important;
+  color: var(--eva-accent-ink) !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.32), 0 0 20px var(--eva-accent-glow), inset 0 1px 0 rgba(255,255,255,.55) !important;
+}
+body[class*="skin-eva"] #colorAutoBtn,
+body[class*="skin-eva"] #aiOptBtn,
+body[class*="skin-eva"] #beautyBtn {
+  background: var(--eva-accent) !important;
+  border: 1px solid var(--eva-accent-2) !important;
+  color: var(--eva-accent-ink) !important;
+  box-shadow: 0 0 12px var(--eva-accent-glow), inset 0 1px 0 rgba(255,255,255,.2) !important;
+}
+body[class*="skin-eva"] #aiOptBtn,
+body[class*="skin-eva"] #beautyBtn {
+  background: var(--eva-accent-2) !important;
+}
+body[class*="skin-eva"] .btn-start:hover {
+  background: var(--eva-accent-3, var(--eva-accent-2)) !important;
+  border-color: var(--eva-accent-3, var(--eva-accent-2)) !important;
+  color: var(--eva-accent-ink) !important;
+}
+
+body[class*="skin-eva"] .btn.danger,
+body[class*="skin-eva"] .bin-btn.danger,
+body[class*="skin-eva"] .alb-opt-item.danger,
+body[class*="skin-eva"] .alb-ctx-item.danger,
+body[class*="skin-eva"] .dup-btn.danger {
+  background: var(--eva-danger-bg) !important;
+  border-color: var(--eva-danger) !important;
+  color: var(--eva-danger-text) !important;
+}
+body[class*="skin-eva"] .btn.danger:hover,
+body[class*="skin-eva"] .bin-btn.danger:hover,
+body[class*="skin-eva"] .alb-opt-item.danger:hover,
+body[class*="skin-eva"] .alb-ctx-item.danger:hover,
+body[class*="skin-eva"] .dup-btn.danger:hover { background: var(--eva-danger) !important; color: #fff !important; }
+
+body[class*="skin-eva"] .alb-opt-item.dis,
+body[class*="skin-eva"] .alb-ctx-item.dis,
+body[class*="skin-eva"] .btn:disabled,
+body[class*="skin-eva"] .btn[disabled] { color: var(--eva-disabled) !important; opacity: .55 !important; }
+
+/* ---------- 输入框 / 下拉 / 滑块 ---------- */
+body[class*="skin-eva"] input,
+body[class*="skin-eva"] select,
+body[class*="skin-eva"] textarea,
+body[class*="skin-eva"] .bottom-select,
+body[class*="skin-eva"] .mini-input,
+body[class*="skin-eva"] .mini-sel,
+body[class*="skin-eva"] .alb-search-box,
+body[class*="skin-eva"] .alb-search-box input,
+body[class*="skin-eva"] .gen-prompt,
+body[class*="skin-eva"] .alb-sel-wrap {
+  background: var(--eva-input) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-text) !important;
+  border-radius: 6px !important;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.30) !important;
+}
+body[class*="skin-eva"] input::placeholder,
+body[class*="skin-eva"] textarea::placeholder { color: var(--eva-placeholder) !important; }
+body[class*="skin-eva"] select option { background: var(--eva-bg-solid) !important; color: var(--eva-text) !important; }
+body[class*="skin-eva"] input:focus,
+body[class*="skin-eva"] select:focus,
+body[class*="skin-eva"] textarea:focus,
+body[class*="skin-eva"] .alb-search-box:focus-within {
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: 0 0 0 2px var(--eva-accent-soft), inset 0 1px 3px rgba(0,0,0,.30) !important;
+  outline: none !important;
+}
+body[class*="skin-eva"] input[type=checkbox] { accent-color: var(--eva-accent-2) !important; }
+
+body[class*="skin-eva"] .slider-row input[type=range] {
+  background: var(--eva-track) !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+}
+body[class*="skin-eva"] .slider-row input[type=range]::-webkit-slider-thumb {
+  background: var(--eva-accent-2) !important;
+  border: 2px solid var(--eva-accent) !important;
+  box-shadow: 0 0 0 3px var(--eva-accent-soft), 0 0 12px var(--eva-accent-glow) !important;
+}
+body[class*="skin-eva"] .progress { background: var(--eva-track) !important; }
+body[class*="skin-eva"] .progress-bar { background: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .status-box {
+  background: var(--eva-input) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-text) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi) !important;
+}
+
+/* ---------- 文件 / LUT 列表 ---------- */
+body[class*="skin-eva"] .file-item:hover,
+body[class*="skin-eva"] .lut-item:hover { background: var(--eva-hover) !important; }
+body[class*="skin-eva"] .file-item.sel,
+body[class*="skin-eva"] .lut-item.sel {
+  background: var(--eva-accent-soft) !important;
+  border-left-color: var(--eva-accent-2) !important;
+  color: var(--eva-text) !important;
+}
+body[class*="skin-eva"] .lut-item.sel .lut-radio { border-color: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .lut-item.sel .lut-radio::after { background: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .lut-menu,
+body[class*="skin-eva"] .alb-sel-menu {
+  background: var(--eva-modal) !important;
+  border-color: var(--eva-line-strong) !important;
+  color: var(--eva-text) !important;
+  box-shadow: 0 18px 44px rgba(0,0,0,.52) !important;
+}
+body[class*="skin-eva"] .lut-menu-item:hover,
+body[class*="skin-eva"] .alb-sel-item:hover { background: var(--eva-hover) !important; }
+
+body[class*="skin-eva"] * { scrollbar-color: var(--eva-accent) var(--eva-scroll-track); }
+body[class*="skin-eva"] ::-webkit-scrollbar-track { background: var(--eva-scroll-track); }
+body[class*="skin-eva"] ::-webkit-scrollbar-thumb { background: var(--eva-accent); border: 2px solid var(--eva-scroll-track); border-radius: 999px; }
+body[class*="skin-eva"] ::-webkit-scrollbar-thumb:hover { background: var(--eva-accent-2); }
+
+/* ---------- 相册 ---------- */
+body[class*="skin-eva"] .alb-overlay { background: transparent !important; }
+body[class*="skin-eva"] .alb-head,
+body[class*="skin-eva"] .alb-foot {
+  background: var(--eva-rail) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-text) !important;
+}
+body[class*="skin-eva"] .alb-body,
+body[class*="skin-eva"] .alb-grid,
+body[class*="skin-eva"] .bin-grid,
+body[class*="skin-eva"] .dup-cells { background: transparent !important; }
+body[class*="skin-eva"] .bin-grid { grid-auto-rows: max-content !important; }
+
+body[class*="skin-eva"] .alb-cell,
+body[class*="skin-eva"] .bin-cell,
+body[class*="skin-eva"] .dup-cell {
+  background: var(--eva-card) !important;
+  border: 1px solid var(--eva-line) !important;
+  border-radius: var(--eva-card-radius) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 4px 12px rgba(0,0,0,.22) !important;
+}
+body[class*="skin-eva"] .alb-cell:hover,
+body[class*="skin-eva"] .bin-cell:hover,
+body[class*="skin-eva"] .dup-cell:hover {
+  border-color: var(--eva-accent) !important;
+  box-shadow: 0 0 0 1px var(--eva-accent), 0 8px 20px rgba(0,0,0,.30), 0 0 18px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] .alb-cell.sel,
+body[class*="skin-eva"] .bin-cell.sel,
+body[class*="skin-eva"] .dup-cell.sel {
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: 0 0 0 1px var(--eva-accent-2), 0 0 22px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] .alb-cell img,
+body[class*="skin-eva"] .dup-cell img,
+body[class*="skin-eva"] .dup-cell .ph {
+  background-color: var(--eva-thumb-bg) !important;
+  border-radius: calc(var(--eva-card-radius) - 1px) !important;
+}
+body[class*="skin-eva"] .bin-thumb {
+  background-color: var(--eva-thumb-bg) !important;
+  border-radius: calc(var(--eva-card-radius) - 1px) !important;
+}
+body[class*="skin-eva"] .alb-cell .nm,
+body[class*="skin-eva"] .bin-name,
+body[class*="skin-eva"] .dup-cell .nm { color: var(--eva-text) !important; text-shadow: 0 1px 3px rgba(0,0,0,.65) !important; }
+body[class*="skin-eva"] .alb-cell .meta,
+body[class*="skin-eva"] .alb-cell .mt,
+body[class*="skin-eva"] .alb-cell .fd,
+body[class*="skin-eva"] .bin-sub,
+body[class*="skin-eva"] .dup-cell .fd,
+body[class*="skin-eva"] .dup-cell .mt { color: var(--eva-muted) !important; text-shadow: 0 1px 2px rgba(0,0,0,.60) !important; }
+body[class*="skin-eva"] .alb-cell .badge {
+  background: var(--eva-badge) !important;
+  border: 1px solid var(--eva-line-strong) !important;
+  color: var(--eva-accent-2) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35) !important;
+}
+body[class*="skin-eva"] .alb-folder-h,
+body[class*="skin-eva"] .alb-day-h,
+body[class*="skin-eva"] .alb-group-h,
+body[class*="skin-eva"] .alb-albums-h { color: var(--eva-muted) !important; border-color: var(--eva-line) !important; }
+body[class*="skin-eva"] .alb-chip,
+body[class*="skin-eva"] .alb-paths,
+body[class*="skin-eva"] .alb-person,
+body[class*="skin-eva"] .alb-pcard,
+body[class*="skin-eva"] .alb-vtags,
+body[class*="skin-eva"] .alb-vexif {
+  background: var(--eva-card) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-text) !important;
+}
+body[class*="skin-eva"] .alb-chip:hover { border-color: var(--eva-accent) !important; color: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .alb-search-box { background: var(--eva-input) !important; }
+body[class*="skin-eva"] .alb-search-hints span { color: var(--eva-muted) !important; background: var(--eva-card) !important; border-color: var(--eva-line) !important; }
+body[class*="skin-eva"] .alb-search-cancel { color: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .alb-opt-menu,
+body[class*="skin-eva"] .alb-ctx,
+body[class*="skin-eva"] .alb-modal {
+  background: var(--eva-modal) !important;
+  border: 1px solid var(--eva-line-strong) !important;
+  color: var(--eva-text) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,.58), 0 0 24px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] .alb-opt-sec { border-bottom-color: var(--eva-line) !important; }
+body[class*="skin-eva"] .alb-opt-sec-title,
+body[class*="skin-eva"] .alb-opt-perf-title { color: var(--eva-accent-2) !important; font-weight: 700 !important; }
+body[class*="skin-eva"] .alb-opt-note { color: var(--eva-accent-2) !important; border-color: var(--eva-line-strong) !important; }
+body[class*="skin-eva"] .alb-modal-mask { background: rgba(0,0,0,.68) !important; }
+body[class*="skin-eva"] .alb-modal h3,
+body[class*="skin-eva"] .alb-modal .row,
+body[class*="skin-eva"] .alb-modal .row label,
+body[class*="skin-eva"] .alb-modal .chkline { color: var(--eva-text) !important; }
+body[class*="skin-eva"] .alb-modal .hint { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] .alb-modal .list {
+  background: var(--eva-input) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-text) !important;
+}
+body[class*="skin-eva"] .alb-modal .prog { background: var(--eva-track) !important; }
+body[class*="skin-eva"] .alb-modal .prog > div { background: var(--eva-accent-2) !important; }
+
+/* ---------- 回收站 / 去重 ---------- */
+body[class*="skin-eva"] .bin-overlay,
+body[class*="skin-eva"] .dup-overlay,
+body[class*="skin-eva"] .fx-modal,
+body[class*="skin-eva"] .gen-overlay,
+body[class*="skin-eva"] .pro-overlay { background: rgba(0,0,0,.68) !important; }
+body[class*="skin-eva"] #binOverlay .bin-panel.bin-panel,
+body[class*="skin-eva"] .bin-panel,
+body[class*="skin-eva"] .dup-panel,
+body[class*="skin-eva"] .fx-box,
+body[class*="skin-eva"] .pro-box,
+body[class*="skin-eva"] .gen-result-box {
+  background: var(--eva-modal) !important;
+  border: 1px solid var(--eva-line-strong) !important;
+  color: var(--eva-text) !important;
+  box-shadow: 0 28px 80px rgba(0,0,0,.58), 0 0 26px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] .bin-title,
+body[class*="skin-eva"] .dup-head .t,
+body[class*="skin-eva"] .pro-head b { color: var(--eva-text) !important; font-weight: 700 !important; }
+body[class*="skin-eva"] .bin-title .s,
+body[class*="skin-eva"] .dup-head .s { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] .dup-tools,
+body[class*="skin-eva"] .bin-foot { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] .dup-group {
+  background: var(--eva-card) !important;
+  border-color: var(--eva-line) !important;
+}
+body[class*="skin-eva"] .dup-cell { background: var(--eva-card-2) !important; }
+body[class*="skin-eva"] .dup-ignore { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] .dup-cell .mk { color: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] .dup-cell label { color: var(--eva-text) !important; }
+body[class*="skin-eva"] .bin-thumb { color: var(--eva-muted) !important; }
+
+/* ---------- 专业 / AI / 生成结果 ---------- */
+body[class*="skin-eva"] .pro-box,
+body[class*="skin-eva"] .fx-box,
+body[class*="skin-eva"] .gen-result-box { background: var(--eva-modal) !important; }
+body[class*="skin-eva"] .pro-tab,
+body[class*="skin-eva"] .gen-tab {
+  background: var(--eva-btn) !important;
+  border-color: var(--eva-line) !important;
+  color: var(--eva-muted) !important;
+}
+body[class*="skin-eva"] .pro-tab.active,
+body[class*="skin-eva"] .gen-tab.active {
+  background: var(--eva-accent) !important;
+  border-color: var(--eva-accent-2) !important;
+  color: var(--eva-accent-ink) !important;
+}
+body[class*="skin-eva"] .pro-pane,
+body[class*="skin-eva"] .gen-result-pane,
+body[class*="skin-eva"] .ai-tool,
+body[class*="skin-eva"] .fx-card { border-color: var(--eva-line) !important; }
+body[class*="skin-eva"] .ai-tool-status,
+body[class*="skin-eva"] .gen-status-line,
+body[class*="skin-eva"] .pro-note,
+body[class*="skin-eva"] .gen-help { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] .ai-tag,
+body[class*="skin-eva"] .pro-badge,
+body[class*="skin-eva"] .gen-badge {
+  background: var(--eva-accent-soft) !important;
+  border-color: var(--eva-accent) !important;
+  color: var(--eva-accent-2) !important;
+}
+body[class*="skin-eva"] .gen-result-head,
+body[class*="skin-eva"] .gen-result-foot,
+body[class*="skin-eva"] .pro-head { border-color: var(--eva-line) !important; }
+body[class*="skin-eva"] .gen-spin { border-color: var(--eva-accent) !important; }
+
+/* ---------- 皮肤菜单 ---------- */
+body[class*="skin-eva"] #skinMenu.skin-menu {
+  background: var(--eva-menu) !important;
+  border: 1px solid var(--eva-line-strong) !important;
+  color: var(--eva-text) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,.62), 0 0 28px var(--eva-accent-soft), inset 0 1px 0 var(--eva-hi) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+body[class*="skin-eva"] #skinMenu .skin-menu-head b { color: var(--eva-accent-2) !important; }
+body[class*="skin-eva"] #skinMenu .skin-menu-head,
+body[class*="skin-eva"] #skinMenu .skin-desc,
+body[class*="skin-eva"] #skinMenu .skin-menu-foot { color: var(--eva-muted) !important; }
+body[class*="skin-eva"] #skinMenu .skin-menu-foot { border-top-color: var(--eva-line) !important; }
+body[class*="skin-eva"] #skinMenu .skin-item:hover {
+  background: var(--eva-hover) !important;
+  border-color: var(--eva-line-strong) !important;
+}
+body[class*="skin-eva"] #skinMenu .skin-item.on {
+  background: var(--eva-accent-soft) !important;
+  border-color: var(--eva-accent) !important;
+  box-shadow: inset 0 0 0 1px var(--eva-line), 0 0 16px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] #skinMenu .skin-check { border-color: var(--eva-line-strong) !important; }
+body[class*="skin-eva"] #skinMenu .skin-item.on .skin-check {
+  background: var(--eva-accent) !important;
+  border-color: var(--eva-accent-2) !important;
+  color: var(--eva-accent-ink) !important;
+  box-shadow: 0 0 0 3px var(--eva-accent-soft) !important;
+}
+
+/* ---------- 换肤转场：三套共用骨架，配色/形状由各机体覆盖 ---------- */
+body[class*="skin-eva"] .skin-transition .st-veil {
+  background: var(--eva-veil) !important;
+  filter: blur(18px) saturate(145%) !important;
+}
+body[class*="skin-eva"] .skin-transition .st-lens {
+  background: var(--eva-lens) !important;
+  filter: blur(2px) saturate(150%) !important;
+}
+body[class*="skin-eva"] .skin-transition .st-prism {
+  background: var(--eva-prism) !important;
+  filter: blur(8px) !important;
+}
+body[class*="skin-eva"] .skin-transition .st-blob {
+  background: var(--eva-blob) !important;
+  filter: blur(26px) !important;
+}
+body[class*="skin-eva"] .skin-transition .st-streak {
+  background: var(--eva-streak) !important;
+  box-shadow: 0 0 18px var(--eva-accent-glow), 0 0 44px var(--eva-accent-soft) !important;
+  filter: blur(.6px) !important;
+}
+body[class*="skin-eva"] .skin-transition .st-ring {
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: 0 0 22px var(--eva-accent-glow), inset 0 0 22px var(--eva-accent-soft) !important;
+}
+body[class*="skin-eva"] .skin-transition .st-shard {
+  background: var(--eva-shard) !important;
+  border-color: var(--eva-line-strong) !important;
+  box-shadow: inset 0 0 18px var(--eva-accent-soft), 0 0 26px var(--eva-accent-glow) !important;
+  filter: none !important;
+}
+body[class*="skin-eva"] .skin-transition .st-core {
+  background: var(--eva-accent-2) !important;
+  box-shadow: 0 0 24px 10px var(--eva-accent-glow), 0 0 90px 38px var(--eva-accent-soft) !important;
+}
+
+/* 页面入场：只做一次轻量揭幕，不碰缩略图网格 */
+body[class*="skin-eva"].lg-page-enter::after {
+  content: "";
+  position: fixed;
+  inset: -10% -20%;
+  z-index: 10020;
+  pointer-events: none;
+  background: var(--eva-enter);
+  opacity: 0;
+  animation: evaPageWipe .86s cubic-bezier(.18,.82,.24,1) both;
+}
+@keyframes evaPageWipe {
+  0% { opacity: 0; transform: translateX(-18%) skewX(-10deg); }
+  26% { opacity: .72; }
+  100% { opacity: 0; transform: translateX(16%) skewX(6deg); }
+}
+body[class*="skin-eva"].lg-page-enter .titlebar,
+body[class*="skin-eva"].lg-page-enter .toolbar,
+body[class*="skin-eva"].lg-page-enter .bottombar,
+body[class*="skin-eva"].lg-page-enter .left,
+body[class*="skin-eva"].lg-page-enter .right {
+  animation: evaPanelIn .52s cubic-bezier(.18,.82,.22,1) both;
+}
+@keyframes evaPanelIn {
+  0% { opacity: .62; transform: translateY(-3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* 弹窗 / 菜单入场：只动透明度和 2px 位移，不对整块面板做 blur */
+body[class*="skin-eva"] .alb-modal,
+body[class*="skin-eva"] .alb-opt-menu,
+body[class*="skin-eva"] .alb-ctx,
+body[class*="skin-eva"] .fx-card,
+body[class*="skin-eva"] .pro-box,
+body[class*="skin-eva"] .gen-result-box,
+body[class*="skin-eva"] .bin-panel,
+body[class*="skin-eva"] .dup-panel {
+  animation: evaPopIn .26s cubic-bezier(.16,.86,.26,1) both;
+}
+@keyframes evaPopIn {
+  0% { opacity: 0; transform: translateY(6px) scale(.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 切肤时不再给整页大图层套 saturate/scale，避免拖动相册时掉帧 */
+body[class*="skin-eva"].skin-switching .alb-overlay,
+body[class*="skin-eva"].skin-switching .dup-panel,
+body[class*="skin-eva"].skin-switching .bin-panel,
+body[class*="skin-eva"].skin-switching .main,
+body[class*="skin-eva"].skin-switching .titlebar,
+body[class*="skin-eva"].skin-switching .toolbar,
+body[class*="skin-eva"].skin-switching .bottombar { animation: none !important; }
+
+/* 各机体共用的小结构：标题栏下方一道 2px 识别线 */
+body[class*="skin-eva"] .titlebar::after,
+body[class*="skin-eva"] .alb-titlebar::after,
+body[class*="skin-eva"] .alb-head::after,
+body[class*="skin-eva"] .dup-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+  background: var(--eva-title-line);
+  opacity: .85;
+}
+
+/* 面板四角的细微 HUD 括线；只在有内边距的面板上出现 */
+body[class*="skin-eva"] .left,
+body[class*="skin-eva"] .right,
+body[class*="skin-eva"] .alb-modal,
+body[class*="skin-eva"] .pro-box,
+body[class*="skin-eva"] .gen-result-box,
+body[class*="skin-eva"] .fx-card { position: relative; }
+body[class*="skin-eva"] .left::before,
+body[class*="skin-eva"] .right::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 16px;
+  height: 2px;
+  background: var(--eva-accent-2);
+  box-shadow: 0 0 8px var(--eva-accent-glow);
+  pointer-events: none;
+  opacity: .55;
+}
+
+/* 无动画偏好时，只保留静态配色 */
+@media (prefers-reduced-motion: reduce) {
+  body[class*="skin-eva"] .skin-transition { display: none !important; }
+  body[class*="skin-eva"].lg-page-enter::after { display: none !important; }
+  body[class*="skin-eva"] .alb-modal,
+  body[class*="skin-eva"] .alb-opt-menu,
+  body[class*="skin-eva"] .alb-ctx,
+  body[class*="skin-eva"] .fx-card,
+  body[class*="skin-eva"] .pro-box,
+  body[class*="skin-eva"] .gen-result-box,
+  body[class*="skin-eva"] .bin-panel,
+  body[class*="skin-eva"] .dup-panel,
+  body[class*="skin-eva"].lg-page-enter .titlebar,
+  body[class*="skin-eva"].lg-page-enter .toolbar,
+  body[class*="skin-eva"].lg-page-enter .bottombar,
+  body[class*="skin-eva"].lg-page-enter .left,
+  body[class*="skin-eva"].lg-page-enter .right { animation: none !important; }
+}
