@@ -14,7 +14,7 @@
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.38_setup.exe`；本地构建文件名为 `图片批处理工具_v2.38_安装包.exe`（1,292,661,371 字节，约 1.20 GB）；SHA256 `AE0172D028CBE3233DDCF9C7F7264885F6DAF9EE6997E37B1636F644D2683AC0`，完整测试记录见 [`v2.38_回归测试报告.md`](v2.38_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.38_setup.exe`；本地构建文件名为 `图片批处理工具_v2.38_安装包.exe`（1,293,118,322 字节，约 1.20 GB）；SHA256 `D720FCF1752957B958B75BEA97A8F57981AE8C6E79C6C8998C7D24540B72351A`，完整测试记录见 [`v2.38_回归测试报告.md`](v2.38_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -574,3 +574,4 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 ## License
 
 MIT
+
