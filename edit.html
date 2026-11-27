@@ -995,6 +995,12 @@ window.addEventListener('mouseup', function(e) {
         <details class="ai-tool" id="aiA8Tool">
           <summary><b>AI 清晰度增强</b><span class="ai-tag">超分 + 锐化</span></summary>
           <div class="ai-tool-body">
+            <div class="ai-line"><span>增强模型</span>
+              <select id="aiA8Model" class="mini-sel" title="极致模式使用 Real-ESRGAN x4plus，细节和质感更好">
+                <option value="ultra" selected>极致 · Real-ESRGAN</option>
+                <option value="fast">快速 · 轻量</option>
+              </select>
+            </div>
             <div class="ai-line"><span>输出分辨率</span>
               <select id="aiA8Mode" class="mini-sel" onchange="aiA8ModeChange()">
                 <option value="2x" selected>2× 智能放大</option>
@@ -1012,7 +1018,7 @@ window.addEventListener('mouseup', function(e) {
             <div class="slider-row"><span>清晰度</span><input type="range" id="aiA8Clarity" min="0" max="100" value="65" oninput="document.getElementById('aiA8ClarityV').textContent=this.value"><span class="val" id="aiA8ClarityV">65</span></div>
             <div class="slider-row"><span>锐度</span><input type="range" id="aiA8Sharp" min="0" max="100" value="35" oninput="document.getElementById('aiA8SharpV').textContent=this.value"><span class="val" id="aiA8SharpV">35</span></div>
             <div class="ai-actions"><button class="ai-run ai-primary-sm" onclick="aiA8()">增强清晰度</button></div>
-            <div class="ai-tool-status" id="aiA8Status">先用 AI 超分补细节，再按清晰度、锐度增强边缘与纹理；适合模糊旧照、截图和低分辨率照片，结果另存不覆盖原图。</div>
+            <div class="ai-tool-status" id="aiA8Status">极致模式使用 Real-ESRGAN x4plus，优先走 GPU；首次处理需加载模型，适合模糊旧照、截图和低分辨率照片，结果另存不覆盖原图。</div>
           </div>
         </details>
 
@@ -6177,7 +6183,8 @@ body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm,b
   window.aiA8=function(){
     if(!needFile())return;
     var mode=(el('aiA8Mode')||{}).value||'2x';
-    var cfg={res_mode:mode,clarity:parseInt((el('aiA8Clarity')||{}).value||'65',10),
+    var cfg={res_mode:mode,model:(el('aiA8Model')||{}).value||'ultra',
+      clarity:parseInt((el('aiA8Clarity')||{}).value||'65',10),
       sharpness:parseInt((el('aiA8Sharp')||{}).value||'35',10),lock_ratio:!!(el('aiA8Lock')&&el('aiA8Lock').checked)};
     if(mode==='custom'){
       var w=parseInt((el('aiA8W')||{}).value||'0',10), h=parseInt((el('aiA8H')||{}).value||'0',10);

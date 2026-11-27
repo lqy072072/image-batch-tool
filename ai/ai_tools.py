@@ -544,6 +544,88 @@ def a5_score(cfg):
 
 _subpixel_sess = None
 _subpixel_path = None
+_real_sess = None
+_real_model = None
+_real_provider = None
+
+
+def _real_session(model):
+    """加载 Real-ESRGAN；优先 DirectML（GTX/RTX 走 GPU），失败再退回 CPU。"""
+    global _real_sess, _real_model, _real_provider
+    if _real_sess is not None and _real_model == model:
+        return _real_sess, _real_provider
+
+    dml_dir = os.path.join(BASE, "ort_dml")
+    if os.path.isdir(dml_dir) and dml_dir not in sys.path:
+        sys.path.insert(0, dml_dir)
+    import onnxruntime as ort
+
+    opts = ort.SessionOptions()
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) - 1)
+    opts.log_severity_level = 3
+    providers = ["DmlExecutionProvider", "CPUExecutionProvider"] \
+        if "DmlExecutionProvider" in ort.get_available_providers() else ["CPUExecutionProvider"]
+    try:
+        sess = ort.InferenceSession(model, sess_options=opts, providers=providers)
+    except Exception:
+        # DirectML 对个别算子不支持时，退回纯 CPU，至少保证工具可用。
+        sess = ort.InferenceSession(model, sess_options=opts, providers=["CPUExecutionProvider"])
+        providers = ["CPUExecutionProvider"]
+    _real_sess = sess
+    _real_model = model
+    _real_provider = providers[0]
+    return sess, _real_provider
+
+
+def _realesrgan_upscale(img):
+    """Real-ESRGAN x4plus：全彩分块超分 + 羽化重叠融合，输出固定 4×。"""
+    model = os.path.join(_model_dir(""), "realesrgan_x4plus.onnx")
+    if not os.path.isfile(model):
+        raise RuntimeError("缺少 realesrgan_x4plus.onnx")
+    sess, provider = _real_session(model)
+    in_name = sess.get_inputs()[0].name
+    h, w = img.shape[:2]
+    tile, overlap, scale = 512, 32, 4
+    if h < 1 or w < 1:
+        raise RuntimeError("输入图片尺寸无效")
+
+    ys = [0] if h <= tile else list(range(0, h - tile + 1, tile - overlap))
+    if h > tile and ys[-1] != h - tile:
+        ys.append(h - tile)
+    xs = [0] if w <= tile else list(range(0, w - tile + 1, tile - overlap))
+    if w > tile and xs[-1] != w - tile:
+        xs.append(w - tile)
+
+    out = np.zeros((h * scale, w * scale, 3), dtype=np.float32)
+    weight = np.zeros((h * scale, w * scale, 1), dtype=np.float32)
+    ramp = np.ones(tile * scale, dtype=np.float32)
+    ramp_len = min(tile * scale // 2, overlap * scale)
+    if ramp_len > 1:
+        f = (np.arange(ramp_len, dtype=np.float32) + 1) / ramp_len
+        ramp[:ramp_len] = f
+        ramp[-ramp_len:] = f[::-1]
+    wgt = np.outer(ramp, ramp)[:, :, None]
+
+    for sy in ys:
+        for sx in xs:
+            patch = img[sy:sy + tile, sx:sx + tile]
+            ph, pw = patch.shape[:2]
+            if ph < tile or pw < tile:
+                patch = cv2.copyMakeBorder(patch, 0, tile - ph, 0, tile - pw, cv2.BORDER_REPLICATE)
+            x = cv2.cvtColor(patch, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+            x = np.transpose(x, (2, 0, 1))[None]
+            pred = sess.run(None, {in_name: x})[0][0]
+            real_scale = max(1, int(round(pred.shape[1] / float(tile))))
+            pred = np.transpose(pred, (1, 2, 0))
+            oh, ow = ph * real_scale, pw * real_scale
+            oy, ox = sy * real_scale, sx * real_scale
+            out[oy:oy + oh, ox:ox + ow] += pred[:oh, :ow] * wgt[:oh, :ow]
+            weight[oy:oy + oh, ox:ox + ow] += wgt[:oh, :ow]
+
+    weight[weight == 0] = 1.0
+    rgb = np.clip(out / weight, 0, 1)
+    return cv2.cvtColor((rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
 
 
 def _subpixel_upscale_y(img):
@@ -557,6 +639,7 @@ def _subpixel_upscale_y(img):
         opts = ort.SessionOptions()
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) - 1)
+        opts.log_severity_level = 3
         _subpixel_sess = ort.InferenceSession(model, sess_options=opts, providers=["CPUExecutionProvider"])
         _subpixel_path = model
 
@@ -605,6 +688,9 @@ def a8_clarity(cfg):
         return _out(False, error="无法读取输入图片")
     h, w = img.shape[:2]
     mode = str(cfg.get("res_mode") or "2x").lower()
+    quality = str(cfg.get("model") or "ultra").lower()
+    if quality not in ("ultra", "fast"):
+        quality = "ultra"
     clarity = max(0, min(100, int(cfg.get("clarity", 65) or 65)))
     sharpness = max(0, min(100, int(cfg.get("sharpness", 35) or 35)))
     lock = bool(cfg.get("lock_ratio", True))
@@ -636,8 +722,23 @@ def a8_clarity(cfg):
     res = img.copy()
     engine = "local-detail"
     try:
-        # 轻量 AI 超分优先：0.02s/224px 分块，普通照片可在数秒内完成；超大图走 Lanczos 防内存峰值。
-        if w * h <= 12000000 and os.path.isfile(os.path.join(BASE, "models", "subpixel_x3.onnx")):
+        if quality == "ultra":
+            model_path = os.path.join(BASE, "models", "realesrgan_x4plus.onnx")
+            if os.path.isfile(model_path):
+                try:
+                    sr_img = img
+                    # 超大图先缩到 600 万像素再超分，避免 4× 输出把内存撑爆。
+                    max_real_pixels = 6000000
+                    if w * h > max_real_pixels:
+                        f = math.sqrt(max_real_pixels / float(w * h))
+                        sr_img = cv2.resize(img, (max(1, int(round(w * f))), max(1, int(round(h * f)))),
+                                            interpolation=cv2.INTER_AREA)
+                    res = _realesrgan_upscale(sr_img)
+                    engine = "Real-ESRGAN x4plus"
+                except Exception:
+                    quality = "fast"
+
+        if quality == "fast" and os.path.isfile(os.path.join(BASE, "models", "subpixel_x3.onnx")):
             try:
                 res = _subpixel_upscale_y(img)
                 engine = "SubPixelCNN x3"
@@ -645,18 +746,19 @@ def a8_clarity(cfg):
                 res = img.copy()
 
         if res.shape[1] != tw or res.shape[0] != th:
-            interp = cv2.INTER_AREA if (res.shape[1] > tw or res.shape[0] > th) else cv2.INTER_LANCZOS4
-            res = cv2.resize(res, (tw, th), interpolation=interp)
+            # Real-ESRGAN 的 4× 结果降到 2×/自定义尺寸时用 Lanczos，避免 AREA 把细节重新抹平。
+            res = cv2.resize(res, (tw, th), interpolation=cv2.INTER_LANCZOS4)
 
         if clarity > 0:
-            alpha = clarity / 100.0 * 0.62
+            # Real-ESRGAN 已经补过细节；清晰度只做轻量局部对比，避免二次过锐。
+            alpha = clarity / 100.0 * (0.25 if engine.startswith("Real-ESRGAN") else 0.62)
             enhanced = cv2.detailEnhance(
                 res, sigma_s=5.0 + clarity * 0.08, sigma_r=0.08 + clarity * 0.0015
             )
             res = cv2.addWeighted(res, 1.0 - alpha, enhanced, alpha, 0.0)
 
         if sharpness > 0:
-            amount = sharpness / 100.0 * 1.15
+            amount = sharpness / 100.0 * (0.55 if engine.startswith("Real-ESRGAN") else 1.15)
             blurred = cv2.GaussianBlur(res, (0, 0), 1.0)
             res = cv2.addWeighted(res, 1.0 + amount, blurred, -amount, 0.0)
 
@@ -664,7 +766,7 @@ def a8_clarity(cfg):
         _write(dst_path, res)
         return _out(True, op="a8", width=int(res.shape[1]), height=int(res.shape[0]),
                     source_width=w, source_height=h, clarity=clarity, sharpness=sharpness,
-                    res_mode=mode, engine=engine,
+                    res_mode=mode, engine=engine, model=quality,
                     info="AI 超分 + 清晰度/锐度增强")
     except Exception as ex:
         return _out(False, error="清晰度增强失败：" + str(ex)[:180])

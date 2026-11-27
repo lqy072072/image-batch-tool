@@ -2,13 +2,14 @@
 
 Windows 图片批处理与相册管理工具：LUT 滤镜、AI 调色、人像增强、美颜液化、景深虚化、超分、证件照、本地相册与去重。相册和图片编辑是两个可独立安装、独立运行的程序。
 
-当前版本：**v2.51**
+当前版本：**v2.52**
 
-v2.51 更新：
+v2.52 更新：
 
-- 图片编辑右侧各分页的分类支持拖动自定义排序，顺序自动保存，重新启动软件后保持。
-- AI 工具箱新增「AI 清晰度增强」，支持 2× / 4× / 自定义输出分辨率、清晰度和锐度调节。
-- 移除 AI 工具箱中的“基础增强”“创作增强”标题，工具列表更紧凑。
+- 「AI 清晰度增强」新增「极致 · Real-ESRGAN x4plus」模型，基于 DirectML 在 NVIDIA / AMD 集显上 GPU 推理，优先 GPU，失败自动回退 CPU。
+- Real-ESRGAN 采用 512 像素分块和 32 像素羽化重叠，降低接缝；4× 结果降采样时使用 Lanczos，保留更多边缘细节。
+- 旧轻量模型保留为「快速 · 轻量」，适合大图或没有可用 GPU 的机器；默认仍为「极致」。
+- 保留 v2.51 的分类拖动排序、自定义顺序持久化，以及 AI 清晰度 2× / 4× / 自定义输出。
 
 ## 下载安装
 
@@ -16,12 +17,12 @@ v2.51 更新：
 
 **https://github.com/lqy072072/image-batch-tool/releases**
 
-- Release 资产名：`image-batch-tool_v2.51_setup.exe`
-- 本地构建名：`图片批处理工具_v2.51_安装包.exe`
-- 大小：1,297,879,915 字节（约 1.21 GB）
-- SHA256：`DBC51AACAFBB0393DB103AEB4F7072A3EF954B874EB8B0A9219992D4B38A0E58`
+- Release 资产名：`image-batch-tool_v2.52_setup.exe`
+- 本地构建名：`图片批处理工具_v2.52_安装包.exe`
+- 大小：1,377,909,104 字节（约 1.28 GB）
+- SHA256：`1C427B3827BCD3F2BBAD08F59109EE383FD6BBF9EA045306D78A32D425AFAFEB`
 
-安装包已内置两个模块的 Python 运行时、AI/OCR 模型和 LUT；生成式修图的大模型不预装，首次使用时在程序内下载。
+安装包已内置两个模块的 Python 运行时、AI/OCR 模型、DirectML 运行库和 LUT；生成式修图的大模型不预装，首次使用时在程序内下载。Real-ESRGAN 模型文件约 64 MB，随包内置，不需额外下载。
 
 运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径为 `D:\Program Files\图片批量处理工具`，只勾选一个也能正常安装运行。
 
@@ -50,6 +51,7 @@ installer/Installer.cs  安装向导源码
 
 - `luts/`：内置 LUT 文件
 - `ai/models/`：ONNX 模型
+- `ai/ort_dml/`：DirectML 版 ONNX Runtime（仅安装包内置；源码模式缺少时自动回退 CPU）
 - `webview2/`：WebView2 SDK
 - `docs/`、`promo_*`：截图、宣传素材
 - 历史测试报告、Release 文案、旧安装包哈希与快捷方式
@@ -79,6 +81,7 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /platform
 - Windows 10 64 位或更高
 - WebView2 Runtime
 - 不需要单独安装 Python（安装包已嵌入运行时）
+- 「极致 · Real-ESRGAN」优先使用 DirectML GPU；没有可用 GPU 时会自动回退 CPU，处理速度会明显变慢
 
 ## License
 

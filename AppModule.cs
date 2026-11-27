@@ -12,7 +12,7 @@ namespace ImageBatchTool
         public const string HtmlFile = "album.html";
         public const string IconFile = "相册.ico";
         public const string SplashSubtitle = "正在初始化相册引擎…";
-        public const string AboutText = "相册\n版本 2.51\n\n制作者：純潔の工口君\n\n免责声明：\n本软件按“现状”提供，仅供个人学习、测试及日常图像处理使用。\n请在使用前自行备份原始文件；因误操作、软件缺陷、第三方组件或系统环境造成的文件损坏、数据丢失或其他损失，开发者不承担赔偿责任。\n请勿将本软件用于任何违法违规用途；使用本软件即表示你已阅读并同意本声明。\n\nGitHub：https://github.com/lqy072072/image-batch-tool";
+        public const string AboutText = "相册\n版本 2.52\n\n制作者：純潔の工口君\n\n免责声明：\n本软件按“现状”提供，仅供个人学习、测试及日常图像处理使用。\n请在使用前自行备份原始文件；因误操作、软件缺陷、第三方组件或系统环境造成的文件损坏、数据丢失或其他损失，开发者不承担赔偿责任。\n请勿将本软件用于任何违法违规用途；使用本软件即表示你已阅读并同意本声明。\n\nGitHub：https://github.com/lqy072072/image-batch-tool";
 #if QA_BUILD
         public const string ConfigFolder = "ImageBatchTool_QA";
 #else
@@ -27,7 +27,7 @@ namespace ImageBatchTool
         public const string HtmlFile = "edit.html";
         public const string IconFile = "相册_编辑.ico";
         public const string SplashSubtitle = "正在初始化图像处理引擎…";
-        public const string AboutText = "图片编辑\n版本 2.51\n\n制作者：純潔の工口君\n\n免责声明：\n本软件按“现状”提供，仅供个人学习、测试及日常图像处理使用。\n请在使用前自行备份原始文件；因误操作、软件缺陷、第三方组件或系统环境造成的文件损坏、数据丢失或其他损失，开发者不承担赔偿责任。\n请勿将本软件用于任何违法违规用途；使用本软件即表示你已阅读并同意本声明。\n\nGitHub：https://github.com/lqy072072/image-batch-tool";
+        public const string AboutText = "图片编辑\n版本 2.52\n\n制作者：純潔の工口君\n\n免责声明：\n本软件按“现状”提供，仅供个人学习、测试及日常图像处理使用。\n请在使用前自行备份原始文件；因误操作、软件缺陷、第三方组件或系统环境造成的文件损坏、数据丢失或其他损失，开发者不承担赔偿责任。\n请勿将本软件用于任何违法违规用途；使用本软件即表示你已阅读并同意本声明。\n\nGitHub：https://github.com/lqy072072/image-batch-tool";
 #if QA_BUILD
         public const string ConfigFolder = "ImageBatchTool_Edit_QA";
 #else

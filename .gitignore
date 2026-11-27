@@ -16,6 +16,7 @@ WebView2Loader.dll
 /luts/
 /ai/models/
 /ai/ort/
+/ai/ort_dml/
 /ai/ort_extracted/
 /ai/ort-managed/
 /ai/genedit/
