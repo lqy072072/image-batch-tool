@@ -3411,7 +3411,8 @@ namespace ImageBatchTool
 
                     string engine = ReadJsonString(cfg, "engine");
                     string script = engine.Equals("flux", StringComparison.OrdinalIgnoreCase) ? "gen_edit.py" : "ai_tools.py";
-                    int timeout = engine.Equals("flux", StringComparison.OrdinalIgnoreCase) ? 1800000 : 300000;
+                    int timeout = engine.Equals("flux", StringComparison.OrdinalIgnoreCase) ? 1800000 :
+                        (op.Equals("a8_clarity", StringComparison.OrdinalIgnoreCase) ? 900000 : 300000);
                     string err;
                     string stdout = PyTools.Run(BeautyRunner.PythonExe, script,
                         new string[] { "run", inFile, outFile }, timeout, out err);

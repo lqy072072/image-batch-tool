@@ -12,6 +12,7 @@
   a3_privacy 人脸 / 车牌打码
   a4_crop    智能构图裁切
   a5_score   画质评分
+  a8_clarity AI 清晰度增强（超分 + 自定义分辨率 + 锐度）
   a6_search  在当前列表里按文字找图（CNClip）
   b1_matte   透明底抠图
   b4_restore 老照片修复 / 划痕修复
@@ -23,6 +24,9 @@ import os
 import re
 import sys
 import time
+
+# 只保留错误日志，避免 ONNX Runtime 的初始化警告写满 C# 的 stderr 管道。
+os.environ.setdefault("ORT_LOGGING_LEVEL", "3")
 
 import cv2
 import numpy as np
@@ -538,6 +542,134 @@ def a5_score(cfg):
                 notes=notes, info="画质评分")
 
 
+_subpixel_sess = None
+_subpixel_path = None
+
+
+def _subpixel_upscale_y(img):
+    """轻量 SubPixelCNN x3：只对亮度分块超分，颜色走双三次，速度快、显存/内存低。"""
+    global _subpixel_sess, _subpixel_path
+    model = os.path.join(_model_dir(""), "subpixel_x3.onnx")
+    if not os.path.isfile(model):
+        raise RuntimeError("缺少 subpixel_x3.onnx")
+    if _subpixel_sess is None or _subpixel_path != model:
+        import onnxruntime as ort
+        opts = ort.SessionOptions()
+        opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) - 1)
+        _subpixel_sess = ort.InferenceSession(model, sess_options=opts, providers=["CPUExecutionProvider"])
+        _subpixel_path = model
+
+    h, w = img.shape[:2]
+    ycc = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    y_chan = ycc[:, :, 0].astype(np.float32) / 255.0
+    tile, overlap = 224, 16
+    stride = tile - overlap
+    starts_y = [0] if h <= tile else list(range(0, h - tile + 1, stride))
+    if h > tile and starts_y[-1] != h - tile:
+        starts_y.append(h - tile)
+    starts_x = [0] if w <= tile else list(range(0, w - tile + 1, stride))
+    if w > tile and starts_x[-1] != w - tile:
+        starts_x.append(w - tile)
+
+    out_y = np.zeros((h * 3, w * 3), dtype=np.float32)
+    count = np.zeros((h * 3, w * 3), dtype=np.uint8)
+    in_name = _subpixel_sess.get_inputs()[0].name
+    for sy in starts_y:
+        for sx in starts_x:
+            patch = y_chan[sy:sy + tile, sx:sx + tile]
+            ph, pw = patch.shape[:2]
+            if ph < tile or pw < tile:
+                patch = cv2.copyMakeBorder(patch, 0, tile - ph, 0, tile - pw, cv2.BORDER_REPLICATE)
+            pred = _subpixel_sess.run(None, {in_name: patch[None, None]})[0][0, 0]
+            real_scale = pred.shape[0] // tile
+            oh, ow = ph * real_scale, pw * real_scale
+            oy, ox = sy * real_scale, sx * real_scale
+            out_y[oy:oy + oh, ox:ox + ow] += pred[:oh, :ow]
+            count[oy:oy + oh, ox:ox + ow] += 1
+
+    count[count == 0] = 1
+    y_up = np.clip(out_y / count, 0, 1)
+    cr_up = cv2.resize(ycc[:, :, 1], (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
+    cb_up = cv2.resize(ycc[:, :, 2], (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
+    ycc_up = cv2.merge([np.clip(y_up * 255, 0, 255).astype(np.uint8), cr_up, cb_up])
+    return cv2.cvtColor(ycc_up, cv2.COLOR_YCrCb2BGR)
+
+
+def a8_clarity(cfg):
+    """AI 清晰度增强：超分补细节 + 可调清晰度 + 可调锐度，支持自定义输出宽高。"""
+    src_path = cfg.get("input", "")
+    dst_path = cfg.get("output", "")
+    img = _read(src_path)
+    if img is None:
+        return _out(False, error="无法读取输入图片")
+    h, w = img.shape[:2]
+    mode = str(cfg.get("res_mode") or "2x").lower()
+    clarity = max(0, min(100, int(cfg.get("clarity", 65) or 65)))
+    sharpness = max(0, min(100, int(cfg.get("sharpness", 35) or 35)))
+    lock = bool(cfg.get("lock_ratio", True))
+    tw = int(cfg.get("target_w", 0) or 0)
+    th = int(cfg.get("target_h", 0) or 0)
+
+    if mode == "4x":
+        tw, th = w * 4, h * 4
+    elif mode == "2x":
+        tw, th = w * 2, h * 2
+    else:
+        if tw <= 0 and th <= 0:
+            tw, th = w * 2, h * 2
+        elif tw <= 0:
+            tw = int(round(th * w / float(h)))
+        elif th <= 0:
+            th = int(round(tw * h / float(w)))
+        if lock and tw > 0:
+            th = int(round(tw * h / float(w)))
+
+    # 防止超大自定义尺寸把内存撑爆；长边上限 8192，保持比例。
+    max_side = 8192
+    if max(tw, th) > max_side:
+        f = max_side / float(max(tw, th))
+        tw, th = int(round(tw * f)), int(round(th * f))
+    tw = max(64, min(max_side, tw))
+    th = max(64, min(max_side, th))
+
+    res = img.copy()
+    engine = "local-detail"
+    try:
+        # 轻量 AI 超分优先：0.02s/224px 分块，普通照片可在数秒内完成；超大图走 Lanczos 防内存峰值。
+        if w * h <= 12000000 and os.path.isfile(os.path.join(BASE, "models", "subpixel_x3.onnx")):
+            try:
+                res = _subpixel_upscale_y(img)
+                engine = "SubPixelCNN x3"
+            except Exception:
+                res = img.copy()
+
+        if res.shape[1] != tw or res.shape[0] != th:
+            interp = cv2.INTER_AREA if (res.shape[1] > tw or res.shape[0] > th) else cv2.INTER_LANCZOS4
+            res = cv2.resize(res, (tw, th), interpolation=interp)
+
+        if clarity > 0:
+            alpha = clarity / 100.0 * 0.62
+            enhanced = cv2.detailEnhance(
+                res, sigma_s=5.0 + clarity * 0.08, sigma_r=0.08 + clarity * 0.0015
+            )
+            res = cv2.addWeighted(res, 1.0 - alpha, enhanced, alpha, 0.0)
+
+        if sharpness > 0:
+            amount = sharpness / 100.0 * 1.15
+            blurred = cv2.GaussianBlur(res, (0, 0), 1.0)
+            res = cv2.addWeighted(res, 1.0 + amount, blurred, -amount, 0.0)
+
+        res = np.clip(res, 0, 255).astype(np.uint8)
+        _write(dst_path, res)
+        return _out(True, op="a8", width=int(res.shape[1]), height=int(res.shape[0]),
+                    source_width=w, source_height=h, clarity=clarity, sharpness=sharpness,
+                    res_mode=mode, engine=engine,
+                    info="AI 超分 + 清晰度/锐度增强")
+    except Exception as ex:
+        return _out(False, error="清晰度增强失败：" + str(ex)[:180])
+
+
 def a6_search(cfg):
     query = str(cfg.get("query") or "").strip()
     paths = cfg.get("paths") or []
@@ -907,6 +1039,7 @@ OPS = {
     "a3_privacy": a3_privacy,
     "a4_crop": a4_crop,
     "a5_score": a5_score,
+    "a8_clarity": a8_clarity,
     "a6_search": a6_search,
     "b1_matte": b1_matte,
     "b2_mask_quick": b2_mask_quick,

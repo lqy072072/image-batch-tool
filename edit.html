@@ -827,6 +827,12 @@ window.addEventListener('mouseup', function(e) {
         <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
         <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
         <span class="edx-gr" data-g="gen" onclick="edxGroup('gen')">AI</span>
+        <span class="edx-sort-btn" id="edxSortBtn" onclick="edxSortToggle(event)" title="自定义分类顺序" aria-label="自定义分类顺序">⇅</span>
+      </div>
+      <div class="edx-sort-tip" id="edxSortTip">
+        <span>拖动左侧 <b>⋮⋮</b> 调整分类顺序</span>
+        <span class="edx-sort-act" onclick="edxSortReset(event)">恢复默认</span>
+        <span class="edx-sort-act edx-sort-done" onclick="edxSortToggle(event)">完成</span>
       </div>
       <div class="right-section" id="histSection">
         <div class="section-header"><span>直方图</span><span class="arrow">▼</span></div>
@@ -986,7 +992,29 @@ window.addEventListener('mouseup', function(e) {
       <div class="section-body">
         <div class="ai-progress" id="aiProgress" style="display:none"><span class="gen-spin"></span><span id="aiProgressText">处理中…</span></div>
 
-        <div class="ai-group-title">基础增强</div>
+        <details class="ai-tool" id="aiA8Tool">
+          <summary><b>AI 清晰度增强</b><span class="ai-tag">超分 + 锐化</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>输出分辨率</span>
+              <select id="aiA8Mode" class="mini-sel" onchange="aiA8ModeChange()">
+                <option value="2x" selected>2× 智能放大</option>
+                <option value="4x">4× 智能放大</option>
+                <option value="custom">自定义</option>
+              </select>
+            </div>
+            <div class="ai-line" id="aiA8CustomRow" style="display:none">
+              <span>宽 × 高</span>
+              <input class="ai-num" id="aiA8W" type="number" min="64" max="8192" placeholder="宽" oninput="aiA8SyncSize('w')">
+              <span>×</span>
+              <input class="ai-num" id="aiA8H" type="number" min="64" max="8192" placeholder="高" oninput="aiA8SyncSize('h')">
+              <label class="chk"><input type="checkbox" id="aiA8Lock" checked onchange="aiA8SyncSize('w')"> 保持比例</label>
+            </div>
+            <div class="slider-row"><span>清晰度</span><input type="range" id="aiA8Clarity" min="0" max="100" value="65" oninput="document.getElementById('aiA8ClarityV').textContent=this.value"><span class="val" id="aiA8ClarityV">65</span></div>
+            <div class="slider-row"><span>锐度</span><input type="range" id="aiA8Sharp" min="0" max="100" value="35" oninput="document.getElementById('aiA8SharpV').textContent=this.value"><span class="val" id="aiA8SharpV">35</span></div>
+            <div class="ai-actions"><button class="ai-run ai-primary-sm" onclick="aiA8()">增强清晰度</button></div>
+            <div class="ai-tool-status" id="aiA8Status">先用 AI 超分补细节，再按清晰度、锐度增强边缘与纹理；适合模糊旧照、截图和低分辨率照片，结果另存不覆盖原图。</div>
+          </div>
+        </details>
 
         <details class="ai-tool">
           <summary><b>换背景 / 换天空</b><span class="ai-tag">人像分割</span></summary>
@@ -1048,8 +1076,6 @@ window.addEventListener('mouseup', function(e) {
           </div>
         </details>
 
-        <div class="ai-group-title">创作增强</div>
-
         <details class="ai-tool">
           <summary><b>一键抠图（透明底）</b><span class="ai-tag">发丝级</span></summary>
           <div class="ai-tool-body">
@@ -1095,7 +1121,7 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
-    <div class="right-section">
+    <div class="right-section" id="edxBeautySection">
       <div class="section-header"><span>美颜</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <div style="display:flex;gap:6px;margin-bottom:10px">
@@ -1175,7 +1201,7 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
-    <div class="right-section">
+    <div class="right-section" id="edxIdPhotoSection">
       <div class="section-header"><span>证件照</span><span class="arrow">▼</span></div>
       <div class="section-body">
         <label class="chk"><input type="checkbox" id="idOnChk" onchange="setParam('id_on',this.checked?1:0);idModeHint(this.checked);post(this.checked?'idpreview':'preview')"> 启用证件照模式</label>
@@ -5559,16 +5585,161 @@ function albPopup(i, cnt){
     var pb=document.getElementById('aiPortraitBadge'); if(pb) pb.textContent=all+' 项';
   }
 }
-function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='lutParamSection') grp='lut'; else if(s.id==='tsPanel'||s.id==='aiStyleSection'||s.id==='fxEnhanceSection') grp='fx'; else if(s.id==='aiPortraitSection') grp='portrait'; else if(s.id==='genEditSection'||s.id==='aiToolsSection') grp='gen'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'||g==='lut'){ try{ if(window.drawHist) drawHist(window._lastHist); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
-try{ edxUiMigrate(); edxGroup('basic'); }catch(e){}
+function edxSectionGroup(s){
+  if(!s) return 'basic';
+  var id=s.id||'';
+  if(id==='lutParamSection') return 'lut';
+  if(id==='tsPanel'||id==='aiStyleSection'||id==='fxEnhanceSection') return 'fx';
+  if(id==='aiPortraitSection'||id==='edxBeautySection'||id==='edxIdPhotoSection') return 'portrait';
+  if(id==='genEditSection'||id==='aiToolsSection') return 'gen';
+  return 'basic';
+}
+var EDX_DEFAULT_ORDER={
+  lut:['lutParamSection'],
+  basic:['edxProSection','edxColorSection'],
+  portrait:['edxBeautySection','aiPortraitSection','edxIdPhotoSection'],
+  fx:['tsPanel','fxEnhanceSection','aiStyleSection'],
+  gen:['genEditSection','aiToolsSection']
+};
+var EDX_ORDER_KEY='ibt_edx_section_order_v1';
+var EDX_DRAG=null;
+function edxOrderRead(){
+  try{ var o=JSON.parse(localStorage.getItem(EDX_ORDER_KEY)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+function edxOrderWrite(o){
+  try{ localStorage.setItem(EDX_ORDER_KEY,JSON.stringify(o||{})); }catch(e){}
+}
+function edxOrderSections(){
+  return Array.prototype.slice.call(document.querySelectorAll('.right > .right-section'));
+}
+function edxGroupSections(g){
+  return edxOrderSections().filter(function(s){ return edxSectionGroup(s)===g; });
+}
+function edxApplyGroupOrder(g,keys,persist){
+  var sections=edxGroupSections(g), byId={}, ids=[], ordered=[];
+  sections.forEach(function(s){ byId[s.id]=s; });
+  (keys||[]).forEach(function(id){
+    if(byId[id] && ids.indexOf(id)<0){ ids.push(id); ordered.push(byId[id]); }
+  });
+  sections.forEach(function(s){ if(ordered.indexOf(s)<0) ordered.push(s); });
+  var right=document.querySelector('.right');
+  if(!right) return ordered;
+  ordered.forEach(function(s){ right.appendChild(s); });
+  if(persist){ var all=edxOrderRead(); all[g]=ordered.map(function(s){ return s.id; }); edxOrderWrite(all); }
+  return ordered;
+}
+function edxApplySavedOrder(){
+  var saved=edxOrderRead();
+  ['lut','basic','portrait','fx','gen'].forEach(function(g){
+    var keys=(saved[g]&&saved[g].length)?saved[g]:EDX_DEFAULT_ORDER[g];
+    edxApplyGroupOrder(g,keys,false);
+  });
+}
+function edxActiveGroup(){
+  var on=document.querySelector('.edx-gr.on');
+  return on?on.getAttribute('data-g'):'basic';
+}
+function edxClearDrop(){
+  document.querySelectorAll('.right-section.edx-drop-target,.right-section.edx-dragging').forEach(function(s){ s.classList.remove('edx-drop-target','edx-dragging'); });
+  EDX_DRAG=null;
+}
+function edxSortToggle(ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  var right=document.querySelector('.right');
+  if(!right) return;
+  var on=right.classList.toggle('edx-sorting');
+  var btn=document.getElementById('edxSortBtn');
+  if(btn){ btn.classList.toggle('on',on); btn.textContent=on?'✓':'⇅'; btn.title=on?'完成分类排序':'自定义分类顺序'; }
+  edxClearDrop();
+  if(on) toastMsg('拖动分类左侧的 ⋮⋮ 手柄调整顺序，松手自动保存');
+}
+function edxSortReset(ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  var g=edxActiveGroup();
+  edxApplyGroupOrder(g,EDX_DEFAULT_ORDER[g]||[],true);
+  toastMsg('已恢复当前分页的默认分类顺序');
+}
+function edxDropSection(target,clientY){
+  if(!EDX_DRAG||!target||EDX_DRAG.section===target) return;
+  var g=EDX_DRAG.group;
+  if(edxSectionGroup(target)!==g) return;
+  var arr=edxGroupSections(g);
+  var fi=arr.indexOf(EDX_DRAG.section), ti=arr.indexOf(target);
+  if(fi<0||ti<0) return;
+  var after=clientY>(target.getBoundingClientRect().top+target.offsetHeight/2);
+  arr.splice(fi,1);
+  if(fi<ti) ti--;
+  if(after) ti++;
+  if(ti<0) ti=0;
+  if(ti>arr.length) ti=arr.length;
+  arr.splice(ti,0,EDX_DRAG.section);
+  edxApplyGroupOrder(g,arr.map(function(s){ return s.id; }),true);
+  toastMsg('分类顺序已保存');
+}
+function edxSetupSortHandles(){
+  edxOrderSections().forEach(function(s){
+    var h=s.querySelector('.section-header');
+    if(!h||h.querySelector('.edx-sec-drag')) return;
+    var d=document.createElement('span');
+    d.className='edx-sec-drag';
+    d.draggable=true;
+    d.title='拖动调整此分类的顺序';
+    d.textContent='⋮⋮';
+    d.addEventListener('click',function(ev){ ev.stopPropagation(); });
+    d.addEventListener('mousedown',function(ev){ ev.stopPropagation(); });
+    d.addEventListener('dragstart',function(ev){
+      EDX_DRAG={section:s,group:edxSectionGroup(s)};
+      try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',s.id); }catch(e){}
+      s.classList.add('edx-dragging');
+      ev.stopPropagation();
+    });
+    d.addEventListener('dragend',function(){ edxClearDrop(); });
+    h.appendChild(d);
+    s.addEventListener('dragover',function(ev){
+      if(!EDX_DRAG||edxSectionGroup(s)!==EDX_DRAG.group) return;
+      ev.preventDefault();
+      try{ ev.dataTransfer.dropEffect='move'; }catch(e){}
+      s.classList.add('edx-drop-target');
+    });
+    s.addEventListener('dragleave',function(ev){
+      if(ev.relatedTarget&&s.contains(ev.relatedTarget)) return;
+      s.classList.remove('edx-drop-target');
+    });
+    s.addEventListener('drop',function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      edxDropSection(s,ev.clientY);
+      edxClearDrop();
+    });
+  });
+}
+function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var grp=edxSectionGroup(s); s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'||g==='lut'){ try{ if(window.drawHist) drawHist(window._lastHist); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
+try{ edxUiMigrate(); edxApplySavedOrder(); edxSetupSortHandles(); edxGroup('basic'); }catch(e){}
 </script>
 <style>
 .edx-groups{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid #33363d;background:#202226;position:static;z-index:auto}
 .edx-gr{font-size:11px;padding:5px 11px;border-radius:5px;color:#9299a5;cursor:pointer;border:1px solid transparent}
 .edx-gr.on{color:#fff;background:#365a7c;border-color:#4d769c}
-body.skin-light .edx-groups{background:#f4f5f8;border-color:#e2e4e9}
-body.skin-light .edx-gr{color:#555}
-body.skin-light .edx-gr.on{color:#12558f;background:#dceaf8;border-color:#b8d3ec}
+.edx-sort-btn{margin-left:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:1px solid #41444b;border-radius:5px;color:#8e96a2;background:#2a2c31;cursor:pointer;font-size:13px;line-height:1;user-select:none}
+.edx-sort-btn:hover{color:#dce8f5;border-color:#5b6a7a;background:#34383f}
+.edx-sort-btn.on{color:#fff;background:#365a7c;border-color:#5d8aae}
+.edx-sort-tip{display:none;align-items:center;gap:8px;padding:5px 10px;font-size:10px;color:#9fb2c6;background:#25282d;border-bottom:1px solid #33363d;line-height:1.45}
+.right.edx-sorting .edx-sort-tip{display:flex}
+.right.edx-sorting > .right-section .section-header{position:relative;padding-left:25px}
+.edx-sec-drag{display:none;position:absolute;left:3px;top:0;bottom:0;width:17px;align-items:center;justify-content:center;color:#718091;font-size:10px;letter-spacing:-1px;cursor:grab;user-select:none;z-index:2;border-radius:3px}
+.right.edx-sorting .edx-sec-drag{display:flex}
+.edx-sec-drag:hover{color:#bcd4ea;background:rgba(120,170,220,.12)}
+.right-section.edx-dragging{opacity:.58}
+.right-section.edx-drop-target .section-header{box-shadow:inset 0 -2px 0 #5da8e8}
+.edx-sort-tip .edx-sort-act{margin-left:auto;color:#8fc4f0;cursor:pointer;white-space:nowrap}
+.edx-sort-tip .edx-sort-act:hover{color:#fff}
+.edx-sort-tip .edx-sort-done{color:#9fe0af;font-weight:600}
+body.skin-light .edx-sort-btn{background:#fff;border-color:#cbd3de;color:#55606d}
+body.skin-light .edx-sort-btn:hover{background:#eef5fc;color:#12558f}
+body.skin-light .edx-sort-btn.on{background:#dceaf8;border-color:#9fc3e6;color:#12558f}
+body.skin-light .edx-sort-tip{background:#f4f5f8;border-color:#e2e4e9;color:#5c6876}
+body.skin-light .edx-sort-tip .edx-sort-act{color:#2472ad}
+body.skin-light .edx-sec-drag{color:#8492a2}
+body.skin-light .edx-sec-drag:hover{color:#2472ad;background:rgba(36,114,173,.08)}
 .gen-badge{font-weight:400;color:#9dd4a8;background:#1d3525;border:1px solid #376a47;border-radius:4px;padding:1px 5px;font-size:9px;vertical-align:1px}
 .gen-status-line{display:flex;align-items:center;gap:6px;font-size:11px;color:#e3eaf3;margin-bottom:8px;line-height:1.45;flex-wrap:wrap}
 .gen-status-line .mini-btn{margin-left:auto;padding:3px 7px;font-size:10px;flex:0 0 auto}
@@ -5669,6 +5840,8 @@ body.skin-light .ai-mask-tools input[type=text],body.skin-frost .ai-mask-tools i
 .ai-line input[type=text]{min-width:0;flex:1;background:#171b20;color:#f2f6fb;border:1px solid #45505e;border-radius:5px;font-size:11px;padding:5px 6px;outline:none}
 .ai-line input[type=text]::placeholder{color:#9caab9}
 .ai-line input[type=color]{width:30px;height:22px;padding:0;border:1px solid #4d5867;border-radius:4px;background:transparent}
+.ai-num{width:58px;min-width:0;background:#171b20;color:#f2f6fb;border:1px solid #45505e;border-radius:5px;font-size:11px;padding:4px 5px;outline:none;box-sizing:border-box}
+.ai-num::placeholder{color:#8492a2}
 .ai-mini-note{font-size:10px;color:#a8b4c3}
 .ai-path{font-size:10px;color:#aab6c5;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ai-actions{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 4px}
@@ -5713,6 +5886,7 @@ body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.ok,body.
 body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.err,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.err,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-tool-status.err{color:#a81818 !important}
 body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-boundary,body.skin-frost :is(#aiToolsSection,#aiPortraitSection) .ai-boundary,body.skin-aurora :is(#aiToolsSection,#aiPortraitSection) .ai-boundary{color:#2c3a49 !important;border-color:#b8c2cf !important}
 body.skin-light .ai-tool .mini-sel,body.skin-frost .ai-tool .mini-sel,body.skin-aurora .ai-tool .mini-sel{background:#fff;color:#222;border-color:#cfd6df}
+body.skin-light .ai-num,body.skin-frost .ai-num,body.skin-aurora .ai-num{background:#fff;color:#222;border-color:#cfd6df}
 body.skin-light .ai-progress,body.skin-frost .ai-progress,body.skin-aurora .ai-progress{background:#eef6ff;border-color:#c9def2;color:#31516d}
 body.skin-light #genEditSection .chk,body.skin-frost #genEditSection .chk,body.skin-aurora #genEditSection .chk{color:#1c2733 !important}
 body.skin-light #genEditSection .gen-help,body.skin-frost #genEditSection .gen-help,body.skin-aurora #genEditSection .gen-help{color:#33404f !important}
@@ -5978,6 +6152,40 @@ body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm,b
     if(!needFile())return;
     aiCv('a5_score',{},'aiA5Status','画质评分');
   };
+  function aiA8PreviewDims(){
+    var im=document.querySelector('#preview > img');
+    if(!im||!im.naturalWidth||!im.naturalHeight) return null;
+    return {w:im.naturalWidth,h:im.naturalHeight};
+  }
+  window.aiA8ModeChange=function(){
+    var mode=(el('aiA8Mode')||{}).value||'2x';
+    var row=el('aiA8CustomRow'); if(row) row.style.display=(mode==='custom')?'flex':'none';
+    if(mode==='custom'){
+      var d=aiA8PreviewDims(), W=el('aiA8W'), H=el('aiA8H');
+      if(W&&!W.value&&d) W.value=Math.min(8192,d.w*2);
+      if(H&&!H.value&&d) H.value=Math.min(8192,Math.round((parseInt(W.value,10)||d.w*2)*d.h/d.w));
+    }
+  };
+  window.aiA8SyncSize=function(from){
+    var lock=el('aiA8Lock'), W=el('aiA8W'), H=el('aiA8H');
+    if(!lock||!lock.checked||!W||!H) return;
+    var d=aiA8PreviewDims(); if(!d) return;
+    var w=parseInt(W.value,10), h=parseInt(H.value,10);
+    if(from==='w'&&w>0){ H.value=Math.max(64,Math.min(8192,Math.round(w*d.h/d.w))); }
+    else if(from==='h'&&h>0){ W.value=Math.max(64,Math.min(8192,Math.round(h*d.w/d.h))); }
+  };
+  window.aiA8=function(){
+    if(!needFile())return;
+    var mode=(el('aiA8Mode')||{}).value||'2x';
+    var cfg={res_mode:mode,clarity:parseInt((el('aiA8Clarity')||{}).value||'65',10),
+      sharpness:parseInt((el('aiA8Sharp')||{}).value||'35',10),lock_ratio:!!(el('aiA8Lock')&&el('aiA8Lock').checked)};
+    if(mode==='custom'){
+      var w=parseInt((el('aiA8W')||{}).value||'0',10), h=parseInt((el('aiA8H')||{}).value||'0',10);
+      if(!w&&!h){ toast('请先填写自定义宽高，或选择 2× / 4× 智能放大'); return; }
+      cfg.target_w=w; cfg.target_h=h;
+    }
+    aiCv('a8_clarity',cfg,'aiA8Status','AI 清晰度');
+  };
   window.aiA7=function(){
     if(!needFile())return;
     var map={cinematic:'电影胶片质感，柔和青橙色调，细腻胶片颗粒，保留人物五官和构图',
@@ -6078,7 +6286,7 @@ body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm,b
     aiFlux('b8_styling',prompt,{mode:'portrait',strength:0.8,protect_face:true},'aiB8Status','人像造型');
   };
   window.aiReveal=function(p){ var d=dirOf(p); if(d) post('proopenfolder|'+edxB64(d)); };
-  var LABELS={a1_bg:'换背景',a2_retouch:'面部精修',a3_privacy:'打码',a4_crop:'智能裁切',a5_score:'画质评分',
+  var LABELS={a1_bg:'换背景',a2_retouch:'面部精修',a3_privacy:'打码',a4_crop:'智能裁切',a5_score:'画质评分',a8_clarity:'AI 清晰度',
     a7_style:'风格化',b1_matte:'透明抠图',b2_remove:'智能消除',b2_mask:'AI 消除',b2_mask_quick:'纹理消除',b3_outpaint:'智能扩图',b3_extend:'智能扩图',
     b4_restore:'老照片修复',b4_colorize:'老照片上色',b5_expression:'神态增强',b6_relight:'重新打光',
     b7_deglare:'去反光/去雾',b8_styling:'人像造型'};

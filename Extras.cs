@@ -584,9 +584,13 @@ static class PyTools
                 psi.EnvironmentVariables["PYTHONUTF8"] = "1";
             } catch { }
             var proc = System.Diagnostics.Process.Start(psi);
+            // 先异步读 stderr：ONNX Runtime 的警告可能写满管道，先读 stdout 会死锁。
+            var errSb = new StringBuilder();
+            proc.ErrorDataReceived += (s, e) => { if (e.Data != null) errSb.AppendLine(e.Data); };
+            proc.BeginErrorReadLine();
             string stdout = proc.StandardOutput.ReadToEnd();
-            string stderr = proc.StandardError.ReadToEnd();
             if (!proc.WaitForExit(timeoutMs)) { try { proc.Kill(); } catch { } err = "超时"; return null; }
+            string stderr = errSb.ToString();
             err = stderr.Length > 800 ? stderr.Substring(0, 800) : stderr;
             return stdout;
         }
