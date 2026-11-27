@@ -1221,6 +1221,7 @@ window.addEventListener('mouseup', function(e) {
       <span class="alb-tab" data-tab="map">地图</span>
     </div>
     <div class="alb-quick">
+      <button class="mini-btn" onclick="albAlbumsOpen()" title="打开/关闭我的相册">我的相册</button>
       <button class="mini-btn" onclick="albToggleTree()" title="显示/隐藏文件夹树">文件夹</button>
       <button class="mini-btn alb-search-btn" id="albSearchBtn" onclick="albSearchOpen()" title="搜索文件名、日期、机型、类型或位置"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15.2 15.2l5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>搜索</button>
     </div>
@@ -1313,6 +1314,7 @@ window.addEventListener('mouseup', function(e) {
     </div>
   </div>
   <div class="alb-body">
+    <div class="alb-albums" id="albAlbums"></div>
     <div class="alb-tree" id="albTree"></div>
     <div class="alb-grid" id="albGrid"></div>
     <div class="alb-person" id="albPerson"></div>

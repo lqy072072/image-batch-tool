@@ -830,7 +830,7 @@ window.addEventListener('mouseup', function(e) {
         <span class="edx-sort-btn" id="edxSortBtn" onclick="edxSortToggle(event)" title="自定义分类顺序" aria-label="自定义分类顺序">⇅</span>
       </div>
       <div class="edx-sort-tip" id="edxSortTip">
-        <span>拖动左侧 <b>⋮⋮</b> 调整分类顺序</span>
+        <span class="edx-sort-hint">按住 <b>⋮⋮</b> 拖动分类</span>
         <span class="edx-sort-act" onclick="edxSortReset(event)">恢复默认</span>
         <span class="edx-sort-act edx-sort-done" onclick="edxSortToggle(event)">完成</span>
       </div>
@@ -995,12 +995,25 @@ window.addEventListener('mouseup', function(e) {
         <details class="ai-tool" id="aiA8Tool">
           <summary><b>AI 清晰度增强</b><span class="ai-tag">超分 + 锐化</span></summary>
           <div class="ai-tool-body">
-            <div class="ai-line"><span>增强模型</span>
-              <select id="aiA8Model" class="mini-sel" title="极致模式使用 Real-ESRGAN x4plus，细节和质感更好">
-                <option value="ultra" selected>极致 · Real-ESRGAN</option>
-                <option value="fast">快速 · 轻量</option>
+            <div class="ai-line ai-model-row"><span>增强模型</span>
+              <select id="aiA8Model" class="mini-sel ai-model-sel" onchange="aiA8ModelChange()" title="按精细程度分三类：极致细节容易编造；保真精细优先保结构；快速轻量只放尺寸">
+                <optgroup label="① 极致细节（可能编造）">
+                  <option value="ultra">Real-ESRGAN｜快｜谨慎</option>
+                  <option value="swin">Swin2SR｜中速｜慎用远景</option>
+                  <option value="diffusion">FLUX 扩散｜极慢｜实验</option>
+                </optgroup>
+                <optgroup label="② 保真精细（结构优先）">
+                  <option value="swinir" selected>SwinIR-M PSNR｜中速｜推荐</option>
+                  <option value="srformer">SRFormer｜中速｜实验</option>
+                  <option value="hats">HAT-S｜慢｜实验</option>
+                  <option value="hatl">HAT-L｜极慢｜仅单张</option>
+                </optgroup>
+                <optgroup label="③ 快速轻量">
+                  <option value="fast">轻量 3×｜极快｜仅尺寸</option>
+                </optgroup>
               </select>
             </div>
+            <div class="ai-mini-note" id="aiA8ModelNote">SwinIR-M 4× PSNR：保守稳定，优先保留远景建筑结构；细节增加较少。</div>
             <div class="ai-line"><span>输出分辨率</span>
               <select id="aiA8Mode" class="mini-sel" onchange="aiA8ModeChange()">
                 <option value="2x" selected>2× 智能放大</option>
@@ -1018,7 +1031,7 @@ window.addEventListener('mouseup', function(e) {
             <div class="slider-row"><span>清晰度</span><input type="range" id="aiA8Clarity" min="0" max="100" value="65" oninput="document.getElementById('aiA8ClarityV').textContent=this.value"><span class="val" id="aiA8ClarityV">65</span></div>
             <div class="slider-row"><span>锐度</span><input type="range" id="aiA8Sharp" min="0" max="100" value="35" oninput="document.getElementById('aiA8SharpV').textContent=this.value"><span class="val" id="aiA8SharpV">35</span></div>
             <div class="ai-actions"><button class="ai-run ai-primary-sm" onclick="aiA8()">增强清晰度</button></div>
-            <div class="ai-tool-status" id="aiA8Status">极致模式使用 Real-ESRGAN x4plus，优先走 GPU；首次处理需加载模型，适合模糊旧照、截图和低分辨率照片，结果另存不覆盖原图。</div>
+            <div class="ai-tool-status" id="aiA8Status">按精细程度分三类：① 极致细节（可能编造）② 保真精细（结构优先）③ 快速轻量。默认 SwinIR-M PSNR；结果另存不覆盖原图。</div>
           </div>
         </details>
 
@@ -5609,6 +5622,9 @@ var EDX_DEFAULT_ORDER={
 };
 var EDX_ORDER_KEY='ibt_edx_section_order_v1';
 var EDX_DRAG=null;
+var EDX_NOCLICK=0;
+var EDX_SCROLL_TIMER=null;
+var EDX_SCROLL_DIR=0;
 function edxOrderRead(){
   try{ var o=JSON.parse(localStorage.getItem(EDX_ORDER_KEY)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
 }
@@ -5646,8 +5662,91 @@ function edxActiveGroup(){
   return on?on.getAttribute('data-g'):'basic';
 }
 function edxClearDrop(){
-  document.querySelectorAll('.right-section.edx-drop-target,.right-section.edx-dragging').forEach(function(s){ s.classList.remove('edx-drop-target','edx-dragging'); });
+  edxStopAutoScroll();
+  document.querySelectorAll('.right-section.edx-drop-target,.right-section.edx-drop-before,.right-section.edx-drop-after,.right-section.edx-dragging').forEach(function(s){ s.classList.remove('edx-drop-target','edx-drop-before','edx-drop-after','edx-dragging'); });
   EDX_DRAG=null;
+}
+function edxMarkDrop(target,after){
+  document.querySelectorAll('.right-section.edx-drop-target,.right-section.edx-drop-before,.right-section.edx-drop-after').forEach(function(s){ s.classList.remove('edx-drop-target','edx-drop-before','edx-drop-after'); });
+  if(!target) return;
+  target.classList.add('edx-drop-target');
+  target.classList.add(after?'edx-drop-after':'edx-drop-before');
+}
+function edxSectionAtPoint(x,y){
+  var el=document.elementFromPoint(x,y), s=el?el.closest('.right-section'):null;
+  if(s && s.parentElement && s.parentElement.classList.contains('right') && s.style.display!=='none') return s;
+  var best=null, bestD=26;
+  edxOrderSections().forEach(function(o){
+    if(o.style.display==='none') return;
+    var r=o.getBoundingClientRect();
+    if(y<r.top-bestD || y>r.bottom+bestD) return;
+    var d=y<r.top?(r.top-y):(y>r.bottom?(y-r.bottom):0);
+    if(d<bestD){ bestD=d; best=o; }
+  });
+  return best;
+}
+function edxStopAutoScroll(){
+  if(EDX_SCROLL_TIMER){ clearInterval(EDX_SCROLL_TIMER); EDX_SCROLL_TIMER=null; }
+  EDX_SCROLL_DIR=0;
+}
+function edxAutoScroll(y){
+  var right=document.querySelector('.right');
+  if(!right) return;
+  var r=right.getBoundingClientRect();
+  var dir=y<r.top+50?-1:(y>r.bottom-50?1:0);
+  if(!dir){ edxStopAutoScroll(); return; }
+  if(EDX_SCROLL_TIMER&&EDX_SCROLL_DIR===dir) return;
+  edxStopAutoScroll();
+  EDX_SCROLL_DIR=dir;
+  EDX_SCROLL_TIMER=setInterval(function(){
+    if(!EDX_DRAG){ edxStopAutoScroll(); return; }
+    var box=document.querySelector('.right');
+    if(!box){ edxStopAutoScroll(); return; }
+    box.scrollTop+=dir*14;
+    edxUpdateDropTarget();
+  },40);
+}
+function edxUpdateDropTarget(){
+  var d=EDX_DRAG;
+  if(!d) return;
+  var target=edxSectionAtPoint(d.lastX,d.lastY);
+  if(target===d.section||(target&&edxSectionGroup(target)!==d.group)) target=null;
+  if(target){
+    var r=target.getBoundingClientRect();
+    var after=d.lastY>(r.top+r.height/2);
+    if(d.target!==target||d.after!==after){ d.target=target; d.after=after; edxMarkDrop(target,after); }
+  }else if(d.target){ d.target=null; edxMarkDrop(null,false); }
+}
+function edxDragStart(s,ev){
+  var right=document.querySelector('.right');
+  if(!right||!right.classList.contains('edx-sorting')||EDX_DRAG) return;
+  if(ev.pointerType==='mouse'&&ev.button!==0) return;
+  EDX_DRAG={section:s,group:edxSectionGroup(s),pointerId:ev.pointerId,startX:ev.clientX,startY:ev.clientY,lastX:ev.clientX,lastY:ev.clientY,moved:false,target:null,after:false};
+  s.classList.add('edx-dragging');
+  try{ ev.currentTarget.setPointerCapture(ev.pointerId); }catch(e){}
+  ev.preventDefault(); ev.stopPropagation();
+}
+function edxDragMove(ev){
+  var d=EDX_DRAG;
+  if(!d||ev.pointerId!==d.pointerId) return;
+  if(!d.moved && (Math.abs(ev.clientX-d.startX)+Math.abs(ev.clientY-d.startY))<5) return;
+  d.moved=true;
+  d.lastX=ev.clientX; d.lastY=ev.clientY;
+  EDX_NOCLICK=Date.now()+320;
+  ev.preventDefault();
+  edxUpdateDropTarget();
+  edxAutoScroll(ev.clientY);
+}
+function edxDragEnd(ev){
+  var d=EDX_DRAG;
+  if(!d||ev.pointerId!==d.pointerId) return;
+  if(d.moved&&d.target) edxDropSection(d.target,d.after);
+  else if(d.moved) toastMsg('未改变分类顺序');
+  edxClearDrop();
+}
+function edxDragCancel(ev){
+  if(EDX_DRAG&&ev.pointerId!==EDX_DRAG.pointerId) return;
+  edxClearDrop();
 }
 function edxSortToggle(ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
@@ -5657,7 +5756,7 @@ function edxSortToggle(ev){
   var btn=document.getElementById('edxSortBtn');
   if(btn){ btn.classList.toggle('on',on); btn.textContent=on?'✓':'⇅'; btn.title=on?'完成分类排序':'自定义分类顺序'; }
   edxClearDrop();
-  if(on) toastMsg('拖动分类左侧的 ⋮⋮ 手柄调整顺序，松手自动保存');
+  if(on) toastMsg('按住分类左侧 ⋮⋮ 手柄或标题拖动，松手自动保存');
 }
 function edxSortReset(ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
@@ -5665,14 +5764,13 @@ function edxSortReset(ev){
   edxApplyGroupOrder(g,EDX_DEFAULT_ORDER[g]||[],true);
   toastMsg('已恢复当前分页的默认分类顺序');
 }
-function edxDropSection(target,clientY){
+function edxDropSection(target,after){
   if(!EDX_DRAG||!target||EDX_DRAG.section===target) return;
   var g=EDX_DRAG.group;
   if(edxSectionGroup(target)!==g) return;
   var arr=edxGroupSections(g);
   var fi=arr.indexOf(EDX_DRAG.section), ti=arr.indexOf(target);
   if(fi<0||ti<0) return;
-  var after=clientY>(target.getBoundingClientRect().top+target.offsetHeight/2);
   arr.splice(fi,1);
   if(fi<ti) ti--;
   if(after) ti++;
@@ -5688,36 +5786,25 @@ function edxSetupSortHandles(){
     if(!h||h.querySelector('.edx-sec-drag')) return;
     var d=document.createElement('span');
     d.className='edx-sec-drag';
-    d.draggable=true;
-    d.title='拖动调整此分类的顺序';
+    d.draggable=false;
+    d.title='按住拖动手柄调整此分类的顺序';
+    d.setAttribute('aria-label','拖动调整分类顺序');
     d.textContent='⋮⋮';
+    d.addEventListener('pointerdown',function(ev){ edxDragStart(s,ev); });
     d.addEventListener('click',function(ev){ ev.stopPropagation(); });
-    d.addEventListener('mousedown',function(ev){ ev.stopPropagation(); });
-    d.addEventListener('dragstart',function(ev){
-      EDX_DRAG={section:s,group:edxSectionGroup(s)};
-      try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',s.id); }catch(e){}
-      s.classList.add('edx-dragging');
-      ev.stopPropagation();
-    });
-    d.addEventListener('dragend',function(){ edxClearDrop(); });
     h.appendChild(d);
-    s.addEventListener('dragover',function(ev){
-      if(!EDX_DRAG||edxSectionGroup(s)!==EDX_DRAG.group) return;
-      ev.preventDefault();
-      try{ ev.dataTransfer.dropEffect='move'; }catch(e){}
-      s.classList.add('edx-drop-target');
-    });
-    s.addEventListener('dragleave',function(ev){
-      if(ev.relatedTarget&&s.contains(ev.relatedTarget)) return;
-      s.classList.remove('edx-drop-target');
-    });
-    s.addEventListener('drop',function(ev){
-      ev.preventDefault(); ev.stopPropagation();
-      edxDropSection(s,ev.clientY);
-      edxClearDrop();
+    h.addEventListener('pointerdown',function(ev){
+      if(ev.target.closest('input,button,select,textarea,a,.edx-sec-drag')) return;
+      edxDragStart(s,ev);
     });
   });
 }
+document.addEventListener('pointermove',edxDragMove,{passive:false});
+document.addEventListener('pointerup',edxDragEnd);
+document.addEventListener('pointercancel',edxDragCancel);
+document.addEventListener('click',function(ev){
+  if(Date.now()<EDX_NOCLICK && ev.target && ev.target.closest && ev.target.closest('.right')){ ev.preventDefault(); ev.stopPropagation(); }
+},true);
 function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var grp=edxSectionGroup(s); s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'||g==='lut'){ try{ if(window.drawHist) drawHist(window._lastHist); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
 try{ edxUiMigrate(); edxApplySavedOrder(); edxSetupSortHandles(); edxGroup('basic'); }catch(e){}
 </script>
@@ -5728,14 +5815,20 @@ try{ edxUiMigrate(); edxApplySavedOrder(); edxSetupSortHandles(); edxGroup('basi
 .edx-sort-btn{margin-left:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:1px solid #41444b;border-radius:5px;color:#8e96a2;background:#2a2c31;cursor:pointer;font-size:13px;line-height:1;user-select:none}
 .edx-sort-btn:hover{color:#dce8f5;border-color:#5b6a7a;background:#34383f}
 .edx-sort-btn.on{color:#fff;background:#365a7c;border-color:#5d8aae}
-.edx-sort-tip{display:none;align-items:center;gap:8px;padding:5px 10px;font-size:10px;color:#9fb2c6;background:#25282d;border-bottom:1px solid #33363d;line-height:1.45}
+.edx-sort-tip{display:none;align-items:center;gap:6px;padding:5px 10px;font-size:10px;color:#9fb2c6;background:#25282d;border-bottom:1px solid #33363d;line-height:1.45}
 .right.edx-sorting .edx-sort-tip{display:flex}
-.right.edx-sorting > .right-section .section-header{position:relative;padding-left:25px}
-.edx-sec-drag{display:none;position:absolute;left:3px;top:0;bottom:0;width:17px;align-items:center;justify-content:center;color:#718091;font-size:10px;letter-spacing:-1px;cursor:grab;user-select:none;z-index:2;border-radius:3px}
-.right.edx-sorting .edx-sec-drag{display:flex}
-.edx-sec-drag:hover{color:#bcd4ea;background:rgba(120,170,220,.12)}
-.right-section.edx-dragging{opacity:.58}
-.right-section.edx-drop-target .section-header{box-shadow:inset 0 -2px 0 #5da8e8}
+.edx-sort-tip .edx-sort-hint{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.right.edx-sorting > .right-section .section-header{position:relative;padding-left:28px;cursor:grab}
+.right.edx-sorting > .right-section > .section-body{display:none!important}
+.right.edx-sorting > .right-section .section-header:active{cursor:grabbing}
+.right.edx-sorting .section-header .edx-sec-drag{display:flex;color:#a9c4dc;background:linear-gradient(180deg,rgba(120,170,220,.14),rgba(120,170,220,.05));border:1px solid rgba(120,170,220,.24)}
+.right.edx-sorting{user-select:none}
+.edx-sec-drag{display:none;position:absolute;left:1px;top:0;bottom:0;width:23px;align-items:center;justify-content:center;color:#7f8d9c;font-size:14px;line-height:1;letter-spacing:0;cursor:grab;user-select:none;touch-action:none;z-index:2;border-radius:5px}
+.edx-sec-drag:hover{color:#fff;background:rgba(120,170,220,.30);box-shadow:inset 0 0 0 1px rgba(150,200,245,.52)}
+.right-section.edx-dragging{opacity:.55}
+.right-section.edx-drop-target .section-header{background:rgba(93,168,232,.06)}
+.right-section.edx-drop-target.edx-drop-before .section-header{box-shadow:inset 0 2px 0 #6bb6ff}
+.right-section.edx-drop-target.edx-drop-after .section-header{box-shadow:inset 0 -2px 0 #6bb6ff}
 .edx-sort-tip .edx-sort-act{margin-left:auto;color:#8fc4f0;cursor:pointer;white-space:nowrap}
 .edx-sort-tip .edx-sort-act:hover{color:#fff}
 .edx-sort-tip .edx-sort-done{color:#9fe0af;font-weight:600}
@@ -5849,6 +5942,9 @@ body.skin-light .ai-mask-tools input[type=text],body.skin-frost .ai-mask-tools i
 .ai-num{width:58px;min-width:0;background:#171b20;color:#f2f6fb;border:1px solid #45505e;border-radius:5px;font-size:11px;padding:4px 5px;outline:none;box-sizing:border-box}
 .ai-num::placeholder{color:#8492a2}
 .ai-mini-note{font-size:10px;color:#a8b4c3}
+.ai-model-row{display:block}
+.ai-model-row>span{display:block;margin-bottom:3px}
+.ai-model-sel{width:100%;max-width:none}
 .ai-path{font-size:10px;color:#aab6c5;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ai-actions{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 4px}
 .ai-actions button{border:1px solid #4b7fae;background:linear-gradient(180deg,#3b7fb3,#2d628f);color:#fff;border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer}
@@ -6171,6 +6267,21 @@ body.skin-light :is(#aiToolsSection,#aiPortraitSection) .ai-actions .ai-alt-sm,b
       if(W&&!W.value&&d) W.value=Math.min(8192,d.w*2);
       if(H&&!H.value&&d) H.value=Math.min(8192,Math.round((parseInt(W.value,10)||d.w*2)*d.h/d.w));
     }
+  };
+  var A8MODELINFO={
+    ultra:'Real-ESRGAN 4×：细节最强，但会把远处低信息建筑编造成窗格/纹理，不建议远景。',
+    swin:'Swin2SR 4×：结构比 Real-ESRGAN 稳，但低信息远景仍可能被重画成怪块。',
+    fast:'轻量 3×：速度最快，细节最少，适合只要求尺寸、不追求细节的图。',
+    srformer:'SRFormer 4×（实验）：保结构优先，但 FP16 模型在纯色天空/低纹理区会回退 Lanczos，城市局部可能涂抹；先小图试。',
+    hatl:'HAT-L 4×（实验）：154MB、首次加载和推理都很慢；低纹理区会回退 Lanczos，可能出现涂抹；只适合单张小图。',
+    hats:'HAT-S 4×（实验）：HAT 轻量版，但实测城市中景有涂抹/融化感，不建议直接用于远景建筑批处理。',
+    swinir:'SwinIR-M 4× PSNR：保守稳定，优先保留结构；细节增加较少，适合城市远景/建筑。',
+    diffusion:'FLUX 扩散重绘（实验）：会用本地 FLUX.2 Klein 低强度重绘，速度慢，且不能保证建筑结构完全不变；不是 DiffBIR/StableSR/SUPIR。'
+  };
+  window.aiA8ModelChange=function(){
+    var v=(el('aiA8Model')||{}).value||'srformer';
+    var note=el('aiA8ModelNote'); if(note) note.textContent=A8MODELINFO[v]||'';
+    var st=el('aiA8Status'); if(st) st.textContent='已选择：'+((el('aiA8Model').selectedOptions&&el('aiA8Model').selectedOptions[0])?el('aiA8Model').selectedOptions[0].textContent:'')+'。结果另存，不覆盖原图。';
   };
   window.aiA8SyncSize=function(from){
     var lock=el('aiA8Lock'), W=el('aiA8W'), H=el('aiA8H');

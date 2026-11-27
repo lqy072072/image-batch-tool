@@ -624,8 +624,271 @@ def _realesrgan_upscale(img):
             weight[oy:oy + oh, ox:ox + ow] += wgt[:oh, :ow]
 
     weight[weight == 0] = 1.0
-    rgb = np.clip(out / weight, 0, 1)
+    ratio = out / weight
+    ratio = np.nan_to_num(ratio, nan=0.0, posinf=1.0, neginf=0.0)
+    rgb = np.clip(ratio, 0, 1)
     return cv2.cvtColor((rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+
+
+_swin_sess = None
+_swin_model = None
+_swin_provider = None
+
+
+def _swin_session(model):
+    """加载 Swin2SR；优先 DirectML，失败再退回 CPU。"""
+    global _swin_sess, _swin_model, _swin_provider
+    if _swin_sess is not None and _swin_model == model:
+        return _swin_sess, _swin_provider
+
+    dml_dir = os.path.join(BASE, "ort_dml")
+    if os.path.isdir(dml_dir) and dml_dir not in sys.path:
+        sys.path.insert(0, dml_dir)
+    import onnxruntime as ort
+
+    opts = ort.SessionOptions()
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) - 1)
+    opts.log_severity_level = 3
+    providers = ["DmlExecutionProvider", "CPUExecutionProvider"] \
+        if "DmlExecutionProvider" in ort.get_available_providers() else ["CPUExecutionProvider"]
+    try:
+        sess = ort.InferenceSession(model, sess_options=opts, providers=providers)
+    except Exception:
+        # Swin 的个别算子 DirectML 不支持时，退回 CPU；速度会明显变慢。
+        sess = ort.InferenceSession(model, sess_options=opts, providers=["CPUExecutionProvider"])
+        providers = ["CPUExecutionProvider"]
+    _swin_sess = sess
+    _swin_model = model
+    _swin_provider = providers[0]
+    return sess, _swin_provider
+
+
+def _swin2sr_upscale(img):
+    """Swin2SR x4（SwinIR 系 Transformer）：分块 + 羽化重叠，输出 4×。"""
+    model = os.path.join(_model_dir(""), "swin2sr_x4.onnx")
+    if not os.path.isfile(model):
+        raise RuntimeError("缺少 swin2sr_x4.onnx")
+    sess, provider = _swin_session(model)
+    in_name = sess.get_inputs()[0].name
+    h, w = img.shape[:2]
+    tile, overlap, scale = 256, 32, 4
+    if h < 1 or w < 1:
+        raise RuntimeError("输入图片尺寸无效")
+
+    ys = [0] if h <= tile else list(range(0, h - tile + 1, tile - overlap))
+    if h > tile and ys[-1] != h - tile:
+        ys.append(h - tile)
+    xs = [0] if w <= tile else list(range(0, w - tile + 1, tile - overlap))
+    if w > tile and xs[-1] != w - tile:
+        xs.append(w - tile)
+
+    out = np.zeros((h * scale, w * scale, 3), dtype=np.float32)
+    weight = np.zeros((h * scale, w * scale, 1), dtype=np.float32)
+    ramp = np.ones(tile * scale, dtype=np.float32)
+    ramp_len = min(tile * scale // 2, overlap * scale)
+    if ramp_len > 1:
+        f = (np.arange(ramp_len, dtype=np.float32) + 1) / ramp_len
+        ramp[:ramp_len] = f
+        ramp[-ramp_len:] = f[::-1]
+    wgt = np.outer(ramp, ramp)[:, :, None]
+
+    for sy in ys:
+        for sx in xs:
+            patch = img[sy:sy + tile, sx:sx + tile]
+            ph, pw = patch.shape[:2]
+            if ph < tile or pw < tile:
+                patch = cv2.copyMakeBorder(patch, 0, tile - ph, 0, tile - pw, cv2.BORDER_REPLICATE)
+            x = cv2.cvtColor(patch, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+            # 当前导出的 swin2sr_x4.onnx 直接接收 [0,1]；喂 [-1,1] 会明显发灰、变糊。
+            x = np.transpose(x, (2, 0, 1))[None]
+            pred = sess.run(None, {in_name: x})[0][0]
+            real_scale = max(1, int(round(pred.shape[1] / float(tile))))
+            pred = np.transpose(pred, (1, 2, 0))
+            oh, ow = ph * real_scale, pw * real_scale
+            oy, ox = sy * real_scale, sx * real_scale
+            out[oy:oy + oh, ox:ox + ow] += pred[:oh, :ow] * wgt[:oh, :ow]
+            weight[oy:oy + oh, ox:ox + ow] += wgt[:oh, :ow]
+
+    weight[weight == 0] = 1.0
+    ratio = out / weight
+    ratio = np.nan_to_num(ratio, nan=0.0, posinf=1.0, neginf=0.0)
+    rgb = np.clip(ratio, 0, 1)
+    return cv2.cvtColor((rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+
+
+_new_sess = None
+_new_model = None
+_new_provider = None
+
+
+def _new_session(model):
+    """加载新增 Transformer 超分模型；优先 DirectML，失败退回 CPU。
+
+    这些模型来自 OpenModelDB / HF，部分为 fp16 IO（SRFormer、HAT-S、HAT-L），
+    输入 dtype 必须跟 ONNX 声明一致，否则 ORT 会直接报类型错误。
+    """
+    global _new_sess, _new_model, _new_provider
+    if _new_sess is not None and _new_model == model:
+        return _new_sess, _new_provider
+
+    dml_dir = os.path.join(BASE, "ort_dml")
+    if os.path.isdir(dml_dir) and dml_dir not in sys.path:
+        sys.path.insert(0, dml_dir)
+    import onnxruntime as ort
+
+    opts = ort.SessionOptions()
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) - 1)
+    opts.log_severity_level = 3
+    providers = ["DmlExecutionProvider", "CPUExecutionProvider"] \
+        if "DmlExecutionProvider" in ort.get_available_providers() else ["CPUExecutionProvider"]
+    try:
+        sess = ort.InferenceSession(model, sess_options=opts, providers=providers)
+    except Exception:
+        # 部分 fp16 图在 DML 上显存不足；退回 CPU，并关闭会初始化失败的 LayerNorm 融合。
+        opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        sess = ort.InferenceSession(model, sess_options=opts, providers=["CPUExecutionProvider"])
+        providers = ["CPUExecutionProvider"]
+    _new_sess = sess
+    _new_model = model
+    _new_provider = providers[0]
+    return sess, _new_provider
+
+
+def _transformer_upscale(img, model_path, scale=4, tile=256, overlap=32, max_pixels=6000000):
+    """通用 Transformer x4 分块推理：SRFormer / HAT-L / HAT-S / SwinIR-M。
+
+    输入 RGB [0,1]，按 ONNX 声明的 dtype 自动转 fp16/fp32；输出羽化融合。
+    大图先缩到 max_pixels，避免 4× 输出撑爆内存。
+    """
+    if not os.path.isfile(model_path):
+        raise RuntimeError("缺少模型：" + os.path.basename(model_path))
+
+    import onnxruntime as ort
+    sess, provider = _new_session(model_path)
+    in_meta = sess.get_inputs()[0]
+    in_name = in_meta.name
+    in_dtype = np.float16 if "float16" in (in_meta.type or "") else np.float32
+
+    h, w = img.shape[:2]
+    if h < 1 or w < 1:
+        raise RuntimeError("输入图片尺寸无效")
+    if w * h > max_pixels:
+        f = math.sqrt(max_pixels / float(w * h))
+        img = cv2.resize(img, (max(1, int(round(w * f))), max(1, int(round(h * f)))),
+                         interpolation=cv2.INTER_AREA)
+        h, w = img.shape[:2]
+
+    ys = [0] if h <= tile else list(range(0, h - tile + 1, tile - overlap))
+    if h > tile and ys[-1] != h - tile:
+        ys.append(h - tile)
+    xs = [0] if w <= tile else list(range(0, w - tile + 1, tile - overlap))
+    if w > tile and xs[-1] != w - tile:
+        xs.append(w - tile)
+
+    out = np.zeros((h * scale, w * scale, 3), dtype=np.float32)
+    weight = np.zeros((h * scale, w * scale, 1), dtype=np.float32)
+    ramp = np.ones(tile * scale, dtype=np.float32)
+    ramp_len = min(tile * scale // 2, overlap * scale)
+    if ramp_len > 1:
+        f = (np.arange(ramp_len, dtype=np.float32) + 1) / ramp_len
+        ramp[:ramp_len] = f
+        ramp[-ramp_len:] = f[::-1]
+    wgt = np.outer(ramp, ramp)[:, :, None]
+
+    for sy in ys:
+        for sx in xs:
+            patch = img[sy:sy + tile, sx:sx + tile]
+            ph, pw = patch.shape[:2]
+            if ph < tile or pw < tile:
+                patch = cv2.copyMakeBorder(patch, 0, tile - ph, 0, tile - pw, cv2.BORDER_REPLICATE)
+            x = cv2.cvtColor(patch, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+            x = np.transpose(x, (2, 0, 1))[None].astype(in_dtype)
+            pred = sess.run(None, {in_name: x})[0][0]
+            if pred.dtype == np.float16:
+                pred = pred.astype(np.float32)
+            pred = np.transpose(pred, (1, 2, 0))
+            # SRFormer / HAT-L 的 fp16 模型在近乎纯色的天空区域会偶发 NaN/inf；
+            # 这些像素用同块 Lanczos 填充，避免整片黑块，也避免把 NaN 当成细节。
+            bad = ~np.isfinite(pred)
+            if bad.any():
+                base_tile = cv2.resize(patch, (pw * scale, ph * scale), interpolation=cv2.INTER_LANCZOS4)
+                base_tile = cv2.cvtColor(base_tile, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+                pred = np.where(bad, base_tile, pred)
+            oh, ow = ph * scale, pw * scale
+            oy, ox = sy * scale, sx * scale
+            out[oy:oy + oh, ox:ox + ow] += pred[:oh, :ow] * wgt[:oh, :ow]
+            weight[oy:oy + oh, ox:ox + ow] += wgt[:oh, :ow]
+
+    weight[weight == 0] = 1.0
+    ratio = out / weight
+    ratio = np.nan_to_num(ratio, nan=0.0, posinf=1.0, neginf=0.0)
+    rgb = np.clip(ratio, 0, 1)
+    return cv2.cvtColor((rgb * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+
+
+def _diffusion_redraw(img, target_w, target_h):
+    """扩散细节重绘（实验）：调用现有 FLUX.2 Klein 低强度 img2img，再回注到 Lanczos 基底。
+
+    注意：这不是 DiffBIR / StableSR / SUPIR，不能保证建筑结构不变；只作为用户可选的
+    “扩散重绘”实验入口，整图速度较慢，默认只跑 1024 长边。
+    """
+    import json
+    import subprocess
+    import tempfile
+
+    gen_py = os.path.join(BASE, "gen_edit.py")
+    if not os.path.isfile(gen_py):
+        raise RuntimeError("缺少 gen_edit.py 扩散引擎")
+    work = tempfile.mkdtemp(prefix="ibt_a8_diff_")
+    src_path = os.path.join(work, "src.png")
+    dst_path = os.path.join(work, "out.png")
+    cfg_path = os.path.join(work, "cfg.json")
+    res_path = os.path.join(work, "res.json")
+    if not cv2.imwrite(src_path, img):
+        raise RuntimeError("无法写入扩散临时输入")
+    cfg = {
+        "input": src_path,
+        "output": dst_path,
+        "prompt": "Enhance this photograph with natural fine detail, crisp architectural edges, "
+                  "realistic textures and clean color. Preserve the original composition, perspective, "
+                  "buildings, rooflines and object placement; do not invent new structures, windows, "
+                  "people or text.",
+        "mode": "edit",
+        "task": "edit",
+        "strength": 0.28,
+        "steps": 4,
+        "seed": -1,
+        "max_side": 1024,
+        "protect_face": False,
+        "timeout_sec": 600,
+    }
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False)
+    proc = subprocess.run([sys.executable, gen_py, "run", cfg_path, res_path],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=700, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if proc.returncode != 0 or not os.path.isfile(res_path):
+        tail = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        raise RuntimeError("扩散重绘失败：" + tail[-300:])
+    try:
+        with open(res_path, "r", encoding="utf-8") as f:
+            result = json.load(f)
+    except Exception:
+        result = {}
+    if not result.get("ok") or not os.path.isfile(dst_path):
+        raise RuntimeError(result.get("error") or "扩散重绘没有输出")
+    gen = cv2.imread(dst_path, cv2.IMREAD_COLOR)
+    if gen is None:
+        raise RuntimeError("扩散输出无法解码")
+
+    # 用 Lanczos 4× 做结构基底，把扩散结果的高频细节按较低强度回注，避免整图被重画。
+    base = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+    diff = cv2.resize(gen, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+    detail = diff.astype(np.float32) - cv2.GaussianBlur(diff, (0, 0), 1.2).astype(np.float32)
+    out = base.astype(np.float32) + detail * 0.42
+    return np.clip(out, 0, 255).astype(np.uint8)
 
 
 def _subpixel_upscale_y(img):
@@ -689,7 +952,7 @@ def a8_clarity(cfg):
     h, w = img.shape[:2]
     mode = str(cfg.get("res_mode") or "2x").lower()
     quality = str(cfg.get("model") or "ultra").lower()
-    if quality not in ("ultra", "fast"):
+    if quality not in ("ultra", "fast", "swin", "srformer", "hatl", "hats", "swinir", "diffusion"):
         quality = "ultra"
     clarity = max(0, min(100, int(cfg.get("clarity", 65) or 65)))
     sharpness = max(0, min(100, int(cfg.get("sharpness", 35) or 35)))
@@ -721,8 +984,56 @@ def a8_clarity(cfg):
 
     res = img.copy()
     engine = "local-detail"
+    new_models = {
+        "srformer": ("srformer_x4.onnx", "SRFormer x4", 256, 32),
+        "hatl": ("hat_l_x4.onnx", "HAT-L x4", 256, 32),
+        "hats": ("hat_s_x4.onnx", "HAT-S x4", 256, 32),
+        "swinir": ("swinir_m_x4_psnr.onnx", "SwinIR-M x4 PSNR", 256, 32),
+    }
     try:
-        if quality == "ultra":
+        if quality == "diffusion":
+            try:
+                res = _diffusion_redraw(img, tw, th)
+                engine = "FLUX 扩散重绘（实验）"
+            except Exception as ex:
+                return _out(False, error="扩散重绘失败：" + str(ex)[:220])
+
+        elif quality in new_models:
+            fname, label, tile, overlap = new_models[quality]
+            model_path = os.path.join(BASE, "models", fname)
+            if not os.path.isfile(model_path):
+                return _out(False, error="缺少 " + fname + "，请重新安装 v2.55 完整包")
+            try:
+                sr_img = img
+                max_new_pixels = 6000000
+                if w * h > max_new_pixels:
+                    f = math.sqrt(max_new_pixels / float(w * h))
+                    sr_img = cv2.resize(img, (max(1, int(round(w * f))), max(1, int(round(h * f)))),
+                                        interpolation=cv2.INTER_AREA)
+                res = _transformer_upscale(sr_img, model_path, scale=4, tile=tile, overlap=overlap,
+                                           max_pixels=max_new_pixels)
+                engine = label
+            except Exception as ex:
+                return _out(False, error=label + " 超分失败：" + str(ex)[:200])
+
+        elif quality == "swin":
+            model_path = os.path.join(BASE, "models", "swin2sr_x4.onnx")
+            if not os.path.isfile(model_path):
+                return _out(False, error="缺少 swin2sr_x4.onnx")
+            try:
+                sr_img = img
+                # Transformer 分块推理更慢，超大图先缩到 600 万像素，避免耗时和内存失控。
+                max_swin_pixels = 6000000
+                if w * h > max_swin_pixels:
+                    f = math.sqrt(max_swin_pixels / float(w * h))
+                    sr_img = cv2.resize(img, (max(1, int(round(w * f))), max(1, int(round(h * f)))),
+                                        interpolation=cv2.INTER_AREA)
+                res = _swin2sr_upscale(sr_img)
+                engine = "Swin2SR x4"
+            except Exception as ex:
+                return _out(False, error="Swin2SR 超分失败：" + str(ex)[:180])
+
+        elif quality == "ultra":
             model_path = os.path.join(BASE, "models", "realesrgan_x4plus.onnx")
             if os.path.isfile(model_path):
                 try:
@@ -746,19 +1057,39 @@ def a8_clarity(cfg):
                 res = img.copy()
 
         if res.shape[1] != tw or res.shape[0] != th:
-            # Real-ESRGAN 的 4× 结果降到 2×/自定义尺寸时用 Lanczos，避免 AREA 把细节重新抹平。
+            # 超分结果降到 2×/自定义尺寸时用 Lanczos，避免 AREA 把细节重新抹平。
             res = cv2.resize(res, (tw, th), interpolation=cv2.INTER_LANCZOS4)
 
         if clarity > 0:
-            # Real-ESRGAN 已经补过细节；清晰度只做轻量局部对比，避免二次过锐。
-            alpha = clarity / 100.0 * (0.25 if engine.startswith("Real-ESRGAN") else 0.62)
+            # 超分已经补过细节；Transformer/Real-ESRGAN 都只做轻量局部对比，避免二次过锐。
+            if engine.startswith("Real-ESRGAN"):
+                clarity_factor = 0.25
+            elif engine.startswith("Swin2SR"):
+                clarity_factor = 0.18
+            elif engine.startswith(("SRFormer", "HAT-L", "HAT-S", "SwinIR")):
+                clarity_factor = 0.12
+            elif engine.startswith("FLUX"):
+                clarity_factor = 0.10
+            else:
+                clarity_factor = 0.62
+            alpha = clarity / 100.0 * clarity_factor
             enhanced = cv2.detailEnhance(
                 res, sigma_s=5.0 + clarity * 0.08, sigma_r=0.08 + clarity * 0.0015
             )
             res = cv2.addWeighted(res, 1.0 - alpha, enhanced, alpha, 0.0)
 
         if sharpness > 0:
-            amount = sharpness / 100.0 * (0.55 if engine.startswith("Real-ESRGAN") else 1.15)
+            if engine.startswith("Real-ESRGAN"):
+                sharp_factor = 0.55
+            elif engine.startswith("Swin2SR"):
+                sharp_factor = 0.35
+            elif engine.startswith(("SRFormer", "HAT-L", "HAT-S", "SwinIR")):
+                sharp_factor = 0.24
+            elif engine.startswith("FLUX"):
+                sharp_factor = 0.18
+            else:
+                sharp_factor = 1.15
+            amount = sharpness / 100.0 * sharp_factor
             blurred = cv2.GaussianBlur(res, (0, 0), 1.0)
             res = cv2.addWeighted(res, 1.0 + amount, blurred, -amount, 0.0)
 
