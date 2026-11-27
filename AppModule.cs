@@ -12,7 +12,7 @@ namespace ImageBatchTool
         public const string HtmlFile = "album.html";
         public const string IconFile = "相册.ico";
         public const string SplashSubtitle = "正在初始化相册引擎…";
-        public const string AboutText = "相册\n版本 2.23\n\n制作者：純潔の工口君";
+        public const string AboutText = "相册\n版本 2.24\n\n制作者：純潔の工口君";
 #if QA_BUILD
         public const string ConfigFolder = "ImageBatchTool_QA";
 #else
@@ -27,7 +27,7 @@ namespace ImageBatchTool
         public const string HtmlFile = "edit.html";
         public const string IconFile = "相册_编辑.ico";
         public const string SplashSubtitle = "正在初始化图像处理引擎…";
-        public const string AboutText = "图片编辑\n版本 2.23\n\n制作者：純潔の工口君";
+        public const string AboutText = "图片编辑\n版本 2.24\n\n制作者：純潔の工口君";
 #if QA_BUILD
         public const string ConfigFolder = "ImageBatchTool_Edit_QA";
 #else

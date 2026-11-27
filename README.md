@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.23-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.24-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.23**：编辑器示例缩略图全部移除，「特效」标签独立承载移轴效果；v2.22 的 HDR/堆栈、AI 修复、专业输出与相册策展功能保持不变。
+> 当前版本 **v2.24**：修复相册回收站格子被压成 2px、缩略图被裁剪消失的问题；v2.23 的两项编辑器 UI 调整与既有功能保持不变。
 
 直接下载最新安装包（约 1.2GB，已内置两个模块各自的 Python 运行时、模型和 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名计划为 `image-batch-tool_v2.23_setup.exe`；本地构建文件名为 `图片批处理工具_v2.23_安装包.exe`（1,220,039,160 字节，约 1.2 GB）；SHA256 `8B2256DC1F1AF6C8DB989F594AFD4529AF2E1D4CCFF68ECAB6DF6C03082CBC0A`，完整测试记录见 [`v2.23_回归测试报告.md`](v2.23_回归测试报告.md)。
+GitHub Release 资产名计划为 `image-batch-tool_v2.24_setup.exe`；本地构建文件名为 `图片批处理工具_v2.24_安装包.exe`（1,220,085,399 字节，约 1.2 GB）；SHA256 `872988FDAA789A18C3FB4996EBBAAFA262B1DE1FC3483F9A93C1B6FB7516F188`，完整测试记录见 [`v2.24_回归测试报告.md`](v2.24_回归测试报告.md)。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
@@ -64,6 +64,15 @@ GitHub Release 资产名计划为 `image-batch-tool_v2.23_setup.exe`；本地构
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.24 更新
+
+![回收站缩略图恢复正常](docs/screenshots/v224_bin.png)
+
+- **修复回收站缩略图消失**：`album.html` 的 `.bin-grid` 原先把隐式行高按 `auto` 计算，WebView2 中每行被压成 2px，卡片内容被 `overflow:hidden` 裁掉；缩略图其实已加载但完全看不见。已给网格加 `grid-auto-rows:max-content`，行高恢复为 186px，缩略图和文件名正常显示。
+- **真机验证**：用实际 297 项回收站数据验证，页签显示 `297 项 · 13.7 MB`，297 个格子均为 186px 高，297 张缩略图全部有背景图；浅色/深色皮肤均正常。
+- **回归测试补充**：本轮同时确认 v2.23 的「调整 / 人像 / 特效 / 专业」标签、7 个 `.fx-row` 隐藏、双组件安装与 `/S` 静默卸载仍正常。
+- **测试流程补充**：以后涉及页面/布局改动，必须实际打开回收站、相册、编辑器等页面确认缩略图和内容真的渲染，不能只验证 DOM 数量、`display` 或接口返回。
 
 ### v2.23 更新
 
