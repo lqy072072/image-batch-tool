@@ -14,7 +14,7 @@
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名计划为 `image-batch-tool_v2.24_setup.exe`；本地构建文件名为 `图片批处理工具_v2.24_安装包.exe`（1,220,085,399 字节，约 1.2 GB）；SHA256 `872988FDAA789A18C3FB4996EBBAAFA262B1DE1FC3483F9A93C1B6FB7516F188`，完整测试记录见 [`v2.24_回归测试报告.md`](v2.24_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.24_setup.exe`；本地构建文件名为 `图片批处理工具_v2.24_安装包.exe`（1,220,085,399 字节，约 1.2 GB）；SHA256 `872988FDAA789A18C3FB4996EBBAAFA262B1DE1FC3483F9A93C1B6FB7516F188`，完整测试记录见 [`v2.24_回归测试报告.md`](v2.24_回归测试报告.md)。
 
 或在 [Releases 页面](https://github.com/lqy072072/image-batch-tool/releases) 查看历史版本。运行安装包后按向导选择「相册」和/或「图片编辑」，默认路径 `D:\Program Files\图片批量处理工具`。只勾选一个也能安装并运行。
 
