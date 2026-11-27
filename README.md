@@ -4,6 +4,24 @@ Windows 图片批处理与相册管理工具：LUT 滤镜、AI 调色、人像�
 
 当前版本：**v2.58**
 
+## 界面预览
+
+> 以下均为 Windows 10 / 11 实机运行截图，不是效果图。
+
+| 图片编辑 · 主界面 | 相册 · 主界面 |
+|:---:|:---:|
+| <a href="assets/gallery/v258/card_02.jpg"><img src="assets/gallery/v258/card_02.jpg" width="420" alt="图片编辑主界面"></a> | <a href="assets/gallery/v258/card_03.jpg"><img src="assets/gallery/v258/card_03.jpg" width="420" alt="相册主界面"></a> |
+
+| LUT 调色 | AI 工具箱 7 项 |
+|:---:|:---:|
+| <a href="assets/gallery/v258/card_10.jpg"><img src="assets/gallery/v258/card_10.jpg" width="420" alt="LUT 调色"></a> | <a href="assets/gallery/v258/card_14.jpg"><img src="assets/gallery/v258/card_14.jpg" width="420" alt="AI 工具箱"></a> |
+
+| AI 清晰度 · 8 个模型 | 九套皮肤总览 |
+|:---:|:---:|
+| <a href="assets/gallery/v258/card_15.jpg"><img src="assets/gallery/v258/card_15.jpg" width="420" alt="AI 清晰度增强"></a> | <a href="assets/gallery/v258/card_21.jpg"><img src="assets/gallery/v258/card_21.jpg" width="420" alt="九套皮肤"></a> |
+
+**[查看完整 22 张图文截图 →](SCREENSHOTS.md)**
+
 v2.58 更新：
 
 - 修复相册「我的相册」面板：界面缺少 `#albAlbums` 容器，点击按钮只切换状态却看不到面板；相册独立版和图片编辑内置相册都已补回侧栏容器，新建/打开相册恢复可用。
