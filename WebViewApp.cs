@@ -2142,6 +2142,9 @@ namespace ImageBatchTool
         bool glassBridgeReady;
         GlassBackdrop dedupGlass;
         System.Windows.Forms.Timer skinSyncTimer;
+        System.Windows.Forms.Timer skinFadeTimer;
+        bool skinFadeClosing;
+        bool dedupFadeClosing;
         volatile string lastSkinSync = "";
         CoreWebView2Environment webEnv;
         public SplashForm Splash;
@@ -2597,6 +2600,7 @@ namespace ImageBatchTool
             if (s == "liquid" || s == "glass" || s == "liquid-glass" || s == "liquidglass"
                 || s == "old-liquid" || s == "dark-glass" || s == "ink") return "smoke";
             if (s == "liquid2" || s == "new-liquid" || s == "realtime-liquid" || s == "clear-glass") return "aurora";
+            if (s == "black-gold" || s == "gold" || s == "gold-black") return "blackgold";
             if (s == "eva-01" || s == "unit01" || s == "unit-01") return "eva01";
             if (s == "eva-00" || s == "unit00" || s == "unit-00") return "eva00";
             if (s == "eva-02" || s == "unit02" || s == "unit-02") return "eva02";
@@ -2610,6 +2614,7 @@ namespace ImageBatchTool
         {
             if (skin == "light") return Color.FromArgb(245, 245, 247);
             if (skin == "frost") return Color.FromArgb(246, 244, 250);
+            if (skin == "blackgold") return Color.FromArgb(5, 4, 3);
             if (skin == "eva00") return Color.FromArgb(7, 17, 29);
             if (skin == "eva02") return Color.FromArgb(16, 5, 7);
             if (skin == "eva01") return Color.FromArgb(7, 5, 13);
@@ -2697,6 +2702,51 @@ namespace ImageBatchTool
             }
             catch (Exception ex) { try { Log("应用原生皮肤失败 " + skin + ": " + ex.Message); } catch { } }
         }
+        // 黑金专属窗口开关过渡：黑金是唯一不透明实体装甲主题，整窗淡入/淡出最自然；
+        // 其他皮肤保持原有行为，不做整窗动画，避免影响液态玻璃 / 浅色皮肤。
+        void BeginBlackGoldOpenFade(string skin)
+        {
+            if (NormalizeSkin(skin) != "blackgold") { if (Opacity < 1) Opacity = 1; return; }
+            if (skinFadeTimer != null) { try { skinFadeTimer.Stop(); skinFadeTimer.Dispose(); } catch { } skinFadeTimer = null; }
+            skinFadeClosing = false;
+            Opacity = 0;
+            int step = 0;
+            var timer = new System.Windows.Forms.Timer { Interval = 16 };
+            skinFadeTimer = timer;
+            timer.Tick += (s, e) =>
+            {
+                if (IsDisposed || skinFadeClosing) { timer.Stop(); timer.Dispose(); return; }
+                step++;
+                try { Opacity = Math.Min(1.0, step / 16.0); } catch { }
+                if (step >= 16) { timer.Stop(); timer.Dispose(); if (ReferenceEquals(skinFadeTimer, timer)) skinFadeTimer = null; }
+            };
+            timer.Start();
+        }
+
+        void CloseWithBlackGoldFade()
+        {
+            if (skinFadeClosing) return;
+            if (NormalizeSkin(ReadSkinName()) != "blackgold") { Close(); return; }
+            if (skinFadeTimer != null) { try { skinFadeTimer.Stop(); skinFadeTimer.Dispose(); } catch { } skinFadeTimer = null; }
+            skinFadeClosing = true;
+            int step = 0;
+            var timer = new System.Windows.Forms.Timer { Interval = 16 };
+            skinFadeTimer = timer;
+            timer.Tick += (s, e) =>
+            {
+                if (IsDisposed) { timer.Stop(); timer.Dispose(); return; }
+                step++;
+                try { Opacity = Math.Max(0.0, 1.0 - step / 14.0); } catch { }
+                if (step >= 14)
+                {
+                    timer.Stop(); timer.Dispose();
+                    if (ReferenceEquals(skinFadeTimer, timer)) skinFadeTimer = null;
+                    try { Close(); } catch { }
+                }
+            };
+            timer.Start();
+        }
+
         static void PostToWeb(WebView2 target, string json)
         {
             if (target == null || json == null) return;
@@ -3321,7 +3371,30 @@ namespace ImageBatchTool
 
         void CloseDupWindow()
         {
-            try { if (dedupForm != null && !dedupForm.IsDisposed) dedupForm.Close(); } catch { }
+            var f = dedupForm;
+            if (f == null || f.IsDisposed) return;
+            if (NormalizeSkin(ReadSkinName()) == "blackgold" && !dedupFadeClosing)
+            {
+                dedupFadeClosing = true;
+                int step = 0;
+                var timer = new System.Windows.Forms.Timer { Interval = 16 };
+                timer.Tick += (s, e) =>
+                {
+                    if (f.IsDisposed) { timer.Stop(); timer.Dispose(); return; }
+                    step++;
+                    try { f.Opacity = Math.Max(0.0, 1.0 - step / 14.0); } catch { }
+                    if (step >= 14)
+                    {
+                        timer.Stop(); timer.Dispose();
+                        dedupFadeClosing = false;
+                        try { f.Close(); } catch { }
+                    }
+                };
+                try { f.Opacity = 1; } catch { }
+                timer.Start();
+                return;
+            }
+            try { f.Close(); } catch { }
         }
 
         void DupWeb_Message(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -3472,13 +3545,15 @@ namespace ImageBatchTool
                 {
                     case "ready":
                         Log("页面 ready，显示主窗口");
+                        bool firstReady = !webPageReady;
                         webPageReady = true;
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
                         string readySkin = ReadSkinName();
                         bool deferGlass = AuroraWindowGlass && NormalizeSkin(readySkin) == "aurora";
                         if (!deferGlass) ApplyNativeSkin(readySkin);
-                        if (Opacity < 1) Opacity = 1;
                         Show(); Activate();
+                        if (firstReady) BeginBlackGoldOpenFade(readySkin);
+                        else if (Opacity < 1) Opacity = 1;
                         if (deferGlass)
                         {
                             // 先让 WebView2 真正画出一帧，再加分层透明；过早设置会让整块网页不显示。
@@ -4108,7 +4183,7 @@ namespace ImageBatchTool
                     case "getskin":
                         Send("{\"type\":\"skin\",\"skin\":" + JsonStr(ReadSkinName()) + "}");
                         break;
-                    case "winclose": InvokeUi(() => Close()); break;
+                    case "winclose": InvokeUi(() => CloseWithBlackGoldFade()); break;
                     case "winmin": InvokeUi(() => MinimizeFromUi()); break;
                     case "winmax": InvokeUi(() => WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized); break;
                     case "dragstart":

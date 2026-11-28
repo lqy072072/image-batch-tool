@@ -46,6 +46,14 @@
       swatch: 'linear-gradient(145deg,#d9fbff 0%,#8fe7ff 24%,#b7a1ff 52%,#ff9edb 76%,#f7fbff 100%)'
     },
     {
+      id: 'blackgold',
+      name: '黑金',
+      desc: '墨黑配色 · 赤金浪纹',
+      cls: 'skin-blackgold skin-eva',
+      css: 'black-gold.css',
+      swatch: 'linear-gradient(145deg,#f5e4b4 0%,#b4863e 28%,#2a1d0e 64%,#050403 100%)'
+    },
+    {
       id: 'eva01',
       name: '紫夜',
       desc: '紫黑配色 · 荧光绿点缀',
@@ -85,6 +93,10 @@
     'new-liquid': 'aurora',
     'realtime-liquid': 'aurora',
     'clear-glass': 'aurora',
+    blackgold: 'blackgold',
+    'black-gold': 'blackgold',
+    gold: 'blackgold',
+    'gold-black': 'blackgold',
     eva01: 'eva01',
     'eva-01': 'eva01',
     unit01: 'eva01',
@@ -199,7 +211,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-css', def.id);
-      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2387';
+      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2390';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -219,7 +231,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-core', '1');
-      link.href = base + 'skin-core.css?v=2387';
+      link.href = base + 'skin-core.css?v=2390';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -271,19 +283,21 @@
     current = id;
     try {
       document.documentElement.setAttribute('data-skin', id);
-      var htmlClasses = ['skin-light-html', 'skin-frost-html', 'skin-smoke-html', 'skin-aurora-html', 'skin-eva01-html', 'skin-eva00-html', 'skin-eva02-html'];
+      var htmlClasses = ['skin-light-html', 'skin-frost-html', 'skin-smoke-html', 'skin-aurora-html', 'skin-blackgold-html', 'skin-eva-html', 'skin-eva01-html', 'skin-eva00-html', 'skin-eva02-html'];
       for (var hc = 0; hc < htmlClasses.length; hc++) document.documentElement.classList.remove(htmlClasses[hc]);
       if (id === 'light') document.documentElement.classList.add('skin-light-html');
       if (id === 'frost') document.documentElement.classList.add('skin-frost-html');
       if (id === 'smoke') document.documentElement.classList.add('skin-smoke-html');
       if (id === 'aurora') document.documentElement.classList.add('skin-aurora-html');
+      if (id === 'blackgold') document.documentElement.classList.add('skin-blackgold-html', 'skin-eva-html');
       if (id === 'eva01') document.documentElement.classList.add('skin-eva01-html');
       if (id === 'eva00') document.documentElement.classList.add('skin-eva00-html');
       if (id === 'eva02') document.documentElement.classList.add('skin-eva02-html');
     } catch (e) {}
     try {
-      document.body.classList.remove('skin-dark', 'skin-light', 'skin-frost', 'skin-smoke', 'skin-aurora', 'skin-eva01', 'skin-eva00', 'skin-eva02');
-      document.body.classList.add(def.cls);
+      document.body.classList.remove('skin-dark', 'skin-light', 'skin-frost', 'skin-smoke', 'skin-aurora', 'skin-blackgold', 'skin-eva', 'skin-eva01', 'skin-eva00', 'skin-eva02');
+      var nextCls = String(def.cls || '').split(/\s+/);
+      for (var nc = 0; nc < nextCls.length; nc++) if (nextCls[nc]) document.body.classList.add(nextCls[nc]);
     } catch (e) {}
     setInlineSurface(id);
     refreshSelection();
@@ -291,7 +305,7 @@
       try {
         document.body.classList.add('skin-fade');
         if (previous && previous !== id) playSkinTransition(previous, id);
-        if (id === 'smoke' || id === 'frost' || id === 'aurora' || id === 'eva01' || id === 'eva00' || id === 'eva02') document.body.classList.add('skin-switching', 'skin-entering');
+        if (id === 'smoke' || id === 'frost' || id === 'aurora' || id === 'blackgold' || id === 'eva01' || id === 'eva00' || id === 'eva02') document.body.classList.add('skin-switching', 'skin-entering');
         clearTimeout(switchTimer);
         clearTimeout(fadeTimer);
         switchTimer = setTimeout(function () {
@@ -449,6 +463,7 @@
     if (early === 'frost') document.documentElement.classList.add('skin-frost-html');
     if (early === 'smoke') document.documentElement.classList.add('skin-smoke-html');
     if (early === 'aurora') document.documentElement.classList.add('skin-aurora-html');
+    if (early === 'blackgold') document.documentElement.classList.add('skin-blackgold-html', 'skin-eva-html');
     if (early === 'eva01') document.documentElement.classList.add('skin-eva01-html');
     if (early === 'eva00') document.documentElement.classList.add('skin-eva00-html');
     if (early === 'eva02') document.documentElement.classList.add('skin-eva02-html');

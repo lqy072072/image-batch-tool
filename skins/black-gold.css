@@ -1,0 +1,489 @@
+@import url("eva-core.css?v=2390");
+
+/* ==========================================================================
+   黑金 · 墨黑赤金主题
+   复用已验收的装甲形状外壳，只替换色彩、背景材质与动效。
+   不改变布局尺寸、点击区域、DOM 结构或业务逻辑。
+   ========================================================================== */
+
+html.skin-blackgold-html { background: #050403 !important; }
+
+body.skin-blackgold {
+  --eva-bg-solid: #050403;
+  --eva-hud-label: "黑金";
+  --eva-body:
+    linear-gradient(180deg, rgba(5,4,3,.18) 0%, rgba(5,4,3,.38) 46%, rgba(5,4,3,.72) 100%),
+    url("black-gold-bg.jpg");
+  --eva-text: #f2e8cf;
+  --eva-muted: #b9a77f;
+  --eva-placeholder: rgba(228,210,172,.46);
+  --eva-accent: #b4863e;
+  --eva-accent-2: #e8c878;
+  --eva-accent-3: #f5e4b4;
+  --eva-accent-ink: #0b0804;
+  --eva-accent-soft: rgba(180,134,62,.22);
+  --eva-accent-glow: rgba(232,200,120,.24);
+  --eva-line: rgba(194,158,94,.30);
+  --eva-line-strong: rgba(234,205,139,.58);
+  --eva-hi: rgba(255,246,218,.10);
+  --eva-rail: linear-gradient(180deg, rgba(24,18,12,.96) 0%, rgba(7,5,4,.96) 100%);
+  --eva-panel: linear-gradient(158deg, rgba(23,18,12,.90) 0%, rgba(6,5,4,.94) 100%);
+  --eva-subhead: linear-gradient(180deg, rgba(62,46,25,.54) 0%, rgba(22,16,10,.46) 100%);
+  --eva-preview:
+    radial-gradient(circle at 50% 42%, rgba(92,68,32,.10), transparent 58%),
+    linear-gradient(145deg, rgba(15,12,8,.92) 0%, rgba(4,4,3,.98) 100%);
+  --eva-btn: linear-gradient(145deg, rgba(55,42,24,.78) 0%, rgba(13,10,7,.72) 100%);
+  --eva-btn-hover: linear-gradient(145deg, rgba(88,65,32,.88) 0%, rgba(26,19,10,.78) 100%);
+  --eva-hover: rgba(232,200,120,.13);
+  --eva-input: rgba(9,7,5,.94);
+  --eva-track: rgba(232,200,120,.16);
+  --eva-scroll-track: #080604;
+  --eva-card: linear-gradient(158deg, rgba(34,25,14,.92) 0%, rgba(7,6,4,.96) 100%);
+  --eva-card-2: linear-gradient(150deg, rgba(55,42,22,.58) 0%, rgba(9,7,5,.88) 100%);
+  --eva-modal: linear-gradient(158deg, rgba(26,19,11,.98) 0%, rgba(5,4,3,.99) 100%);
+  --eva-menu: linear-gradient(158deg, rgba(25,18,10,.99) 0%, rgba(5,4,3,.99) 100%);
+  --eva-badge: rgba(30,22,12,.82);
+  --eva-thumb-bg: #050403;
+  --eva-danger: #c94f43;
+  --eva-danger-bg: rgba(108,24,18,.38);
+  --eva-danger-text: #ffd8cc;
+  --eva-disabled: rgba(228,212,178,.40);
+  --eva-title-line: repeating-linear-gradient(90deg, #e8c878 0 10px, transparent 10px 19px);
+  --eva-veil:
+    radial-gradient(32% 46% at 22% 30%, rgba(232,200,120,.20) 0%, transparent 72%),
+    radial-gradient(38% 44% at 78% 18%, rgba(164,116,44,.40) 0%, transparent 74%),
+    radial-gradient(42% 50% at 54% 98%, rgba(62,44,20,.42) 0%, transparent 72%),
+    conic-gradient(from 212deg at 52% 48%, rgba(120,84,35,.24), rgba(232,200,120,.10) 34%, rgba(80,56,24,.20) 62%, rgba(120,84,35,.24));
+  --eva-lens:
+    radial-gradient(circle at var(--st-x, 50%) var(--st-y, 50%), rgba(255,243,200,.50) 0%, rgba(180,134,62,.26) 24%, rgba(232,200,120,.12) 44%, transparent 64%),
+    conic-gradient(from 210deg at var(--st-x, 50%) var(--st-y, 50%), rgba(164,116,44,.22), transparent 28%, rgba(232,200,120,.16) 58%, transparent 84%);
+  --eva-prism: linear-gradient(108deg, transparent 24%, rgba(232,200,120,.38) 38%, rgba(164,116,44,.30) 48%, transparent 68%);
+  --eva-blob: radial-gradient(circle at 38% 34%, rgba(255,236,171,.54), rgba(164,116,44,.28) 48%, transparent 72%);
+  --eva-streak: linear-gradient(90deg, transparent, rgba(245,228,180,.78), rgba(180,134,62,.58), transparent);
+  --eva-shard: linear-gradient(132deg, rgba(232,200,120,.34) 0%, rgba(164,116,44,.30) 42%, rgba(49,30,11,.58) 100%);
+  --eva-enter:
+    repeating-linear-gradient(112deg, transparent 0 26px, rgba(232,200,120,.10) 26px 28px),
+    linear-gradient(112deg, transparent 30%, rgba(232,200,120,.24) 42%, rgba(164,116,44,.32) 54%, transparent 72%);
+  color-scheme: dark;
+  background-position: center top !important;
+}
+
+/* 背景：金色浪纹是底图，面板只压暗阅读区域，不铺满整屏 */
+body.skin-blackgold .main,
+body.skin-blackgold .alb-overlay,
+body.skin-blackgold .alb-body,
+body.skin-blackgold .alb-view,
+body.skin-blackgold .alb-view-body { background: transparent !important; }
+
+/* 顶栏：黑金铭牌与金色断续刻度 */
+body.skin-blackgold .titlebar,
+body.skin-blackgold .alb-titlebar,
+body.skin-blackgold .alb-head {
+  background-image:
+    linear-gradient(90deg, rgba(232,200,120,.06), transparent 30%, transparent 72%, rgba(232,200,120,.05)),
+    var(--eva-rail) !important;
+  border-bottom: 1px solid rgba(232,200,120,.34) !important;
+}
+body.skin-blackgold .titlebar::after,
+body.skin-blackgold .alb-titlebar::after,
+body.skin-blackgold .alb-head::after {
+  height: 3px !important;
+  background: repeating-linear-gradient(90deg, #e8c878 0 10px, rgba(180,134,62,.72) 10px 13px, transparent 13px 23px) !important;
+  opacity: .72 !important;
+}
+body.skin-blackgold .titlebar::before,
+body.skin-blackgold .alb-titlebar::before {
+  color: var(--eva-accent-2) !important;
+  text-shadow: 0 0 12px rgba(232,200,120,.18) !important;
+  opacity: .88 !important;
+  letter-spacing: .20em !important;
+}
+
+/* 顶栏标签：黑底金边，悬停金色描边 */
+body.skin-blackgold .top-right span {
+  border: 1px solid rgba(194,158,94,.30) !important;
+  background: linear-gradient(145deg, rgba(54,41,22,.58), rgba(8,6,4,.66)) !important;
+  color: #f2e8cf !important;
+  box-shadow: inset 0 1px 0 rgba(255,246,218,.10) !important;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease !important;
+}
+body.skin-blackgold .top-right span:hover {
+  border-color: var(--eva-accent-2) !important;
+  background: linear-gradient(145deg, rgba(92,68,32,.72), rgba(17,12,7,.74)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,246,218,.18), 0 0 18px rgba(232,200,120,.10) !important;
+}
+
+/* 左右面板：硬直角、金线、底部回形角标 */
+body.skin-blackgold .left,
+body.skin-blackgold .right {
+  border-color: var(--eva-line) !important;
+  box-shadow:
+    inset 0 1px 0 var(--eva-hi),
+    inset 0 0 0 1px rgba(0,0,0,.26),
+    0 18px 44px rgba(0,0,0,.34) !important;
+}
+body.skin-blackgold .left::after,
+body.skin-blackgold .right::after {
+  background: var(--eva-accent-2) !important;
+  box-shadow: 0 -7px 0 -1px var(--eva-accent-2) !important;
+  opacity: .62 !important;
+}
+body.skin-blackgold .section-header {
+  border-left: 3px solid var(--eva-accent-2) !important;
+  background: linear-gradient(90deg, rgba(126,90,38,.26), rgba(24,17,10,.24)) !important;
+  color: var(--eva-accent-2) !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.42) !important;
+}
+body.skin-blackgold .panel-title,
+body.skin-blackgold .sub-title,
+body.skin-blackgold .lut-header {
+  color: var(--eva-accent-2) !important;
+}
+body.skin-blackgold .left-header,
+body.skin-blackgold .right-header { border-bottom-color: var(--eva-line) !important; }
+body.skin-blackgold .vsplitter { background: rgba(194,158,94,.40) !important; }
+body.skin-blackgold .vsplitter:hover,
+body.skin-blackgold .vsplitter.dragging { background: var(--eva-accent-2) !important; }
+
+/* 标签页 / 分段按钮 / 主按钮 */
+body.skin-blackgold .tab.active,
+body.skin-blackgold .tab.on,
+body.skin-blackgold .edx-tab.active,
+body.skin-blackgold .edx-tab.on,
+body.skin-blackgold .pro-tab.active,
+body.skin-blackgold .pro-tab.on,
+body.skin-blackgold .gen-tab.active,
+body.skin-blackgold .gen-tab.on,
+body.skin-blackgold .hist-tab.active,
+body.skin-blackgold .hist-tab.on {
+  background: linear-gradient(145deg, #e8c878 0%, #b4863e 100%) !important;
+  color: #0b0804 !important;
+  border-color: #e8c878 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.40), 0 0 18px rgba(232,200,120,.12) !important;
+}
+body.skin-blackgold .btn-start,
+body.skin-blackgold #colorAutoBtn,
+body.skin-blackgold #aiOptBtn,
+body.skin-blackgold #beautyBtn {
+  background: linear-gradient(145deg, #e8c878 0%, #b4863e 68%, #7b5527 100%) !important;
+  color: #0b0804 !important;
+  border-color: #e8c878 !important;
+  text-shadow: 0 1px 0 rgba(255,246,218,.45) !important;
+}
+body.skin-blackgold .btn-start:hover,
+body.skin-blackgold #colorAutoBtn:hover,
+body.skin-blackgold #aiOptBtn:hover,
+body.skin-blackgold #beautyBtn:hover {
+  filter: brightness(1.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.58), 0 0 24px rgba(232,200,120,.18) !important;
+}
+body.skin-blackgold .btn,
+body.skin-blackgold .tool-btn,
+body.skin-blackgold .mini-btn,
+body.skin-blackgold .lut-mode-btn,
+body.skin-blackgold .alb-ctl,
+body.skin-blackgold .alb-search-btn,
+body.skin-blackgold .alb-dedup-btn,
+body.skin-blackgold .alb-curate-btn,
+body.skin-blackgold .alb-favbtn,
+body.skin-blackgold .alb-zoom button,
+body.skin-blackgold .bin-btn,
+body.skin-blackgold .dup-btn,
+body.skin-blackgold .pro-btn,
+body.skin-blackgold .gen-primary,
+body.skin-blackgold .ai-primary-sm,
+body.skin-blackgold .ai-run {
+  border-color: var(--eva-line) !important;
+  background: linear-gradient(145deg, rgba(54,40,21,.68), rgba(10,7,5,.72)) !important;
+  color: var(--eva-text) !important;
+}
+body.skin-blackgold .btn:hover,
+body.skin-blackgold .tool-btn:hover,
+body.skin-blackgold .mini-btn:hover,
+body.skin-blackgold .alb-ctl:hover,
+body.skin-blackgold .alb-search-btn:hover,
+body.skin-blackgold .alb-dedup-btn:hover,
+body.skin-blackgold .alb-curate-btn:hover,
+body.skin-blackgold .alb-favbtn:hover,
+body.skin-blackgold .alb-zoom button:hover,
+body.skin-blackgold .bin-btn:hover,
+body.skin-blackgold .dup-btn:hover,
+body.skin-blackgold .pro-btn:hover,
+body.skin-blackgold .gen-primary:hover,
+body.skin-blackgold .ai-primary-sm:hover,
+body.skin-blackgold .ai-run:hover {
+  border-color: var(--eva-accent-2) !important;
+  background: linear-gradient(145deg, rgba(91,66,31,.78), rgba(21,15,8,.78)) !important;
+  box-shadow: inset 2px 0 0 var(--eva-accent-2), 0 0 16px rgba(232,200,120,.08) !important;
+}
+body.skin-blackgold .btn.danger,
+body.skin-blackgold .bin-btn.danger {
+  background: linear-gradient(145deg, #b3443c, #591b19) !important;
+  color: #ffe5d9 !important;
+  border-color: #d36d59 !important;
+}
+
+/* 输入框：左侧金槽、右下切角、内嵌细刻度 */
+body.skin-blackgold input,
+body.skin-blackgold select,
+body.skin-blackgold textarea,
+body.skin-blackgold .bottom-select,
+body.skin-blackgold .crop-row select,
+body.skin-blackgold .crop-row input,
+body.skin-blackgold .mini-input,
+body.skin-blackgold .mini-sel,
+body.skin-blackgold .alb-search-box,
+body.skin-blackgold .alb-search-box input,
+body.skin-blackgold .alb-sel-wrap,
+body.skin-blackgold .gen-prompt {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,246,218,.040) 22px 23px),
+    linear-gradient(90deg, rgba(180,134,62,.22) 0 3px, transparent 3px),
+    var(--eva-input) !important;
+  border-color: var(--eva-line) !important;
+  border-left-color: var(--eva-accent-2) !important;
+  color: var(--eva-text) !important;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.42), inset 0 -1px 0 rgba(255,246,218,.05) !important;
+}
+body.skin-blackgold input:focus,
+body.skin-blackgold select:focus,
+body.skin-blackgold textarea:focus,
+body.skin-blackgold .bottom-select:focus,
+body.skin-blackgold .mini-input:focus,
+body.skin-blackgold .alb-search-box:focus-within {
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.42), 0 0 0 1px rgba(232,200,120,.18) !important;
+}
+body.skin-blackgold select option { background: #0b0805 !important; color: var(--eva-text) !important; }
+
+/* 滑块：金色薄轨 + 竖向装甲块 */
+body.skin-blackgold .slider-row input[type=range] {
+  background: linear-gradient(90deg, rgba(232,200,120,.22), rgba(180,134,62,.36) 48%, rgba(232,200,120,.18)) !important;
+}
+body.skin-blackgold .slider-row input[type=range]::-webkit-slider-thumb {
+  background: linear-gradient(180deg, #f5e4b4 0%, #c29449 48%, #6f4b22 100%) !important;
+  border: 1px solid #f5e4b4 !important;
+  box-shadow: 0 0 10px rgba(232,200,120,.22) !important;
+}
+
+/* 卡片、缩略图、标签 */
+body.skin-blackgold .alb-cell,
+body.skin-blackgold .file-item,
+body.skin-blackgold .lut-item,
+body.skin-blackgold .gen-card {
+  border-color: var(--eva-line) !important;
+  background: var(--eva-card) !important;
+}
+body.skin-blackgold .alb-cell:hover,
+body.skin-blackgold .alb-cell.sel {
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: 0 0 0 1px var(--eva-accent-2), 0 10px 26px rgba(0,0,0,.38), 0 0 22px rgba(232,200,120,.14) !important;
+}
+body.skin-blackgold .alb-cell .badge,
+body.skin-blackgold .tag,
+body.skin-blackgold .bin-tag,
+body.skin-blackgold .alb-vtags span {
+  border-color: rgba(232,200,120,.34) !important;
+  background: rgba(37,27,14,.78) !important;
+  color: var(--eva-accent-3) !important;
+}
+body.skin-blackgold .thumb,
+body.skin-blackgold .alb-thumb,
+body.skin-blackgold .bin-thumb,
+body.skin-blackgold .dup-thumb {
+  background-color: var(--eva-thumb-bg) !important;
+}
+
+/* 去重子窗口：全屏实体面板也要透出黑金浪纹 */
+body.skin-blackgold .dup-panel,
+body.skin-blackgold #dupPanel {
+  background:
+    linear-gradient(180deg, rgba(5,4,3,.20) 0%, rgba(5,4,3,.46) 46%, rgba(5,4,3,.78) 100%),
+    url("black-gold-bg.jpg") !important;
+  background-size: cover !important;
+  background-position: center top !important;
+}
+body.skin-blackgold .dup-head {
+  background-image:
+    linear-gradient(90deg, rgba(232,200,120,.06), transparent 34%, transparent 70%, rgba(232,200,120,.05)),
+    var(--eva-rail) !important;
+  border-bottom-color: rgba(232,200,120,.34) !important;
+}
+body.skin-blackgold .dup-group,
+body.skin-blackgold .dup-cell {
+  background: var(--eva-card) !important;
+  border-color: var(--eva-line) !important;
+}
+body.skin-blackgold .dup-cell:hover {
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: 0 0 0 1px var(--eva-accent-2), 0 0 18px rgba(232,200,120,.12) !important;
+}
+
+/* 回收站子窗口：透明面板边缘与金色装甲板 */
+body.skin-blackgold .bin-panel {
+  background: var(--eva-modal) !important;
+  border-color: var(--eva-line-strong) !important;
+}
+body.skin-blackgold .bin-head {
+  background: var(--eva-rail) !important;
+  border-bottom-color: rgba(232,200,120,.34) !important;
+}
+
+/* 侧栏：保留极淡浪纹，压到不干扰文字的可读区 */
+body.skin-blackgold .left,
+body.skin-blackgold .right {
+  background:
+    linear-gradient(180deg, rgba(5,4,3,.86) 0%, rgba(5,4,3,.94) 100%),
+    url("black-gold-bg.jpg") !important;
+  background-size: cover !important;
+  background-position: center top !important;
+}
+
+body.skin-blackgold .alb-modal,
+body.skin-blackgold .alb-view,
+body.skin-blackgold .dup-panel,
+body.skin-blackgold .bin-panel,
+body.skin-blackgold .pro-panel,
+body.skin-blackgold .gen-modal,
+body.skin-blackgold .alb-opts,
+body.skin-blackgold .lut-menu {
+  background: var(--eva-modal) !important;
+  border-color: var(--eva-line-strong) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 24px 70px rgba(0,0,0,.72) !important;
+}
+body.skin-blackgold .alb-modal::before,
+body.skin-blackgold .pro-panel::before,
+body.skin-blackgold .gen-modal::before {
+  background: repeating-linear-gradient(90deg, #e8c878 0 12px, rgba(180,134,62,.8) 12px 15px, transparent 15px 26px) !important;
+  opacity: .68 !important;
+}
+body.skin-blackgold .alb-opt-item,
+body.skin-blackgold .alb-ctx-item,
+body.skin-blackgold .lut-menu-item {
+  color: var(--eva-text) !important;
+  border-color: var(--eva-line) !important;
+}
+body.skin-blackgold .alb-opt-item:hover,
+body.skin-blackgold .alb-ctx-item:hover,
+body.skin-blackgold .lut-menu-item:hover {
+  background: rgba(232,200,120,.12) !important;
+  border-color: var(--eva-accent-2) !important;
+}
+
+/* 窗口控制键：保持关闭键的危险色，其余改成金色切角块 */
+body.skin-blackgold .light {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 0 !important;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  border: 1px solid rgba(255,246,218,.22) !important;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease !important;
+}
+body.skin-blackgold .light.red {
+  background: linear-gradient(145deg, #c94f43, #681b17) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 0 10px rgba(201,79,67,.18) !important;
+}
+body.skin-blackgold .light.yellow { background: linear-gradient(145deg, #f5e4b4, #b4863e) !important; }
+body.skin-blackgold .light.green { background: linear-gradient(145deg, #e8c878, #7b5527) !important; }
+body.skin-blackgold .light:hover { transform: scale(1.18); filter: brightness(1.12); }
+
+/* 皮肤菜单：金色选中框与斜切装甲卡 */
+body.skin-blackgold #skinMenu.skin-menu {
+  background: var(--eva-menu) !important;
+  border-color: var(--eva-line-strong) !important;
+  box-shadow: inset 0 1px 0 var(--eva-hi), 0 18px 50px rgba(0,0,0,.72) !important;
+}
+body.skin-blackgold #skinMenu .skin-item {
+  border-color: rgba(194,158,94,.24) !important;
+  background: rgba(255,246,218,.035) !important;
+}
+body.skin-blackgold #skinMenu .skin-item:hover {
+  background: rgba(232,200,120,.11) !important;
+  border-color: rgba(232,200,120,.50) !important;
+}
+body.skin-blackgold #skinMenu .skin-item.on {
+  background: rgba(232,200,120,.16) !important;
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: inset 2px 0 0 var(--eva-accent-2) !important;
+}
+body.skin-blackgold #skinMenu .skin-check {
+  color: transparent !important;
+  border-color: rgba(194,158,94,.30) !important;
+}
+body.skin-blackgold #skinMenu .skin-item.on .skin-check {
+  color: #0b0804 !important;
+  background: linear-gradient(145deg, #f5e4b4, #b4863e) !important;
+  border-color: var(--eva-accent-2) !important;
+  box-shadow: 0 0 10px rgba(232,200,120,.18) !important;
+}
+body.skin-blackgold #skinMenu .skin-menu-head b,
+body.skin-blackgold #skinMenu .skin-name { color: var(--eva-accent-2) !important; }
+body.skin-blackgold #skinMenu .skin-desc,
+body.skin-blackgold #skinMenu .skin-menu-foot { color: var(--eva-muted) !important; }
+
+/* 切肤动画：金色浪幕与斜切装甲片 */
+body.skin-blackgold .skin-transition .st-veil {
+  background: var(--eva-veil) !important;
+  filter: blur(12px) saturate(130%) !important;
+}
+body.skin-blackgold .skin-transition .st-lens {
+  background: var(--eva-lens) !important;
+  border-color: rgba(232,200,120,.74) !important;
+  border-style: double !important;
+}
+body.skin-blackgold .skin-transition .st-prism {
+  background: var(--eva-prism) !important;
+}
+body.skin-blackgold .skin-transition .st-blob {
+  background: var(--eva-blob) !important;
+}
+body.skin-blackgold .skin-transition .st-streak {
+  background: var(--eva-streak) !important;
+  height: 3px !important;
+}
+body.skin-blackgold .skin-transition .st-shard {
+  background: var(--eva-shard) !important;
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 58% 100%, 0 100%);
+}
+body.skin-blackgold .skin-transition .st-ring {
+  border-color: rgba(232,200,120,.52) !important;
+  border-style: double !important;
+}
+body.skin-blackgold .skin-transition .st-core {
+  background: #f5e4b4 !important;
+  box-shadow: 0 0 24px rgba(232,200,120,.72) !important;
+}
+
+/* 页面入场：从上向下展开的金色浪幕，不拦截操作 */
+body.skin-blackgold.lg-page-enter::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(5,4,3,.96) 0%, rgba(5,4,3,.68) 32%, rgba(232,200,120,.10) 52%, transparent 76%),
+    repeating-linear-gradient(90deg, transparent 0 42px, rgba(232,200,120,.08) 42px 44px);
+  clip-path: inset(0 0 0 0);
+  animation: bgGoldCurtain 1.05s cubic-bezier(.2,.8,.2,1) both;
+}
+body.skin-blackgold.lg-page-enter .titlebar,
+body.skin-blackgold.lg-page-enter .alb-titlebar {
+  animation: bgGoldBarIn .72s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes bgGoldCurtain {
+  0% { clip-path: inset(0 0 100% 0); opacity: 1; }
+  38% { clip-path: inset(0 0 28% 0); opacity: .96; }
+  100% { clip-path: inset(0 0 0 0); opacity: 0; }
+}
+@keyframes bgGoldBarIn {
+  0% { transform: translateY(-12px); opacity: .35; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.skin-blackgold.lg-page-enter::after,
+  body.skin-blackgold.lg-page-enter .titlebar,
+  body.skin-blackgold.lg-page-enter .alb-titlebar { animation: none !important; }
+  body.skin-blackgold .light { transition: none !important; }
+}

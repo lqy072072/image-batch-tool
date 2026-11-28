@@ -1,6 +1,6 @@
 # 图片批处理工具
 
-[![Release](https://img.shields.io/badge/下载安装包-v2.38-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
+[![Release](https://img.shields.io/badge/下载安装包-v2.39-blue?logo=github)](https://github.com/lqy072072/image-batch-tool/releases)
 [![GitHub Release](https://img.shields.io/github/v/release/lqy072072/image-batch-tool)](https://github.com/lqy072072/image-batch-tool/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -8,13 +8,13 @@
 
 ## 下载安装
 
-> 当前版本 **v2.38**：液态玻璃改为一张预生成的雾蓝磨砂玻璃底图，宿主不再抓屏、不再推帧，窗口使用匹配的浅色实底，彻底去掉实时模糊带来的帧率问题。三套装甲风主题深化为完整形状系统：**紫夜（紫黑配色 / 荧光绿点缀）**、**霜蓝（蓝黑配色 / 琥珀点缀）**、**赤霞（红黑配色 / 橙光点缀）**，覆盖主界面、子界面、输入框、字体、标签、按钮、背景网格与切肤快门动画。只改皮肤层，不修改任何业务功能。
+> 当前版本 **v2.39**：新增「黑金」皮肤，极深墨黑底叠古金色日式海浪浮世绘纹，覆盖相册、图片编辑、去重、回收站、皮肤菜单、按钮、标签页、输入框、下拉与弹窗；黑金窗口使用整窗淡入 / 淡出，切肤为金色装甲片过渡。关于页追加免责声明与 GitHub 地址。只改 UI 皮肤层与关于文案，不修改任何照片处理、导出、AI、LUT、相册索引、去重等业务功能。
 
-直接下载最新安装包（约 1.19GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
+直接下载最新安装包（约 1.21GB，已内置两个模块各自的 Python 运行时、原有 AI 模型、OCR 模型与 LUT）：
 
 **[👉 前往 Releases 页面下载最新安装包](https://github.com/lqy072072/image-batch-tool/releases)**
 
-GitHub Release 资产名为 `image-batch-tool_v2.38_setup.exe`；本地构建文件名为 `图片批处理工具_v2.38_安装包.exe`（1,293,118,322 字节，约 1.20 GB）；SHA256 `D720FCF1752957B958B75BEA97A8F57981AE8C6E79C6C8998C7D24540B72351A`，完整测试记录见 [`v2.38_回归测试报告.md`](v2.38_回归测试报告.md)。
+GitHub Release 资产名为 `image-batch-tool_v2.39_setup.exe`；本地构建文件名为 `图片批处理工具_v2.39_安装包.exe`（1,297,440,434 字节，约 1.21 GB）；SHA256 `6D7C0CE5DBFA7173A4010548FB67CE0D0D6B9A7F6650CD76B612501B6FEB6EC7`，完整测试记录见 [`v2.39_回归测试报告.md`](v2.39_回归测试报告.md)。
 
 > **生成式修图模型不预装**：基础安装包不含 `ai/genedit` 推理运行时和 `ai/models/genedit` 下的 FLUX.2 Klein 4B / Qwen3-4B / FLUX.2 VAE（约 5.3GB 模型，加运行时合计约 6GB）。首次在图片编辑「AI → 生成式修图」里点「下载模型」，程序会断点续传、SHA256 校验并解压到安装目录；下载前检查磁盘剩余 ≥7GB。
 
@@ -61,7 +61,7 @@ GitHub Release 资产名为 `image-batch-tool_v2.38_setup.exe`；本地构建文
   - **暂停 / 继续 / 停止**：上千张跑到一半可以停下改参数，或只放弃剩余
   - **拖放导入 + 快捷键**：文件夹/照片直接拖进窗口；Ctrl+O 加文件、Ctrl+Shift+O 加文件夹、Ctrl+Enter 开始、Del 移除、空格拉帘对比
 - **交互**：前后对比拉帘（拖动分割线）、单张重做、参数预设保存/读取/记忆、列表只渲染可视窗口
-- **八套界面皮肤**：深色 / 墨色玻璃 / 浅色 / 柔光白 / 液态玻璃 / 紫夜 / 霜蓝 / 赤霞，WebView2 渲染，独立皮肤文件，可双窗口同步切换。v2.38 起液态玻璃改为预生成的雾蓝磨砂玻璃底图，窗口保持不透明，照片、相册缩略图、回收站缩略图与去重缩略图始终完全不透明；底图不再由宿主抓屏，页面只读取 `skins/aurora-bg.jpg`。三套装甲风主题共用独立外壳样式，新增斜切按钮、装甲输入框、直角卡片、网格背景与快门转场；去重窗口为保证长列表可读与可点，固定使用不透明深色皮肤。
+- **九套界面皮肤**：深色 / 墨色玻璃 / 浅色 / 柔光白 / 液态玻璃 / 紫夜 / 霜蓝 / 赤霞 / 黑金，WebView2 渲染，独立皮肤文件，可双窗口同步切换。v2.38 起液态玻璃改为预生成的雾蓝磨砂玻璃底图，窗口保持不透明，照片、相册缩略图、回收站缩略图与去重缩略图始终完全不透明；底图不再由宿主抓屏，页面只读取 `skins/aurora-bg.jpg`。三套装甲风主题共用独立外壳样式，新增斜切按钮、装甲输入框、直角卡片、网格背景与快门转场；黑金复用装甲形状系统并使用黑金浪纹底图与金色转场；去重窗口为保证长列表可读与可点，固定使用不透明深色皮肤。
 
 ## 相册（v2.00 新增，v2.01 增强）
 
@@ -78,6 +78,22 @@ GitHub Release 资产名为 `image-batch-tool_v2.38_setup.exe`；本地构建文
 ![设置菜单](docs/screenshots/album_v210_menu.png)
 
 ![人物分类](docs/screenshots/album_v210_person.png)
+
+### v2.39 更新
+
+![v2.39 黑金相册主界面](docs/screenshots/v239_blackgold_album.png)
+
+![v2.39 黑金图片编辑](docs/screenshots/v239_blackgold_edit.png)
+
+![v2.39 黑金皮肤菜单](docs/screenshots/v239_blackgold_skin_menu.png)
+
+- **新增「黑金」皮肤**：`skins/black-gold-bg.jpg`（2560×1600，约 1.0 MB）为极深墨黑底、古金色日式海浪浮世绘线稿，浪花集中在四边、中央保留较暗阅读区，不含文字 / Logo / 水印 / 人物。`black-gold.css` 复用 `eva-core.css` 装甲形状系统，body 同时挂 `skin-blackgold skin-eva`，只作用于皮肤作用域。
+- **覆盖范围**：相册主界面、顶栏标签页、左右面板、按钮、搜索 / 筛选、缩略图卡片、回收站 `.bin-panel`、去重 `#dupPanel`、图片编辑左右侧栏、LUT 列表、滑块、输入框 / select / textarea、设置菜单、下拉、弹窗、皮肤菜单、页面入场金色幕帘与切肤金色装甲片过渡。
+- **可读性处理**：黑金 body 使用黑底 + 暗金浪纹；左右侧栏叠加 86%–94% 黑金渐层后保留极淡浪纹，避免 LUT 列表、滑块标签和输入框被亮金线条干扰；缩略图、文件和分组卡片保持暗色实体底与金边。
+- **窗口开关动画**：`WebViewApp.cs` 为黑金增加整窗淡入（约 256ms）与关闭淡出（约 224ms），只对黑金生效；去重窗口关闭同样淡出。其他皮肤保持原行为，不改变窗口生命周期和业务逻辑。
+- **关于页**：两个模块的关于文案统一为 `版本 2.39`，追加免责声明和 `GitHub：https://github.com/lqy072072/image-batch-tool`；原有制作者、版本结构和消息路由不变。
+- **兼容修复**：`skin-core.js` 的 `apply()` 改为按空白拆分 `def.cls` 后逐个 `classList.add`，避免 `skin-blackgold skin-eva` 这类多 class 触发 `InvalidCharacterError`；未选中皮肤不再误显示勾选；临时调试日志已移除。
+- **回归**：相册 / 图片编辑 / 去重 / 回收站 / 皮肤菜单均实机截图验收；静默安装、启动、关于窗口、静默卸载均在隔离目录完成。只改 UI 与关于文案，照片处理、导出、AI、LUT、相册索引、去重等业务函数未动。完整记录见 [`v2.39_回归测试报告.md`](v2.39_回归测试报告.md)。
 
 ### v2.38 更新
 
