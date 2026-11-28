@@ -12,7 +12,7 @@ namespace ImageBatchTool
         public const string HtmlFile = "album.html";
         public const string IconFile = "相册.ico";
         public const string SplashSubtitle = "正在初始化相册引擎…";
-        public const string AboutText = "相册\n版本 2.24\n\n制作者：純潔の工口君";
+        public const string AboutText = "相册\n版本 2.28\n\n制作者：純潔の工口君";
 #if QA_BUILD
         public const string ConfigFolder = "ImageBatchTool_QA";
 #else
@@ -27,7 +27,7 @@ namespace ImageBatchTool
         public const string HtmlFile = "edit.html";
         public const string IconFile = "相册_编辑.ico";
         public const string SplashSubtitle = "正在初始化图像处理引擎…";
-        public const string AboutText = "图片编辑\n版本 2.24\n\n制作者：純潔の工口君";
+        public const string AboutText = "图片编辑\n版本 2.28\n\n制作者：純潔の工口君";
 #if QA_BUILD
         public const string ConfigFolder = "ImageBatchTool_Edit_QA";
 #else
@@ -47,6 +47,26 @@ namespace ImageBatchTool
             }
             catch { return ConfigFolder; }
         }
+
+        // 相册与图片编辑是两个独立进程、独立安装目录；皮肤选择放在公共配置目录，
+        // 两个窗口及去重子窗口都读同一份，切换后能相互跟随。
+        public static string SharedSkinFile()
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
+                    "ImageBatchTool");
+                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                return System.IO.Path.Combine(dir, "skin_shared.txt");
+            }
+            catch
+            {
+                return System.IO.Path.Combine(System.Windows.Forms.Application.StartupPath, "skin_shared.txt");
+            }
+        }
     }
 }
+
+
 

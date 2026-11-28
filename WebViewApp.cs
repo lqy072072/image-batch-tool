@@ -323,7 +323,23 @@ namespace ImageBatchTool
     {
         [DllImport("user32.dll")] public static extern bool ReleaseCapture();
         [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] public static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
         [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+        [DllImport("dwmapi.dll")] public static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MARGINS { public int Left, Right, Top, Bottom; }
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DWM_BLURBEHIND { public int dwFlags; public bool fEnable; public IntPtr hRgnBlur; public bool fTransitionOnMaximized; }
+        [DllImport("dwmapi.dll")] public static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref DWM_BLURBEHIND blur);
+        [StructLayout(LayoutKind.Sequential)] public struct ACCENTPOLICY { public int State, Flags, Color, Animation; }
+        [StructLayout(LayoutKind.Sequential)] public struct WINCOMPDATA { public int Attr; public IntPtr Data; public int Size; }
+        [DllImport("user32.dll")] public static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINCOMPDATA data);
+        public static int Accent(IntPtr hwnd, int state, int color) {
+            ACCENTPOLICY a = new ACCENTPOLICY { State = state, Flags = 2, Color = color, Animation = 0 };
+            WINCOMPDATA d = new WINCOMPDATA { Attr = 19, Data = Marshal.AllocHGlobal(Marshal.SizeOf(a)), Size = Marshal.SizeOf(a) };
+            try { Marshal.StructureToPtr(a, d.Data, false); return SetWindowCompositionAttribute(hwnd, ref d); }
+            finally { Marshal.FreeHGlobal(d.Data); }
+        }
         [DllImport("imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
         public static extern void lut_apply(byte[] buf, int W, int H, int stride,
             [In] float[] lut, int size, float inMin, float inMax,
@@ -348,6 +364,267 @@ namespace ImageBatchTool
         public static extern int gpu_color_adjust(byte[] buf, int W, int H, int stride,
             float saturation, float contrast, float brightness,
             float shadows, float highlights, float temp, float tint, float vignette);
+    }
+
+    // ============================================================
+    // 液态玻璃实时背景：
+    //   把窗口自身排除在屏幕捕获之外（WDA_EXCLUDEFROMCAPTURE），
+    //   定时截取窗口所在屏幕区域 -> 缩小 -> 高斯模糊 -> 作为 Form 背景。
+    //   WebView2 页面保持透明，因此毛玻璃里是窗口下方真实的桌面/其它窗口，
+    //   窗口移动、下方内容变化时背景会真实跟着变化，而不是一张静态毛玻璃贴图。
+    // ============================================================
+    class GlassBackdrop : IDisposable
+    {
+        readonly Form host;
+        readonly WebView2 web;
+        readonly System.Windows.Forms.Timer timer;
+        Bitmap cap, small;
+        Bitmap fullDesktop;
+        Point deskOrigin;
+        Size deskSize;
+        Rectangle lastBounds;
+        bool hasLastBounds;
+        bool enabled, failed;
+        int busy;
+        string lastFrame = "";
+
+        public GlassBackdrop(Form host, WebView2 web)
+        {
+            this.host = host;
+            this.web = web;
+            timer = new System.Windows.Forms.Timer { Interval = 170 };
+            timer.Tick += (s, e) => Capture();
+        }
+
+        public bool Enabled { get { return enabled; } }
+
+        // 在窗口显示之前抓一张整屏桌面。之后每次只补抓窗口四周区域，
+        // 再按窗口当前位置裁切；窗口移动时，新位置早已是真实桌面，不会截到自己。
+        public void PrimeDesktop()
+        {
+            try
+            {
+                Rectangle vs = SystemInformation.VirtualScreen;
+                try { MainForm.Log("液态玻璃 Prime " + vs.Width + "x" + vs.Height); } catch { }
+                if (vs.Width < 80 || vs.Height < 80) return;
+                if (fullDesktop != null && deskSize.Width == vs.Width && deskSize.Height == vs.Height && deskOrigin.X == vs.Left && deskOrigin.Y == vs.Top) return;
+                if (fullDesktop != null) fullDesktop.Dispose();
+                fullDesktop = new Bitmap(vs.Width, vs.Height, PixelFormat.Format32bppArgb);
+                using (var g = Graphics.FromImage(fullDesktop))
+                    g.CopyFromScreen(vs.Location, Point.Empty, vs.Size, CopyPixelOperation.SourceCopy);
+                deskOrigin = vs.Location;
+                deskSize = vs.Size;
+                try { fullDesktop.Save(Path.Combine(Application.StartupPath, "cache", "logs", "glass_desktop.png"), ImageFormat.Png); } catch { }
+                try { MainForm.Log("液态玻璃底图 " + vs.Width + "x" + vs.Height + " @" + vs.X + "," + vs.Y); } catch { }
+            }
+            catch (Exception ex) { try { MainForm.Log("液态玻璃底图失败: " + ex.Message); } catch { } }
+        }
+
+        public bool Enable()
+        {
+            if (enabled || failed || host == null || host.IsDisposed) return enabled;
+            if (!host.IsHandleCreated || !host.Visible) return false;
+            try
+            {
+                enabled = true;
+                host.BackgroundImageLayout = ImageLayout.Stretch;
+                Capture();
+                timer.Start();
+                return true;
+            }
+            catch { failed = true; return false; }
+        }
+
+        public void Disable()
+        {
+            try { timer.Stop(); } catch { }
+            enabled = false;
+            try { if (host != null) { host.BackgroundImage = null; host.Invalidate(); } } catch { }
+            DisposeBitmaps();
+        }
+
+        void DisposeBitmaps()
+        {
+            try { if (cap != null) { cap.Dispose(); cap = null; } } catch { }
+            try { if (small != null) { small.Dispose(); small = null; } } catch { }
+            try { if (fullDesktop != null) { fullDesktop.Dispose(); fullDesktop = null; } } catch { }
+        }
+
+        void Capture()
+        {
+            if (!enabled || failed || host == null || host.IsDisposed || !host.Visible) return;
+            if (host.WindowState == FormWindowState.Minimized) return;
+            if (Interlocked.CompareExchange(ref busy, 1, 0) != 0) return;
+            try
+            {
+                var b = host.Bounds;
+                if (b.Width < 120 || b.Height < 100) return;
+                if (fullDesktop == null) PrimeDesktop();
+                // 上一次窗口位置四周先补抓：窗口移动后，新位置原本就在上一次窗口之外，
+                // 这些区域是真实桌面，不会截到窗口自己。
+                if (hasLastBounds) PatchDesktop(lastBounds);
+                PatchDesktop(b);
+                lastBounds = b;
+                hasLastBounds = true;
+
+                int sw = Math.Max(240, Math.Min(640, b.Width / 2));
+                int sh = Math.Max(100, (int)Math.Round(sw * (double)b.Height / b.Width));
+                if (small == null || small.Width != sw || small.Height != sh)
+                {
+                    if (small != null) small.Dispose();
+                    small = new Bitmap(sw, sh, PixelFormat.Format32bppArgb);
+                }
+                using (var g = Graphics.FromImage(small))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    Rectangle src = new Rectangle(b.X - deskOrigin.X, b.Y - deskOrigin.Y, b.Width, b.Height);
+                    if (fullDesktop != null)
+                    {
+                        Rectangle safe = Rectangle.Intersect(src, new Rectangle(0, 0, fullDesktop.Width, fullDesktop.Height));
+                        if (safe.Width > 0 && safe.Height > 0)
+                        {
+                            using (var full = new Bitmap(safe.Width, safe.Height, PixelFormat.Format32bppArgb))
+                            using (var fg = Graphics.FromImage(full))
+                            {
+                                fg.DrawImage(fullDesktop, new Rectangle(0, 0, safe.Width, safe.Height), safe, GraphicsUnit.Pixel);
+                                g.DrawImage(full, new Rectangle(0, 0, sw, sh));
+                            }
+                        }
+                        else g.Clear(Color.FromArgb(8, 18, 32));
+                    }
+                    else
+                    {
+                        g.Clear(Color.FromArgb(8, 18, 32));
+                    }
+                }
+                BoxBlur(small, 4, 2);
+                host.BackgroundImage = small;
+                host.Invalidate();
+                PushFrame();
+            }
+            catch { }
+            finally { busy = 0; }
+        }
+
+        // 只截窗口以外四条边，补进整屏底图；窗口移动后新位置就是真实桌面。
+        void PatchDesktop( Rectangle b)
+        {
+            if (fullDesktop == null || fullDesktop.Width < 8 || fullDesktop.Height < 8) return;
+            try
+            {
+                Rectangle vs = new Rectangle(deskOrigin, deskSize);
+                using (var g = Graphics.FromImage(fullDesktop))
+                {
+                    PatchBand(g, Rectangle.Intersect(new Rectangle(vs.Left, vs.Top, Math.Max(0, b.Left - vs.Left), vs.Height), vs));
+                    PatchBand(g, Rectangle.Intersect(new Rectangle(b.Right, vs.Top, Math.Max(0, vs.Right - b.Right), vs.Height), vs));
+                    if (b.Left < vs.Right && b.Right > vs.Left)
+                    {
+                        int l = Math.Max(b.Left, vs.Left), r = Math.Min(b.Right, vs.Right);
+                        PatchBand(g, Rectangle.Intersect(new Rectangle(l, vs.Top, Math.Max(0, r - l), Math.Max(0, b.Top - vs.Top)), vs));
+                        PatchBand(g, Rectangle.Intersect(new Rectangle(l, b.Bottom, Math.Max(0, r - l), Math.Max(0, vs.Bottom - b.Bottom)), vs));
+                    }
+                }
+            }
+            catch { }
+        }
+
+        void PatchBand(Graphics g, Rectangle r)
+        {
+            if (fullDesktop == null || r.Width <= 0 || r.Height <= 0) return;
+            Point dest = new Point(r.X - deskOrigin.X, r.Y - deskOrigin.Y);
+            if (dest.X < 0 || dest.Y < 0 || dest.X + r.Width > fullDesktop.Width || dest.Y + r.Height > fullDesktop.Height) return;
+            try { g.CopyFromScreen(r.Location, dest, r.Size, CopyPixelOperation.SourceCopy); } catch { }
+        }
+
+        void PushFrame()
+        {
+            if (web == null || web.CoreWebView2 == null || small == null) return;
+            try
+            {
+                using (var ms = new MemoryStream())
+                {
+                    try { small.Save(ms, ImageFormat.Jpeg); }
+                    catch (Exception ex) { try { MainForm.Log("液态玻璃 JPEG 失败: " + ex.Message); } catch { } return; }
+                    byte[] bytes = ms.ToArray();
+                    if (bytes.Length < 64) return;
+                    string b64 = Convert.ToBase64String(bytes);
+                    // 页面可能比第一帧晚 ready；静态底图每 170ms 重发一次，保证一定能收到。
+                    lastFrame = b64;
+                    string json = "{\"type\":\"glassbg\",\"data\":\"data:image/jpeg;base64," + b64 + "\"}";
+                    web.CoreWebView2.PostWebMessageAsJson(json);
+                    if (lastFrame == b64) { }
+                    // 帧日志会每 170ms 刷屏，正常运行不写
+                }
+            }
+            catch { }
+        }
+
+        static unsafe void BoxBlur(Bitmap bmp, int radius, int passes)
+        {
+            int w = bmp.Width, h = bmp.Height;
+            var rect = new Rectangle(0, 0, w, h);
+            var data = bmp.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            try
+            {
+                int stride = data.Stride;
+                byte[] src = new byte[stride * h];
+                byte[] tmp = new byte[stride * h];
+                Marshal.Copy(data.Scan0, src, 0, src.Length);
+                int win = radius * 2 + 1;
+                for (int p = 0; p < passes; p++)
+                {
+                    // 水平
+                    for (int y = 0; y < h; y++)
+                    {
+                        int row = y * stride;
+                        for (int c = 0; c < 3; c++)
+                        {
+                            int sum = 0;
+                            for (int k = -radius; k <= radius; k++)
+                            {
+                                int xx = k < 0 ? 0 : (k >= w ? w - 1 : k);
+                                sum += src[row + xx * 4 + c];
+                            }
+                            for (int x = 0; x < w; x++)
+                            {
+                                tmp[row + x * 4 + c] = (byte)(sum / win);
+                                int add = x + radius + 1; if (add >= w) add = w - 1;
+                                int del = x - radius; if (del < 0) del = 0;
+                                sum += src[row + add * 4 + c] - src[row + del * 4 + c];
+                            }
+                        }
+                        for (int x = 0; x < w; x++) tmp[row + x * 4 + 3] = src[row + x * 4 + 3];
+                    }
+                    // 垂直
+                    for (int x = 0; x < w; x++)
+                    {
+                        int col = x * 4;
+                        for (int c = 0; c < 3; c++)
+                        {
+                            int sum = 0;
+                            for (int k = -radius; k <= radius; k++)
+                            {
+                                int yy = k < 0 ? 0 : (k >= h ? h - 1 : k);
+                                sum += tmp[yy * stride + col + c];
+                            }
+                            for (int y = 0; y < h; y++)
+                            {
+                                src[y * stride + col + c] = (byte)(sum / win);
+                                int add = y + radius + 1; if (add >= h) add = h - 1;
+                                int del = y - radius; if (del < 0) del = 0;
+                                sum += tmp[add * stride + col + c] - tmp[del * stride + col + c];
+                            }
+                        }
+                        for (int y = 0; y < h; y++) src[y * stride + col + 3] = tmp[y * stride + col + 3];
+                    }
+                }
+                Marshal.Copy(src, 0, data.Scan0, src.Length);
+            }
+            finally { bmp.UnlockBits(data); }
+        }
+
+        public void Dispose() { try { Disable(); } catch { } try { timer.Dispose(); } catch { } }
     }
 
     // ============================================================
@@ -401,7 +678,10 @@ namespace ImageBatchTool
             main.FormClosed += (s, e) => MainForm.Log("主窗口已关闭");
             main.FormClosing += (s, e) => { try { main.AiStopAll(); } catch { } };
             Application.ApplicationExit += (s, e) => MainForm.Log("ApplicationExit");
-            Application.Run(main);
+            // 与独立玻璃探测程序保持同一启动顺序：先 Show 出真实窗口，再进入消息循环。
+            // 直接 Application.Run(main) 会在进入循环后才首次显示，DWM 背景有时会退回不透明灰。
+            main.Show();
+            Application.Run();
             MainForm.Log("Application.Run 返回");
             // 修改缓存位置后重启：等旧 WebView2/文件句柄释放，再拉起新实例。
             // 新实例启动时会先执行 CacheStore.ApplyPendingMove()，再打开 WebView2。
@@ -439,37 +719,43 @@ namespace ImageBatchTool
             Size = new Size(360, 220);
             string skin = "dark";
             try {
+                string shared = AppModule.SharedSkinFile();
                 string sf = Path.Combine(Application.StartupPath, "skin.txt");
-                if (File.Exists(sf)) skin = File.ReadAllText(sf).Trim().ToLower();
+                if (File.Exists(shared)) skin = File.ReadAllText(shared).Trim().ToLower();
+                else if (File.Exists(sf)) skin = File.ReadAllText(sf).Trim().ToLower();
             } catch {}
             bool light = skin == "light";
-            BackColor = light ? Color.FromArgb(245,245,247) : Color.FromArgb(43,43,43);
+            bool frost = skin == "frost";
+            bool aurora = skin == "aurora";
+            bool glass = skin == "liquid" || skin == "smoke";
+            bool pale = light || frost || aurora;
+            BackColor = glass ? Color.FromArgb(19,21,49) : frost ? Color.FromArgb(246,244,250) : light ? Color.FromArgb(245,245,247) : aurora ? Color.FromArgb(245,250,255) : Color.FromArgb(43,43,43);
 
             var t = new Label();
             t.Text = AppModule.DisplayName;
-            t.ForeColor = light ? Color.FromArgb(29,29,31) : Color.FromArgb(220,220,220);
+            t.ForeColor = glass ? Color.FromArgb(246,250,255) : pale ? Color.FromArgb(29,29,31) : Color.FromArgb(220,220,220);
             t.Font = new Font("Microsoft YaHei UI", 14f);
             t.AutoSize = false; t.Size = new Size(360, 40); t.Location = new Point(0, 70);
             t.TextAlign = ContentAlignment.MiddleCenter;
 
             var sub = new Label();
             sub.Text = AppModule.SplashSubtitle;
-            sub.ForeColor = light ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
+            sub.ForeColor = glass ? Color.FromArgb(183,205,237) : pale ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
             sub.Font = new Font("Microsoft YaHei UI", 9f);
             sub.AutoSize = false; sub.Size = new Size(360, 20); sub.Location = new Point(0, 120);
             sub.TextAlign = ContentAlignment.MiddleCenter;
 
             var bar = new Panel();
             bar.Size = new Size(200, 3); bar.Location = new Point(80, 160);
-            bar.BackColor = light ? Color.FromArgb(229,229,234) : Color.FromArgb(60,60,60);
+            bar.BackColor = glass ? Color.FromArgb(61,72,111) : pale ? Color.FromArgb(229,229,234) : Color.FromArgb(60,60,60);
             var fill = new Panel();
             fill.Size = new Size(0, 3); fill.Location = new Point(0, 0);
-            fill.BackColor = Color.FromArgb(9,105,218);
+            fill.BackColor = glass ? Color.FromArgb(98,197,255) : Color.FromArgb(9,105,218);
             bar.Controls.Add(fill);
 
             var pct = new Label();
             pct.Text = "0%";
-            pct.ForeColor = light ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
+            pct.ForeColor = glass ? Color.FromArgb(196,218,248) : pale ? Color.FromArgb(142,142,147) : Color.FromArgb(140,140,140);
             pct.Font = new Font("Microsoft YaHei UI", 9f);
             pct.AutoSize = false; pct.Size = new Size(360, 18); pct.Location = new Point(0, 168);
             pct.TextAlign = ContentAlignment.MiddleCenter;
@@ -1712,6 +1998,10 @@ namespace ImageBatchTool
         WebView2 dedupWeb;
         AlbumMeta albMeta;
         Form dedupForm;
+        GlassBackdrop mainGlass;
+        GlassBackdrop dedupGlass;
+        System.Windows.Forms.Timer skinSyncTimer;
+        volatile string lastSkinSync = "";
         CoreWebView2Environment webEnv;
         public SplashForm Splash;
         public string StartupMode = AppModule.Id;
@@ -1726,6 +2016,8 @@ namespace ImageBatchTool
         readonly List<string[]> failList = new List<string[]>();
         volatile bool running = false;
         int selected = -1;
+        volatile bool genEditInstalling = false;
+        volatile string genEditSource = "";
         string outputDir = "";
         CubeLut activeLut = null;
         string activeLutPath = null;
@@ -1834,16 +2126,34 @@ namespace ImageBatchTool
             catch { }
             Width = 1400; Height = 900;
             StartPosition = FormStartPosition.CenterScreen;
-            BackColor = Color.FromArgb(32,32,36);
             FormBorderStyle = FormBorderStyle.None;
             DoubleBuffered = true;
-            Opacity = 0;
+            SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+            string startupSkin = "dark";
+            try { startupSkin = ReadSkinName(); } catch { }
+            // 透明色键 + 分层窗口与 Opacity/DoubleBuffer 混用会丢掉色键合成。
+            if (startupSkin == "aurora") DoubleBuffered = false;
+            if (startupSkin != "aurora") Opacity = 0;
+            BackColor = startupSkin == "aurora" ? Color.FromArgb(8,18,32) : Color.FromArgb(32,32,36);
+
+            // 液态玻璃走实时捕获毛玻璃，不再使用透明色键；
+            // TransparencyKey 会把窗口变成分层窗口，导致无法从屏幕捕获中排除自身。
+            try {
+                if (startupSkin == "aurora") {
+                    TransparencyKey = Color.Empty;
+                }
+            } catch { }
 
             if (AppModule.IsAlbum) { try { MigrateLegacyCache(); } catch {} }
             web = new WebView2();
             web.Dock = DockStyle.Fill;
             Controls.Add(web);
-            InitWeb();
+            mainGlass = new GlassBackdrop(this, web);
+            try { MainForm.Log("构造 startupSkin=" + startupSkin); } catch { }
+            if (startupSkin == "aurora") { try { mainGlass.PrimeDesktop(); } catch { } }
+            // WebView2 的透明合成必须等窗体真正显示后再初始化；在构造函数里提前初始化时，
+            // DWM 毛玻璃与 WebView2 的 DirectComposition 会互相顶掉，页面会整层不可见。
+            this.Shown += (s, e) => { try { if (web != null && web.CoreWebView2 == null) InitWeb(); } catch { } };
 
             par["filterStrength"]=50; par["chroma"]=100; par["filmContrast"]=0;
             par["saturation"]=100; par["contrast"]=100; par["brightness"]=100;
@@ -1900,8 +2210,12 @@ namespace ImageBatchTool
                 LoadLuts(Path.Combine(Application.StartupPath, "luts"));
             }
 
-            this.Load += (s, e) => ApplyRoundedCorner();
+            this.Load += (s, e) => { ApplyNativeSkin(ReadSkinName()); ApplyRoundedCorner(); };
             this.Resize += (s, e) => ApplyRoundedCorner();
+            this.FormClosed += (s, e) => {
+                try { if (mainGlass != null) { mainGlass.Dispose(); mainGlass = null; } } catch {}
+                try { if (skinSyncTimer != null) { skinSyncTimer.Stop(); skinSyncTimer.Dispose(); skinSyncTimer = null; } } catch {}
+            };
             if (AppModule.IsAlbum) this.FormClosed += (s, e) => CloseDupWindow();
         }
 
@@ -1937,6 +2251,9 @@ namespace ImageBatchTool
         void ApplyRoundedCorner()
         {
             try {
+                // 液态玻璃的圆角已在 ApplyNativeSkin 里按 DWM 要求的顺序写入；
+                // 这里再写一次 33 会把系统 Acrylic 顶回不透明灰，必须跳过。
+                if (ReadSkinName() == "aurora") return;
                 int attr = 2;
                 Native.DwmSetWindowAttribute(this.Handle, 33, ref attr, sizeof(int));
                 if (WindowState == FormWindowState.Maximized) this.Region = null;
@@ -1957,6 +2274,8 @@ namespace ImageBatchTool
         {
             try
             {
+                // 必须在创建 CoreWebView2Environment 之前设置，WebView2 才会真正画出透明底。
+                try { Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "0"); } catch { }
                 string webData = CacheSub("webview2");
                 CoreWebView2Environment env = null;
                 try
@@ -1984,6 +2303,8 @@ namespace ImageBatchTool
                 int tries = 0;
                 while (web.CoreWebView2 == null && tries < 20) { await Task.Delay(100); tries++; }
                 if (web.CoreWebView2 == null) { MessageBox.Show("WebView2 初始化超时"); return; }
+                // 关键：透明背景必须在首次 Navigate 之前写入，否则旧导航留下的不透明表面不会重绘。
+                ApplyNativeSkin(ReadSkinName(), this, web);
                 // 拖放交给宿主窗体处理（WebView2 不吞掉拖放）
                 try { web.AllowExternalDrop = false; } catch { }
                 this.AllowDrop = true;
@@ -2029,11 +2350,11 @@ namespace ImageBatchTool
                     await Task.Delay(1800);
                     try { if (Opacity < 1) { Opacity = 1; Show(); Activate(); } } catch { }
                 };
-                string skinFile = Path.Combine(Application.StartupPath, "skin.txt");
-                string skin = "dark";
-                try { if (File.Exists(skinFile)) skin = File.ReadAllText(skinFile).Trim().ToLower(); } catch {}
+                string skin = ReadSkinName();
+                if (Environment.GetEnvironmentVariable("IBT_BLANK") == "1") { web.CoreWebView2.NavigateToString("<!doctype html><html><head><style>html,body{background:transparent!important;margin:0;height:100%}</style></head><body></body></html>"); return; }
                 // 各模块加载自己的入口页面，不再通过同一个 ui.html 切模式。
                 web.CoreWebView2.Navigate("http://app.local/" + AppModule.HtmlFile + "?skin=" + skin + "&mode=" + AppModule.Id + "&standalone=" + AppModule.Id + "&v=" + DateTime.Now.Ticks);
+                StartSkinSync();
                 if (!AppModule.IsAlbum) SendState();
             }
             catch (Exception ex) { MessageBox.Show("WebView2 初始化失败：\n" + ex.Message); }
@@ -2042,11 +2363,122 @@ namespace ImageBatchTool
         void Send(string json)
         {
             PostToWeb(web, json);
-            // 去重独立窗口只接收去重相关消息，避免预览等大消息重复传输。
-            if (json != null && json.StartsWith("{\"type\":\"dup", StringComparison.Ordinal))
+            // 去重窗口接收去重消息和皮肤同步消息，避免预览等大消息重复传输。
+            if (json != null && (json.StartsWith("{\"type\":\"dup", StringComparison.Ordinal) ||
+                json.StartsWith("{\"type\":\"skin\"", StringComparison.Ordinal)))
                 PostToWeb(dedupWeb, json);
         }
 
+        string ReadSkinName()
+        {
+            try {
+                string shared = AppModule.SharedSkinFile();
+                if (File.Exists(shared)) {
+                    string s = File.ReadAllText(shared).Trim().ToLowerInvariant();
+                    if (s.Length > 0) return NormalizeSkin(s);
+                }
+            } catch {}
+            try {
+                string sf = Path.Combine(Application.StartupPath, "skin.txt");
+                if (File.Exists(sf)) {
+                    string s = File.ReadAllText(sf).Trim().ToLowerInvariant();
+                    if (s.Length > 0) return NormalizeSkin(s);
+                }
+            } catch {}
+            return "dark";
+        }
+
+        // 独立进程之间通过 skin.txt 同步：任一窗口切换后，另一窗口 0.7 秒内跟随。
+        void StartSkinSync()
+        {
+            if (skinSyncTimer != null) return;
+            lastSkinSync = ReadSkinName();
+            skinSyncTimer = new System.Windows.Forms.Timer();
+            skinSyncTimer.Interval = 700;
+            skinSyncTimer.Tick += (s, e) =>
+            {
+                try {
+                    string cur = ReadSkinName();
+                    if (!string.Equals(cur, lastSkinSync, StringComparison.OrdinalIgnoreCase)) {
+                        lastSkinSync = cur;
+                        ApplyNativeSkin(cur);
+                        if (dedupForm != null && !dedupForm.IsDisposed) ApplyNativeSkin(cur, dedupForm, dedupWeb);
+                        Send("{\"type\":\"skin\",\"skin\":" + JsonStr(cur) + "}");
+                    }
+                } catch {}
+            };
+            skinSyncTimer.Start();
+        }
+
+        static string NormalizeSkin(string skin)
+        {
+            if (skin == null) return "dark";
+            string s = skin.Trim().ToLowerInvariant();
+            if (s == "liquid" || s == "glass" || s == "liquid-glass" || s == "liquidglass"
+                || s == "old-liquid" || s == "dark-glass" || s == "ink") return "smoke";
+            if (s == "liquid2" || s == "new-liquid" || s == "realtime-liquid" || s == "clear-glass") return "aurora";
+            if (s == "frostwhite" || s == "frosted-white") return "frost";
+            if (s == "white") return "light";
+            if (s == "black") return "dark";
+            return s.Length == 0 ? "dark" : s;
+        }
+
+        Color OpaqueBackFor(string skin)
+        {
+            if (skin == "light") return Color.FromArgb(245, 245, 247);
+            if (skin == "frost") return Color.FromArgb(246, 244, 250);
+            return Color.FromArgb(32, 32, 36);
+        }
+
+        void ApplyNativeSkin(string skin)
+        {
+            ApplyNativeSkin(NormalizeSkin(skin), this, web);
+        }
+
+        // 液态玻璃使用“透明色键 + 系统实时 Acrylic + WebView2 透明”：
+        // 页面玻璃里透出的不是静态图片，而是窗口下方真实的桌面 / 其它窗口；
+        // 窗口移动、下方内容变化时，透出的背景也会实时变化。
+        void ApplyNativeSkin(string skin, Form targetForm, WebView2 targetWeb)
+        {
+            if (targetForm == null || targetForm.IsDisposed) return;
+            skin = NormalizeSkin(skin);
+            try
+            {
+                if (!targetForm.IsHandleCreated) return;
+                bool aurora = skin == "aurora";
+                try { Log("原生皮肤=" + skin + " aurora=" + aurora + " key=" + targetForm.TransparencyKey + " back=" + targetForm.BackColor + " op=" + targetForm.Opacity); } catch { }
+                if (aurora)
+                {
+                    // 不使用 TransparencyKey / DWM Acrylic：DWM 在本应用窗口上会退回不透明灰。
+                    // 改为“窗口排除屏幕捕获 + 实时截取背景缩小模糊 + WebView2 透明”，
+                    // 毛玻璃里始终是窗口下方真实桌面，移动窗口时会立即换背景。
+                    targetForm.TransparencyKey = Color.Empty;
+                    targetForm.BackColor = Color.FromArgb(8, 18, 32);
+                    try { int v = 1; Native.DwmSetWindowAttribute(targetForm.Handle, 38, ref v, sizeof(int)); } catch { }
+                    try { var m = new Native.MARGINS { Left = 0, Top = 0, Right = 0, Bottom = 0 }; Native.DwmExtendFrameIntoClientArea(targetForm.Handle, ref m); } catch { }
+                    try { int v = 2; Native.DwmSetWindowAttribute(targetForm.Handle, 33, ref v, sizeof(int)); } catch { }
+                    if (targetWeb != null) targetWeb.DefaultBackgroundColor = Color.FromArgb(255, 8, 18, 32);
+                    GlassBackdrop glass = targetForm == this ? mainGlass : (targetForm == dedupForm ? dedupGlass : null);
+                    if (glass != null) glass.Enable();
+                    try { Log("Aurora 实时背景=" + (glass != null && glass.Enabled)); } catch { }
+                }
+                else
+                {
+                    GlassBackdrop glass = targetForm == this ? mainGlass : (targetForm == dedupForm ? dedupGlass : null);
+                    if (glass != null) glass.Disable();
+                    targetForm.TransparencyKey = Color.Empty;
+                    targetForm.BackColor = OpaqueBackFor(skin);
+                    var margins = new Native.MARGINS { Left = 0, Top = 0, Right = 0, Bottom = 0 };
+                    try { Native.DwmExtendFrameIntoClientArea(targetForm.Handle, ref margins); } catch { }
+                    try { int v = 1; Native.DwmSetWindowAttribute(targetForm.Handle, 38, ref v, sizeof(int)); } catch { }
+                    try { int v = 2; Native.DwmSetWindowAttribute(targetForm.Handle, 33, ref v, sizeof(int)); } catch { }
+                    if (targetWeb != null)
+                        targetWeb.DefaultBackgroundColor = skin == "light" ? Color.FromArgb(255, 255, 255) : skin == "frost" ? Color.FromArgb(250, 250, 252) : Color.FromArgb(32, 32, 36);
+                }
+                targetForm.Invalidate(true);
+            }
+            catch (Exception ex) { try { Log("应用原生皮肤失败 " + skin + ": " + ex.Message); } catch { } }
+        }
         static void PostToWeb(WebView2 target, string json)
         {
             if (target == null || json == null) return;
@@ -2115,6 +2547,320 @@ namespace ImageBatchTool
             catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"预览失败：" + ex.Message.Replace("\"", "'") + "\"}"); }
         }
 
+        // ---- v2.28 本地生成式修图（FLUX.2 Klein 4B / stable-diffusion.cpp）----
+        string GenEditRuntimeExe()
+        {
+            return Path.Combine(Application.StartupPath, "ai", "genedit", "sd-cli.exe");
+        }
+
+        string GenEditModelDir()
+        {
+            return Path.Combine(Application.StartupPath, "ai", "models", "genedit");
+        }
+
+        string GenEditModelPath(string name)
+        {
+            return Path.Combine(GenEditModelDir(), name);
+        }
+
+        void DetectGpu(out string gpuName, out double vramGb)
+        {
+            gpuName = "";
+            vramGb = 0;
+            try
+            {
+                var psi = new ProcessStartInfo("nvidia-smi",
+                    "--query-gpu=name,memory.total --format=csv,noheader,nounits");
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.StandardOutputEncoding = Encoding.UTF8;
+                psi.StandardErrorEncoding = Encoding.UTF8;
+                var p = Process.Start(psi);
+                string so = p.StandardOutput.ReadToEnd();
+                p.StandardError.ReadToEnd();
+                p.WaitForExit(5000);
+                string line = "";
+                foreach (string ln in (so ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                { line = ln.Trim(); if (line.Length > 0) break; }
+                if (!string.IsNullOrEmpty(line))
+                {
+                    int comma = line.LastIndexOf(',');
+                    if (comma > 0)
+                    {
+                        gpuName = line.Substring(0, comma).Trim();
+                        string mem = line.Substring(comma + 1).Trim();
+                        double mb;
+                        if (double.TryParse(mem, NumberStyles.Any, CultureInfo.InvariantCulture, out mb) && mb > 0)
+                            vramGb = Math.Round(mb / 1024.0, 1);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        void SendGenEditStatus()
+        {
+            string exe = GenEditRuntimeExe();
+            string modelDir = GenEditModelDir();
+            string diff = GenEditModelPath("flux-2-klein-4b-Q4_0.gguf");
+            string te = GenEditModelPath("Qwen3-4B-Q4_K_M.gguf");
+            string vae = GenEditModelPath("flux2-vae.safetensors");
+            bool runtimeOk = File.Exists(exe);
+            bool diffOk = File.Exists(diff) && new FileInfo(diff).Length > 2200L * 1024 * 1024;
+            bool teOk = File.Exists(te) && new FileInfo(te).Length > 2200L * 1024 * 1024;
+            bool vaeOk = File.Exists(vae) && new FileInfo(vae).Length > 280L * 1024 * 1024;
+            bool ready = runtimeOk && diffOk && teOk && vaeOk;
+            var missing = new StringBuilder();
+            Action<string> addMissing = s => { if (missing.Length > 0) missing.Append("，"); missing.Append(s); };
+            if (!runtimeOk) addMissing("推理运行时");
+            if (!diffOk) addMissing("扩散模型");
+            if (!teOk) addMissing("文本编码器");
+            if (!vaeOk) addMissing("VAE");
+            string gpu; double vram;
+            DetectGpu(out gpu, out vram);
+            string backend = (gpu ?? "").IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0 ? "cuda0" : "vulkan0";
+            int maxSide = vram > 0 && vram <= 6.5 ? 768 : (vram > 0 && vram <= 10.5 ? 1024 : 1280);
+            long total = 0;
+            try { if (File.Exists(diff)) total += new FileInfo(diff).Length; } catch { }
+            try { if (File.Exists(te)) total += new FileInfo(te).Length; } catch { }
+            try { if (File.Exists(vae)) total += new FileInfo(vae).Length; } catch { }
+            Send("{\"type\":\"genedit_status\",\"ready\":" + (ready ? "true" : "false") +
+                 ",\"runtimeOk\":" + (runtimeOk ? "true" : "false") +
+                 ",\"modelsOk\":" + ((diffOk && teOk && vaeOk) ? "true" : "false") +
+                 ",\"missing\":" + JsonStr(missing.ToString()) +
+                 ",\"runtime\":" + JsonStr(exe) +
+                 ",\"modelDir\":" + JsonStr(modelDir) +
+                 ",\"modelBytes\":" + total +
+                 ",\"gpu\":" + JsonStr(gpu) +
+                 ",\"vramGb\":" + vram.ToString("0.0", CultureInfo.InvariantCulture) +
+                 ",\"backend\":" + JsonStr(backend) +
+                 ",\"recommendedMaxSide\":" + maxSide +
+                 ",\"model\":\"FLUX.2 Klein 4B Q4_0\"}");
+        }
+
+        string GenEditPreviewData(Bitmap bmp, int maxSide)
+        {
+            int w = bmp.Width, h = bmp.Height;
+            if (w > maxSide || h > maxSide)
+            {
+                double s = Math.Min(maxSide / (double)w, maxSide / (double)h);
+                w = Math.Max(1, (int)Math.Round(w * s));
+                h = Math.Max(1, (int)Math.Round(h * s));
+            }
+            using (var small = new Bitmap(w, h))
+            {
+                using (var g = Graphics.FromImage(small))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(bmp, 0, 0, w, h);
+                }
+                using (var ms = new MemoryStream())
+                {
+                    small.Save(ms, ImageFormat.Jpeg);
+                    return "data:image/jpeg;base64," + Convert.ToBase64String(ms.ToArray());
+                }
+            }
+        }
+
+        void GenEditRun(string json)
+        {
+            int idx = selected;
+            if (idx < 0 || idx >= files.Count)
+            {
+                Send("{\"type\":\"genedit\",\"data\":{\"ok\":false,\"error\":\"请先在左侧选中一张图片。\"}}");
+                return;
+            }
+            string srcPath = files[idx];
+            genEditSource = srcPath;
+            Send("{\"type\":\"genedit_start\"}");
+            new Thread(() =>
+            {
+                string inFile = Path.Combine(Path.GetTempPath(), "ibt_gen_" + Guid.NewGuid().ToString("N") + ".json");
+                string outFile = Path.Combine(Path.GetTempPath(), "ibt_gen_" + Guid.NewGuid().ToString("N") + ".out.json");
+                string snap = CacheStore.TempFile("genedit_in_", ".png");
+                string outPath = Path.Combine(CacheStore.Sub("genedit"),
+                    "gen_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 6) + ".png");
+                try
+                {
+                    Bitmap snapBmp = null;
+                    InvokeUi(() =>
+                    {
+                        try
+                        {
+                            if (cachedBase != null && cachedFile == srcPath)
+                                snapBmp = (Bitmap)cachedBase.Clone();
+                            else
+                                snapBmp = LoadBase(srcPath);
+                        }
+                        catch (Exception ex) { Log("生成式修图取底图失败: " + ex.Message); }
+                    });
+                    if (snapBmp == null) throw new Exception("无法读取当前图片底图。");
+                    using (snapBmp) snapBmp.Save(snap, ImageFormat.Png);
+
+                    string cfg = (json ?? "{}").Trim();
+                    if (cfg.Length == 0) cfg = "{}";
+                    if (!cfg.StartsWith("{")) throw new Exception("生成参数格式错误。");
+                    if (cfg.EndsWith("}")) cfg = cfg.Substring(0, cfg.Length - 1).TrimEnd();
+                    if (cfg.Length > 1) cfg += ",";
+                    string gpu; double vram;
+                    DetectGpu(out gpu, out vram);
+                    string backend = (gpu ?? "").IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0 ? "cuda0" : "vulkan0";
+                    cfg += "\"input\":" + JsonStr(snap) + ",\"output\":" + JsonStr(outPath) +
+                           ",\"vram_gb\":" + vram.ToString("0.0", CultureInfo.InvariantCulture) +
+                           ",\"backend\":" + JsonStr(backend) + "}";
+                    File.WriteAllText(inFile, cfg, new UTF8Encoding(false));
+
+                    string err;
+                    string stdout = PyTools.Run(BeautyRunner.PythonExe, "gen_edit.py",
+                        new string[] { "run", inFile, outFile }, 1800000, out err);
+                    if (!File.Exists(outFile))
+                        throw new Exception("生成引擎没有返回结果：" + (err ?? stdout ?? ""));
+                    string result = File.ReadAllText(outFile, Encoding.UTF8);
+                    Send("{\"type\":\"genedit\",\"data\":" + result + "}");
+                    if (result.IndexOf("\"ok\":true", StringComparison.Ordinal) >= 0 ||
+                        result.IndexOf("\"ok\": true", StringComparison.Ordinal) >= 0)
+                    {
+                        if (!File.Exists(outPath)) throw new Exception("结果文件未生成。");
+                        string orig64, res64;
+                        using (var ob = new Bitmap(snap)) orig64 = GenEditPreviewData(ob, 1000);
+                        using (var rb = new Bitmap(outPath)) res64 = GenEditPreviewData(rb, 1000);
+                        Send("{\"type\":\"genedit_preview\",\"path\":" + JsonStr(outPath) +
+                             ",\"orig\":\"" + orig64 + "\",\"result\":\"" + res64 + "\"}");
+                    }
+                    Log("生成式修图完成: " + Path.GetFileName(outPath));
+                }
+                catch (Exception ex)
+                {
+                    string e = (ex.Message ?? "").Replace("\\", "\\\\").Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
+                    Send("{\"type\":\"genedit\",\"data\":{\"ok\":false,\"error\":" + JsonStr(e) + "}}");
+                    Log("生成式修图失败: " + e);
+                }
+                finally
+                {
+                    try { if (File.Exists(inFile)) File.Delete(inFile); } catch { }
+                    try { if (File.Exists(outFile)) File.Delete(outFile); } catch { }
+                    try { if (File.Exists(snap)) File.Delete(snap); } catch { }
+                }
+            }) { IsBackground = true }.Start();
+        }
+
+        void GenEditAdd(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) { Send("{\"type\":\"toast\",\"msg\":\"结果文件不存在\"}"); return; }
+                if (!AddFileUnique(path)) { Send("{\"type\":\"toast\",\"msg\":\"这张图已经在列表里\"}"); return; }
+                selected = files.Count - 1;
+                cachedBase = null;
+                cachedFile = null;
+                SendState();
+                QueuePreview();
+                Send("{\"type\":\"toast\",\"msg\":\"已作为新图片加入编辑器，原图未改动\"}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"加入列表失败：" + ex.Message.Replace("\"", "'") + "\"}"); }
+        }
+
+        void GenEditSave(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) { Send("{\"type\":\"toast\",\"msg\":\"结果文件不存在\"}"); return; }
+                string dir = outputDir;
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+                {
+                    string src = genEditSource;
+                    if (!string.IsNullOrEmpty(src) && File.Exists(src))
+                        dir = Path.GetDirectoryName(src);
+                    else
+                        dir = selected >= 0 && selected < files.Count ? Path.GetDirectoryName(files[selected]) : Application.StartupPath;
+                }
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) dir = Application.StartupPath;
+                string baseName = (!string.IsNullOrEmpty(genEditSource) && File.Exists(genEditSource))
+                    ? Path.GetFileNameWithoutExtension(genEditSource)
+                    : (selected >= 0 && selected < files.Count ? Path.GetFileNameWithoutExtension(files[selected]) : "genedit");
+                string dst = Path.Combine(dir, baseName + "_genedit_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png");
+                int n = 2;
+                while (File.Exists(dst))
+                    dst = Path.Combine(dir, baseName + "_genedit_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + (n++) + ".png");
+                File.Copy(path, dst, false);
+                Send("{\"type\":\"toast\",\"msg\":\"已保存：" + Path.GetFileName(dst).Replace("\"", "'") + "\"}");
+            }
+            catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"保存失败：" + ex.Message.Replace("\"", "'") + "\"}"); }
+        }
+
+        void GenEditInstall()
+        {
+            if (genEditInstalling) { Send("{\"type\":\"toast\",\"msg\":\"模型正在下载，请稍候\"}"); return; }
+            string py = BeautyRunner.PythonExe;
+            if (string.IsNullOrEmpty(py))
+            {
+                Send("{\"type\":\"genedit_install\",\"done\":true,\"data\":{\"ok\":false,\"error\":\"未找到便携 Python，无法下载模型。\"}}");
+                return;
+            }
+            genEditInstalling = true;
+            new Thread(() =>
+            {
+                string outFile = CacheStore.TempFile("genedit_install_", ".json");
+                try
+                {
+                    string script = Path.Combine(Application.StartupPath, "ai", "genedit_install.py");
+                    if (!File.Exists(script)) throw new Exception("缺少下载脚本 genedit_install.py");
+                    string args = "\"" + script + "\" install \"" + outFile + "\"";
+                    var psi = new ProcessStartInfo(py, args);
+                    psi.UseShellExecute = false;
+                    psi.CreateNoWindow = true;
+                    psi.RedirectStandardOutput = true;
+                    psi.RedirectStandardError = true;
+                    psi.StandardOutputEncoding = Encoding.UTF8;
+                    psi.StandardErrorEncoding = Encoding.UTF8;
+                    psi.WorkingDirectory = Path.Combine(Application.StartupPath, "ai");
+                    try { psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8"; psi.EnvironmentVariables["PYTHONUTF8"] = "1"; } catch { }
+                    var proc = Process.Start(psi);
+                    proc.OutputDataReceived += (s, e) =>
+                    {
+                        string line = e.Data;
+                        if (string.IsNullOrEmpty(line) || !line.StartsWith("PROGRESS|")) return;
+                        string[] p = line.Split(new[] { '|' }, 4);
+                        double pct = 0;
+                        if (p.Length >= 3) double.TryParse(p[2], NumberStyles.Any, CultureInfo.InvariantCulture, out pct);
+                        string detail = p.Length >= 4 ? p[3] : "";
+                        Send("{\"type\":\"genedit_install\",\"done\":false,\"phase\":" + JsonStr(p.Length >= 2 ? p[1] : "") +
+                             ",\"percent\":" + pct.ToString("0.0", CultureInfo.InvariantCulture) +
+                             ",\"detail\":" + JsonStr(detail) + "}");
+                    };
+                    proc.ErrorDataReceived += (s, e) =>
+                    {
+                        string line = e.Data;
+                        if (!string.IsNullOrEmpty(line) && line.Length < 300)
+                            Send("{\"type\":\"genedit_install\",\"done\":false,\"detail\":" + JsonStr(line) + "}");
+                    };
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+                    if (!proc.WaitForExit(2400000))
+                    {
+                        try { proc.Kill(); } catch { }
+                        throw new Exception("下载超时（40 分钟）。");
+                    }
+                    proc.WaitForExit();
+                    string result = File.Exists(outFile) ? File.ReadAllText(outFile, Encoding.UTF8)
+                        : "{\"ok\":false,\"error\":\"下载脚本没有返回结果。\"}";
+                    Send("{\"type\":\"genedit_install\",\"done\":true,\"data\":" + result + "}");
+                    SendGenEditStatus();
+                }
+                catch (Exception ex)
+                {
+                    Send("{\"type\":\"genedit_install\",\"done\":true,\"data\":{\"ok\":false,\"error\":" + JsonStr(ex.Message) + "}}");
+                }
+                finally
+                {
+                    genEditInstalling = false;
+                    try { if (File.Exists(outFile)) File.Delete(outFile); } catch { }
+                }
+            }) { IsBackground = true }.Start();
+        }
+
         void OpenDupWindow()
         {
             try
@@ -2136,20 +2882,26 @@ namespace ImageBatchTool
                     MinimumSize = new Size(760, 520),
                     StartPosition = FormStartPosition.CenterScreen,
                     BackColor = Color.FromArgb(32, 32, 36),
+                    FormBorderStyle = FormBorderStyle.None,
                     ShowInTaskbar = true,
                     TopMost = true,
                     Icon = this.Icon
                 };
                 var w = new WebView2 { Dock = DockStyle.Fill };
+                try { w.DefaultBackgroundColor = Color.FromArgb(0, 0, 0, 0); } catch { }
                 f.Controls.Add(w);
                 dedupForm = f;
                 dedupWeb = w;
+                dedupGlass = new GlassBackdrop(f, w);
+                dedupGlass.PrimeDesktop();
                 f.FormClosed += (s, e) =>
                 {
+                    try { if (dedupGlass != null) { dedupGlass.Dispose(); dedupGlass = null; } } catch { }
                     if (dedupWeb == w) dedupWeb = null;
                     if (dedupForm == f) dedupForm = null;
                 };
                 f.Show();
+                ApplyNativeSkin(ReadSkinName(), f, w);
                 InitDupWeb(w);
             }
             catch (Exception ex)
@@ -2169,13 +2921,12 @@ namespace ImageBatchTool
                 int tries = 0;
                 while (w.CoreWebView2 == null && tries < 20) { await Task.Delay(100); tries++; }
                 if (w.CoreWebView2 == null) { Log("去重窗口 WebView2 初始化超时"); return; }
+                ApplyNativeSkin(ReadSkinName(), dedupForm, w);
                 w.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "app.local", Application.StartupPath, CoreWebView2HostResourceAccessKind.Allow);
                 w.CoreWebView2.WebMessageReceived += DupWeb_Message;
                 w.CoreWebView2.NavigationCompleted += (s, e) => Log("去重窗口页面加载完成 success=" + e.IsSuccess + " url=" + w.Source);
-                string skinFile = Path.Combine(Application.StartupPath, "skin.txt");
-                string skin = "dark";
-                try { if (File.Exists(skinFile)) skin = File.ReadAllText(skinFile).Trim().ToLower(); } catch { }
+                string skin = ReadSkinName();
                 Log("去重窗口开始导航");
                 w.CoreWebView2.Navigate("http://app.local/dedup.html?skin=" + skin + "&v=" + DateTime.Now.Ticks);
             }
@@ -2253,6 +3004,29 @@ namespace ImageBatchTool
                     case "dupmove":
                         if (parts.Length > 1) DupMove(parts[1].Split('\n'));
                         break;
+                    case "dupwinclose":
+                        CloseDupWindow();
+                        break;
+                    case "dupwinmin":
+                        InvokeUi(() => { try { if (dedupForm != null) dedupForm.WindowState = FormWindowState.Minimized; } catch { } });
+                        break;
+                    case "dupwinmax":
+                        InvokeUi(() => {
+                            try {
+                                if (dedupForm == null) return;
+                                dedupForm.WindowState = dedupForm.WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                            } catch { }
+                        });
+                        break;
+                    case "dupdragstart":
+                        InvokeUi(() => {
+                            try {
+                                if (dedupForm == null) return;
+                                Native.ReleaseCapture();
+                                Native.SendMessage(dedupForm.Handle, 0xA1, (IntPtr)0x2, IntPtr.Zero);
+                            } catch { }
+                        });
+                        break;
                     case "dupclose":
                         CloseDupWindow();
                         break;
@@ -2317,7 +3091,9 @@ namespace ImageBatchTool
                     case "ready":
                         Log("页面 ready，显示主窗口");
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
-                        Opacity = 1; Show(); Activate();
+                        ApplyNativeSkin(ReadSkinName());
+                        if (Opacity < 1) Opacity = 1;
+                        Show(); Activate();
                         if (AppModule.IsAlbum)
                         {
                             LoadAlbRoots();
@@ -2916,9 +3692,15 @@ namespace ImageBatchTool
                         break;
                     case "setskin":
                         try {
-                            string skin = parts.Length > 1 ? parts[1] : "dark";
+                            string skin = NormalizeSkin(parts.Length > 1 ? parts[1] : "dark");
                             File.WriteAllText(Path.Combine(Application.StartupPath, "skin.txt"), skin);
+                            File.WriteAllText(AppModule.SharedSkinFile(), skin);
+                            ApplyNativeSkin(skin);
+                            if (dedupForm != null && !dedupForm.IsDisposed) ApplyNativeSkin(skin, dedupForm, dedupWeb);
                         } catch {}
+                        break;
+                    case "getskin":
+                        Send("{\"type\":\"skin\",\"skin\":" + JsonStr(ReadSkinName()) + "}");
                         break;
                     case "winclose": InvokeUi(() => Close()); break;
                     case "winmin": InvokeUi(() => MinimizeFromUi()); break;
@@ -3003,6 +3785,30 @@ namespace ImageBatchTool
                         break;
                     case "propreview":
                         if (parts.Length > 1) ProPreview(B64Text(parts[1]));
+                        break;
+                    case "genedit":
+                        if (parts.Length > 1) GenEditRun(B64Text(parts[1]));
+                        break;
+                    case "genedit_status":
+                        SendGenEditStatus();
+                        break;
+                    case "genedit_install":
+                        GenEditInstall();
+                        break;
+                    case "genedit_add":
+                        if (parts.Length > 1) GenEditAdd(B64Text(parts[1]));
+                        break;
+                    case "genedit_save":
+                        if (parts.Length > 1) GenEditSave(B64Text(parts[1]));
+                        break;
+                    case "genedit_openmodels":
+                        try
+                        {
+                            string gmd = GenEditModelDir();
+                            if (!Directory.Exists(gmd)) Directory.CreateDirectory(gmd);
+                            Process.Start("explorer.exe", "\"" + gmd + "\"");
+                        }
+                        catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":" + JsonStr("打开模型目录失败：" + ex.Message) + "}"); }
                         break;
                     case "chooseicc": {
                             string picked = null;
@@ -11183,3 +11989,4 @@ namespace ImageBatchTool
         }
     }
 }
+

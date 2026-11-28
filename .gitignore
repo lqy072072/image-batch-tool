@@ -77,6 +77,13 @@ luts/_失效文件备份/
 /ai/models/ocr/
 /ai/models/yolox/
 
+# 生成式修图运行时与大模型：随 Release 或首次下载，不入源码仓库
+/ai/genedit/
+/ai/models/genedit/
+
+# 本地发布产物（安装包不重复入库）
+/release_v*/
+
 # 演示相册与截图缓存（仅本机测试用）
 /docs/_demo_cache/
 /docs/demo_album_ai/

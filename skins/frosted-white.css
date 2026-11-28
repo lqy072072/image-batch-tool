@@ -1,0 +1,830 @@
+/* ==========================================================================
+   柔光白皮肤（磨砂白玻璃）
+   独立皮肤文件：只通过 body.skin-frost 生效，不修改深色、浅色皮肤的任何规则。
+   新增皮肤时复制本文件改名，并在 skins/skin-core.js 的 SKINS 中登记即可。
+   ========================================================================== */
+
+body.skin-frost {
+  --lg-ink: #10223d;
+  --lg-ink-soft: #27405f;
+  --lg-muted: rgba(22,40,66,.68);
+  --lg-muted-strong: rgba(22,40,66,.84);
+  --lg-line: rgba(255,255,255,.58);
+  --lg-line-strong: rgba(255,255,255,.78);
+  --lg-accent: #0a84ff;
+  --lg-accent-deep: #3867ff;
+  --lg-violet: #7b61ff;
+  --lg-panel:
+    linear-gradient(148deg, rgba(255,255,255,.72) 0%, rgba(247,252,255,.42) 42%, rgba(236,246,255,.58) 100%);
+  --lg-panel-soft:
+    linear-gradient(152deg, rgba(255,255,255,.56) 0%, rgba(247,251,255,.28) 48%, rgba(239,247,255,.46) 100%);
+  --lg-control:
+    linear-gradient(145deg, rgba(255,255,255,.84) 0%, rgba(241,248,255,.52) 52%, rgba(255,255,255,.66) 100%);
+  --lg-control-hi:
+    linear-gradient(145deg, rgba(255,255,255,.96) 0%, rgba(236,246,255,.68) 52%, rgba(255,255,255,.82) 100%);
+  --lg-pop:
+    linear-gradient(148deg, rgba(253,255,255,.92) 0%, rgba(240,247,255,.76) 48%, rgba(248,244,255,.84) 100%);
+  --lg-smoke:
+    linear-gradient(148deg, rgba(31,47,74,.80) 0%, rgba(45,64,96,.52) 52%, rgba(31,45,70,.72) 100%);
+  --lg-shadow: 0 16px 42px rgba(48,82,136,.18), 0 3px 10px rgba(28,54,96,.10);
+  --lg-shadow-lift: 0 22px 56px rgba(48,82,136,.24), 0 7px 18px rgba(28,54,96,.12);
+  --lg-inner: inset 0 1px 0 rgba(255,255,255,.92), inset 0 -1px 0 rgba(255,255,255,.26);
+  --lg-inner-dark: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(0,0,0,.20);
+
+  background:
+    radial-gradient(980px 620px at 5% -12%, rgba(255,191,235,.72) 0%, rgba(255,191,235,0) 63%),
+    radial-gradient(900px 580px at 98% 2%, rgba(146,215,255,.76) 0%, rgba(146,215,255,0) 64%),
+    radial-gradient(820px 660px at 74% 108%, rgba(174,151,255,.58) 0%, rgba(174,151,255,0) 65%),
+    radial-gradient(680px 500px at 12% 94%, rgba(137,255,226,.46) 0%, rgba(137,255,226,0) 66%),
+    linear-gradient(150deg, #f7fbff 0%, #e9f0ff 32%, #f4ebff 66%, #eaf9ff 100%) !important;
+  color: var(--lg-ink) !important;
+  color-scheme: light;
+  background-attachment: fixed !important;
+}
+
+/* ---------- 窗口骨架：磨砂玻璃面 ---------- */
+body.skin-frost .titlebar,
+body.skin-frost .toolbar,
+body.skin-frost .bottombar {
+  background: linear-gradient(180deg, rgba(255,255,255,.78) 0%, rgba(246,251,255,.48) 58%, rgba(255,255,255,.60) 100%) !important;
+  border-color: rgba(255,255,255,.62) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.36), 0 7px 22px rgba(48,82,136,.12) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
+}
+body.skin-frost .titlebar { border-bottom: 1px solid rgba(255,255,255,.66) !important; }
+body.skin-frost .toolbar { border-bottom: 1px solid rgba(255,255,255,.52) !important; }
+body.skin-frost .bottombar { border-top: 1px solid rgba(255,255,255,.60) !important; }
+
+body.skin-frost .left,
+body.skin-frost .right {
+  background: var(--lg-panel) !important;
+  border-color: rgba(255,255,255,.52) !important;
+  box-shadow: var(--lg-inner), var(--lg-shadow) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(185%);
+  backdrop-filter: blur(30px) saturate(185%);
+}
+body.skin-frost .left { border-right: 1px solid rgba(255,255,255,.56) !important; }
+body.skin-frost .right { border-left: 1px solid rgba(255,255,255,.56) !important; }
+body.skin-frost .center { background: transparent !important; }
+body.skin-frost .preview-area {
+  background:
+    radial-gradient(circle at 50% 34%, rgba(109,144,196,.34) 0%, rgba(44,63,94,.72) 48%, rgba(18,28,45,.88) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), inset 0 26px 90px rgba(13,22,39,.42) !important;
+}
+body.skin-frost .ruler-row,
+body.skin-frost .ruler-v-col { background: rgba(255,255,255,.24) !important; border-color: rgba(255,255,255,.46) !important; }
+body.skin-frost .ruler-corner { border-color: rgba(255,255,255,.46) !important; }
+body.skin-frost .vsplitter { background: rgba(255,255,255,.30) !important; }
+body.skin-frost .vsplitter:hover,
+body.skin-frost .vsplitter.dragging { background: rgba(10,132,255,.66) !important; }
+
+body.skin-frost .left-section,
+body.skin-frost .right-section,
+body.skin-frost .left-footer,
+body.skin-frost .lut-header,
+body.skin-frost .panel-divider { border-color: rgba(255,255,255,.38) !important; }
+
+body.skin-frost .section-header {
+  background: linear-gradient(180deg, rgba(255,255,255,.52) 0%, rgba(248,252,255,.26) 100%) !important;
+  color: var(--lg-ink) !important;
+  border-bottom: 1px solid rgba(255,255,255,.42) !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.6);
+}
+body.skin-frost .left-header,
+body.skin-frost .left-header .count,
+body.skin-frost .lut-header,
+body.skin-frost .sub-title { color: var(--lg-ink-soft) !important; }
+body.skin-frost .left-header,
+body.skin-frost .lut-header { text-shadow: 0 1px 0 rgba(255,255,255,.55); }
+
+/* ---------- 通用文字 ---------- */
+body.skin-frost .left,
+body.skin-frost .right,
+body.skin-frost .center,
+body.skin-frost .titlebar,
+body.skin-frost .toolbar,
+body.skin-frost .bottombar,
+body.skin-frost .alb-overlay,
+body.skin-frost .alb-head,
+body.skin-frost .alb-foot,
+body.skin-frost .dup-panel,
+body.skin-frost .bin-panel { color: var(--lg-ink) !important; }
+
+body.skin-frost .row-line,
+body.skin-frost .row-line > span,
+body.skin-frost .slider-row label,
+body.skin-frost .slider-row .val,
+body.skin-frost .crop-row label,
+body.skin-frost .chk,
+body.skin-frost .file-item .fsize,
+body.skin-frost .lut-group-title,
+body.skin-frost .hist-labels,
+body.skin-frost .output-info,
+body.skin-frost .bottom-label,
+body.skin-frost .zoom-label,
+body.skin-frost .status,
+body.skin-frost .status-pct,
+body.skin-frost .toolbar .preview-label,
+body.skin-frost .file-list,
+body.skin-frost .preview-empty,
+body.skin-frost .alb-path-empty,
+body.skin-frost .alb-opt-sec-title,
+body.skin-frost .alb-opt-perf-title,
+body.skin-frost .alb-person-ctl .ttl,
+body.skin-frost .alb-person-ctl .stat,
+body.skin-frost .alb-vtags .ttl,
+body.skin-frost .alb-vtags .legend,
+body.skin-frost .alb-vexif .k,
+body.skin-frost .dup-stat,
+body.skin-frost .dup-path,
+body.skin-frost .dup-group-h,
+body.skin-frost .dup-empty,
+body.skin-frost .bin-dir,
+body.skin-frost .bin-sub,
+body.skin-frost .bin-foot,
+body.skin-frost .edx-tip,
+body.skin-frost .edx-hsl-row,
+body.skin-frost .pro-note,
+body.skin-frost .pro-kv { color: var(--lg-muted) !important; }
+
+body.skin-frost .output-info b,
+body.skin-frost .left-header,
+body.skin-frost .lut-header,
+body.skin-frost .section-header,
+body.skin-frost .alb-modal h3,
+body.skin-frost .alb-modal .row { color: var(--lg-ink) !important; }
+
+/* ---------- 顶部标签 / 皮肤入口 ---------- */
+body.skin-frost .tab { color: var(--lg-muted-strong) !important; border-radius: 9px; }
+body.skin-frost .tab.active {
+  color: #fff !important;
+  background: linear-gradient(145deg, rgba(83,173,255,.96), rgba(20,116,230,.92)) !important;
+  border: 1px solid rgba(255,255,255,.55) !important;
+  box-shadow: 0 5px 16px rgba(10,100,220,.28), inset 0 1px 0 rgba(255,255,255,.55) !important;
+}
+body.skin-frost .top-right { color: var(--lg-muted-strong) !important; }
+body.skin-frost .top-right span {
+  border-radius: 9px;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+body.skin-frost .top-right span:hover {
+  background: rgba(255,255,255,.52) !important;
+  color: var(--lg-ink) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 4px 12px rgba(52,86,142,.12);
+}
+
+/* ---------- 按钮：玻璃胶囊 ---------- */
+body.skin-frost button:not(.pro-close):not(.dup-ignore):not(.skin-item),
+body.skin-frost .btn,
+body.skin-frost .tool-btn,
+body.skin-frost .lut-mode-btn,
+body.skin-frost .hist-tab,
+body.skin-frost .mini-btn,
+body.skin-frost .alb-btn,
+body.skin-frost .alb-ctl,
+body.skin-frost .alb-tab,
+body.skin-frost .alb-opt-item,
+body.skin-frost .alb-ctx-item,
+body.skin-frost .alb-search-cancel,
+body.skin-frost .alb-curate-tab,
+body.skin-frost .edx-tab,
+body.skin-frost .edx-gr,
+body.skin-frost .pro-btn {
+  background: var(--lg-control) !important;
+  color: var(--lg-ink) !important;
+  border: 1px solid var(--lg-line) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--lg-inner), 0 4px 13px rgba(48,82,136,.12) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: blur(14px) saturate(180%);
+  text-shadow: 0 1px 0 rgba(255,255,255,.55);
+  transition: background .18s ease, border-color .18s ease, box-shadow .22s ease, transform .18s cubic-bezier(.2,.9,.25,1) !important;
+}
+body.skin-frost button:not(.pro-close):not(.dup-ignore):not(.skin-item):hover,
+body.skin-frost .btn:hover,
+body.skin-frost .tool-btn:hover,
+body.skin-frost .lut-mode-btn:hover,
+body.skin-frost .hist-tab:hover,
+body.skin-frost .mini-btn:hover,
+body.skin-frost .alb-btn:hover,
+body.skin-frost .alb-ctl:hover,
+body.skin-frost .alb-tab:hover,
+body.skin-frost .alb-opt-item:hover,
+body.skin-frost .alb-ctx-item:hover,
+body.skin-frost .alb-curate-tab:hover,
+body.skin-frost .edx-tab:hover,
+body.skin-frost .edx-gr:hover,
+body.skin-frost .pro-btn:hover {
+  background: var(--lg-control-hi) !important;
+  border-color: var(--lg-line-strong) !important;
+  box-shadow: var(--lg-inner), 0 9px 22px rgba(48,82,136,.18) !important;
+  transform: translateY(-1px);
+}
+body.skin-frost button:not(.pro-close):not(.dup-ignore):not(.skin-item):active,
+body.skin-frost .btn:active,
+body.skin-frost .tool-btn:active,
+body.skin-frost .mini-btn:active,
+body.skin-frost .alb-ctl:active,
+body.skin-frost .pro-btn:active {
+  transform: scale(.97);
+  box-shadow: inset 0 2px 5px rgba(30,55,95,.18), inset 0 1px 0 rgba(255,255,255,.6) !important;
+}
+
+/* 主按钮 / 激活态：彩色玻璃，不改原有语义色（:not(#lg-none) 提升优先级，压过通用按钮底） */
+body.skin-frost .btn-start:not(#lg-none),
+body.skin-frost button.btn-start:not(#lg-none),
+body.skin-frost .alb-search-btn:not(#lg-none),
+body.skin-frost .alb-dedup-btn:not(#lg-none),
+body.skin-frost .tool-btn.on:not(#lg-none),
+body.skin-frost button.tool-btn.on:not(#lg-none),
+body.skin-frost .lut-mode-btn.active:not(#lg-none),
+body.skin-frost .hist-tab.active:not(#lg-none),
+body.skin-frost .alb-tab.on:not(#lg-none),
+body.skin-frost .alb-ctl.on:not(#lg-none),
+body.skin-frost button.alb-ctl.on:not(#lg-none),
+body.skin-frost .alb-ctl.on.warn:not(#lg-none),
+body.skin-frost .alb-ctl.on.idle:not(#lg-none),
+body.skin-frost .alb-sel-wrap #albSelBtn.on:not(#lg-none),
+body.skin-frost .edx-tab.on:not(#lg-none),
+body.skin-frost button.edx-tab.on:not(#lg-none),
+body.skin-frost .edx-gr.on:not(#lg-none),
+body.skin-frost button.edx-gr.on:not(#lg-none) {
+  background: linear-gradient(145deg, rgba(90,181,255,.98) 0%, rgba(10,132,255,.94) 56%, rgba(65,91,235,.92) 100%) !important;
+  color: #fff !important;
+  border: 1px solid rgba(174,224,255,.78) !important;
+  box-shadow: 0 9px 24px rgba(10,106,220,.28), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(21,72,150,.26) !important;
+  text-shadow: 0 1px 2px rgba(12,44,92,.28);
+}
+body.skin-frost .alb-ctl.on.warn:not(#lg-none) { background: linear-gradient(145deg,#ffcf7a,#f19a2b 62%,#d87317) !important; color:#3a2200 !important; }
+body.skin-frost .alb-ctl.on.idle:not(#lg-none) { background: linear-gradient(145deg,#7ce4ad,#25aa71 64%,#138b5b) !important; color:#fff !important; }
+body.skin-frost .btn-start:hover:not(#lg-none),
+body.skin-frost button.btn-start:hover:not(#lg-none),
+body.skin-frost .tool-btn.on:hover:not(#lg-none),
+body.skin-frost .edx-tab.on:hover:not(#lg-none),
+body.skin-frost .alb-ctl.on:hover:not(#lg-none),
+body.skin-frost .alb-search-btn:hover:not(#lg-none),
+body.skin-frost .alb-dedup-btn:hover:not(#lg-none) {
+  background: linear-gradient(145deg,#72c6ff,#158bfa 58%,#4b6cff) !important;
+  color: #fff !important;
+}
+body.skin-frost .bin-btn.danger,
+body.skin-frost .alb-modal .btn.danger,
+body.skin-frost button[style*="background:#b33"] {
+  background: linear-gradient(145deg,#ff9b9b,#e54848 60%,#b72f39) !important;
+  color: #fff !important;
+  border-color: rgba(255,185,185,.8) !important;
+  box-shadow: 0 7px 18px rgba(178,43,55,.22), inset 0 1px 0 rgba(255,255,255,.4) !important;
+}
+body.skin-frost .tool-btn.on { box-shadow: 0 8px 20px rgba(10,106,220,.26), inset 0 1px 0 rgba(255,255,255,.55) !important; }
+
+/* ---------- 输入框 / 下拉框 / 文本域：乳白玻璃 ---------- */
+body.skin-frost input[type="text"],
+body.skin-frost input[type="search"],
+body.skin-frost input[type="password"],
+body.skin-frost input[type="number"],
+body.skin-frost textarea,
+body.skin-frost select,
+body.skin-frost .mini-input,
+body.skin-frost .mini-sel,
+body.skin-frost .bottom-select,
+body.skin-frost .crop-row input,
+body.skin-frost .crop-row select {
+  background: rgba(255,255,255,.54) !important;
+  color: var(--lg-ink) !important;
+  border: 1px solid rgba(255,255,255,.72) !important;
+  border-radius: 10px !important;
+  box-shadow: inset 0 2px 5px rgba(36,62,104,.10), inset 0 1px 0 rgba(255,255,255,.94), 0 2px 7px rgba(48,82,136,.06) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
+  outline: none !important;
+}
+body.skin-frost input[type="text"]:focus,
+body.skin-frost input[type="search"]:focus,
+body.skin-frost input[type="password"]:focus,
+body.skin-frost input[type="number"]:focus,
+body.skin-frost textarea:focus,
+body.skin-frost select:focus {
+  border-color: rgba(90,179,255,.85) !important;
+  box-shadow: 0 0 0 3px rgba(10,132,255,.14), inset 0 1px 0 rgba(255,255,255,.95), 0 3px 10px rgba(48,82,136,.08) !important;
+}
+body.skin-frost input::placeholder,
+body.skin-frost textarea::placeholder { color: rgba(34,55,86,.42) !important; }
+body.skin-frost select option { background: #f8fbff !important; color: #142743 !important; }
+body.skin-frost input[type="checkbox"] { accent-color: var(--lg-accent); }
+body.skin-frost .alb-search-box input,
+body.skin-frost .alb-search-box input:focus {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ---------- 滑块：玻璃轨道 + 高光球 ---------- */
+body.skin-frost input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 18px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  cursor: pointer;
+}
+body.skin-frost input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.68);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.62) 48%, rgba(206,229,255,.48)) !important;
+  box-shadow:
+    inset 0 1px 3px rgba(34,60,100,.14),
+    inset 0 -1px 0 rgba(255,255,255,.46),
+    0 1px 0 rgba(255,255,255,.65);
+}
+body.skin-frost input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.92);
+  background:
+    radial-gradient(circle at 35% 28%, #fff 0%, #f6fbff 36%, #bcdcff 72%, #88b9ec 100%) !important;
+  box-shadow:
+    0 4px 10px rgba(40,78,132,.24),
+    0 0 0 2px rgba(255,255,255,.20),
+    inset 0 -1px 2px rgba(32,80,140,.18);
+  transition: transform .16s cubic-bezier(.2,.9,.25,1), box-shadow .16s ease;
+}
+body.skin-frost input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 6px 14px rgba(40,78,132,.28), 0 0 0 4px rgba(10,132,255,.12), inset 0 -1px 2px rgba(32,80,140,.18);
+}
+body.skin-frost input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.02); }
+body.skin-frost .slider-row .reset { border-radius: 9px !important; }
+
+/* ---------- 列表 / 选中态 ---------- */
+body.skin-frost .file-item,
+body.skin-frost .lut-item,
+body.skin-frost .alb-tree .tr-row,
+body.skin-frost .alb-tree .tr-root,
+body.skin-frost .alb-albums .ab-item {
+  color: var(--lg-ink) !important;
+  border-radius: 9px;
+  transition: background .16s ease, color .16s ease, box-shadow .18s ease;
+}
+body.skin-frost .file-item:hover,
+body.skin-frost .lut-item:hover,
+body.skin-frost .alb-tree .tr-row:hover,
+body.skin-frost .alb-tree .tr-root:hover,
+body.skin-frost .alb-albums .ab-item:hover {
+  background: rgba(255,255,255,.42) !important;
+  color: var(--lg-ink) !important;
+}
+body.skin-frost .file-item.sel {
+  background: rgba(10,132,255,.16) !important;
+  color: #0a4f9c !important;
+  border-left-color: var(--lg-accent) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62), 0 3px 10px rgba(10,90,180,.08);
+}
+body.skin-frost .file-item.sel .fsize { color: rgba(8,72,145,.64) !important; }
+body.skin-frost .lut-item.sel,
+body.skin-frost .alb-tree .tr-row.sel,
+body.skin-frost .alb-albums .ab-item.on {
+  background: rgba(10,132,255,.15) !important;
+  color: #0a4f9c !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.56);
+}
+body.skin-frost .lut-radio { border-color: rgba(39,75,120,.38) !important; }
+body.skin-frost .lut-item.sel .lut-radio { border-color: var(--lg-accent) !important; }
+body.skin-frost .lut-item.sel .lut-radio::after { background: var(--lg-accent) !important; }
+
+/* ---------- 直方图 / 状态区 ---------- */
+body.skin-frost .hist-canvas-wrap,
+body.skin-frost .edx-curve-wrap {
+  background: var(--lg-smoke) !important;
+  border: 1px solid rgba(255,255,255,.38) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--lg-inner-dark), 0 8px 22px rgba(28,54,96,.14) !important;
+  overflow: hidden;
+}
+body.skin-frost .hist-labels { color: rgba(255,255,255,.78) !important; }
+body.skin-frost .status-box {
+  background: rgba(255,255,255,.50) !important;
+  border: 1px solid rgba(255,255,255,.70) !important;
+  color: var(--lg-ink) !important;
+  border-radius: 10px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.88), 0 3px 10px rgba(48,82,136,.08) !important;
+}
+body.skin-frost #currentLut {
+  background: rgba(255,255,255,.42) !important;
+  border: 1px solid rgba(255,255,255,.60) !important;
+  color: var(--lg-muted-strong) !important;
+  border-radius: 10px !important;
+}
+body.skin-frost #currentLut b { color: var(--lg-ink) !important; }
+body.skin-frost .progress { background: rgba(255,255,255,.36) !important; border: 1px solid rgba(255,255,255,.55); }
+body.skin-frost .progress-bar { background: linear-gradient(90deg,#59b6ff,#0a84ff,#6e67ff) !important; box-shadow: 0 0 12px rgba(10,132,255,.34); }
+body.skin-frost .render-name { color: #0a63c9 !important; }
+body.skin-frost .preview-area img { box-shadow: 0 18px 48px rgba(8,20,38,.55), 0 0 0 1px rgba(255,255,255,.18); border-radius: 6px; }
+
+/* ---------- 相册：主界面 ---------- */
+body.skin-frost .alb-overlay {
+  background:
+    radial-gradient(900px 520px at 4% 0%, rgba(255,205,242,.34) 0%, transparent 66%),
+    radial-gradient(760px 540px at 100% 10%, rgba(159,220,255,.40) 0%, transparent 64%),
+    linear-gradient(155deg, rgba(249,252,255,.76), rgba(232,241,255,.64) 55%, rgba(246,238,255,.72)) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+}
+body.skin-frost .alb-head {
+  background: linear-gradient(180deg, rgba(255,255,255,.60) 0%, rgba(247,252,255,.30) 100%) !important;
+  border-bottom: 1px solid rgba(255,255,255,.58) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92), 0 8px 24px rgba(48,82,136,.10) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+}
+body.skin-frost .alb-paths {
+  background: rgba(255,255,255,.28) !important;
+  border-color: rgba(255,255,255,.46) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.66);
+}
+body.skin-frost .alb-foot {
+  background: linear-gradient(180deg, rgba(255,255,255,.38), rgba(247,251,255,.24)) !important;
+  border-color: rgba(255,255,255,.48) !important;
+  color: var(--lg-muted) !important;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+body.skin-frost .alb-foot #albSub { color: var(--lg-ink-soft) !important; }
+body.skin-frost .alb-foot #albSub::before { background: var(--lg-accent) !important; box-shadow: 0 0 8px rgba(10,132,255,.5) !important; }
+body.skin-frost .alb-foot #albFootInfo { color: var(--lg-muted) !important; }
+body.skin-frost .alb-foot #albFootInfo .stat b { color: var(--lg-ink) !important; }
+body.skin-frost .alb-foot #albFootInfo .sep { background: rgba(30,55,95,.18) !important; }
+
+body.skin-frost .alb-search-box {
+  background: rgba(255,255,255,.44) !important;
+  border: 1px solid rgba(255,255,255,.66) !important;
+  border-radius: 12px !important;
+  box-shadow: inset 0 2px 5px rgba(32,60,102,.08), inset 0 1px 0 rgba(255,255,255,.9) !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+body.skin-frost .alb-search-box .mag { color: rgba(26,55,92,.46) !important; }
+body.skin-frost .alb-search-box input { color: var(--lg-ink) !important; }
+body.skin-frost .alb-search-box input::placeholder { color: rgba(26,55,92,.42) !important; }
+body.skin-frost .alb-search-cancel { color: #0a63c9 !important; background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+body.skin-frost .alb-search-hints span { color: var(--lg-muted-strong) !important; background: rgba(255,255,255,.40) !important; border-color: rgba(255,255,255,.58) !important; }
+body.skin-frost .alb-saved span { color: var(--lg-ink-soft) !important; }
+
+body.skin-frost .alb-tab {
+  color: var(--lg-muted-strong) !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+body.skin-frost .alb-tab.on {
+  background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(229,241,255,.66)) !important;
+  color: var(--lg-ink) !important;
+  border-color: rgba(255,255,255,.78) !important;
+  box-shadow: 0 5px 14px rgba(48,82,136,.12), inset 0 1px 0 rgba(255,255,255,.95) !important;
+}
+body.skin-frost .alb-chip {
+  background: rgba(255,255,255,.42) !important;
+  border-color: rgba(255,255,255,.60) !important;
+  color: var(--lg-ink-soft) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+}
+body.skin-frost .alb-chip .rm { color: rgba(30,58,98,.48) !important; }
+
+body.skin-frost .alb-tree {
+  background: rgba(255,255,255,.32) !important;
+  border-right: 1px solid rgba(255,255,255,.48) !important;
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+}
+body.skin-frost .alb-tree .tr-row .n,
+body.skin-frost .alb-albums .ab-item .n { color: var(--lg-muted) !important; }
+body.skin-frost .alb-albums {
+  background: var(--lg-pop) !important;
+  border-right: 1px solid rgba(255,255,255,.66) !important;
+  box-shadow: 18px 0 50px rgba(48,82,136,.18) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+}
+body.skin-frost .alb-albums-h { color: var(--lg-ink) !important; }
+body.skin-frost .alb-albums .ab-item { color: var(--lg-ink-soft) !important; }
+body.skin-frost .alb-albums .ab-sec { color: var(--lg-muted) !important; }
+body.skin-frost .alb-albums .ab-new { color: #0a63c9 !important; border-color: rgba(10,132,255,.38) !important; }
+
+body.skin-frost .alb-cell,
+body.skin-frost .bin-cell {
+  background: linear-gradient(145deg, rgba(255,255,255,.54), rgba(232,243,255,.24)) !important;
+  border: 1px solid rgba(255,255,255,.60) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--lg-inner), 0 8px 22px rgba(48,82,136,.13) !important;
+  overflow: hidden;
+  transition: transform .22s cubic-bezier(.2,.9,.25,1), box-shadow .22s ease, border-color .22s ease !important;
+}
+body.skin-frost .alb-cell:hover,
+body.skin-frost .bin-cell:hover {
+  border-color: rgba(255,255,255,.90) !important;
+  box-shadow: var(--lg-inner), 0 15px 34px rgba(48,82,136,.22) !important;
+  transform: translateY(-3px) scale(1.008);
+  z-index: 2;
+}
+body.skin-frost .alb-cell img,
+body.skin-frost .bin-thumb { background-color: rgba(30,48,74,.18) !important; }
+body.skin-frost .alb-cell .badge { background: rgba(25,45,78,.52) !important; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+body.skin-frost .alb-cell .nm { color: rgba(255,255,255,.94) !important; text-shadow: 0 1px 3px rgba(0,0,0,.58); }
+body.skin-frost .alb-cell .meta { color: rgba(255,255,255,.72) !important; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+body.skin-frost .bin-name { color: var(--lg-ink) !important; }
+body.skin-frost .alb-folder-h { color: var(--lg-muted-strong) !important; border-color: rgba(255,255,255,.36) !important; }
+body.skin-frost .alb-day-h { background: rgba(255,255,255,.34) !important; color: var(--lg-ink-soft) !important; border-color: rgba(255,255,255,.48) !important; }
+body.skin-frost .alb-day-h:hover { background: rgba(255,255,255,.52) !important; color: var(--lg-ink) !important; }
+body.skin-frost .alb-empty { color: var(--lg-muted) !important; }
+body.skin-frost .alb-view-side { background: var(--lg-pop) !important; border-color: rgba(255,255,255,.68) !important; box-shadow: var(--lg-shadow) !important; }
+body.skin-frost .alb-vname { color: var(--lg-ink) !important; }
+body.skin-frost .alb-vinfo { color: var(--lg-muted) !important; }
+
+body.skin-frost .alb-person-ctl,
+body.skin-frost .alb-pcard,
+body.skin-frost .alb-vtags,
+body.skin-frost .alb-vexif { border-color: rgba(255,255,255,.44) !important; }
+body.skin-frost .alb-person-ctl { background: rgba(255,255,255,.38) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+body.skin-frost .alb-pcard { background: rgba(255,255,255,.42) !important; border: 1px solid rgba(255,255,255,.54) !important; border-radius: 13px !important; box-shadow: var(--lg-inner), 0 7px 18px rgba(48,82,136,.10) !important; }
+body.skin-frost .alb-pcard .nm { color: var(--lg-ink) !important; }
+body.skin-frost .alb-vtags .tag { color: #14569c !important; background: rgba(222,241,255,.68) !important; border-color: rgba(144,199,255,.62) !important; }
+body.skin-frost .alb-vtags .tag.ocr { color: #78510c !important; background: rgba(255,243,212,.78) !important; border-color: rgba(238,205,143,.7) !important; }
+body.skin-frost .alb-vtags .tag.scene { color: #256b3c !important; background: rgba(227,249,229,.76) !important; border-color: rgba(160,214,166,.68) !important; }
+body.skin-frost .alb-vexif .v { color: var(--lg-ink) !important; }
+
+/* ---------- 相册：弹层与菜单 ---------- */
+body.skin-frost .alb-opt-menu,
+body.skin-frost .alb-ctx,
+body.skin-frost .lut-menu,
+body.skin-frost .alb-modal,
+body.skin-frost .alb-curate-box,
+body.skin-frost .alb-search-panel {
+  background: var(--lg-pop) !important;
+  border: 1px solid rgba(255,255,255,.72) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 26px 70px rgba(40,72,122,.22), inset 0 1px 0 rgba(255,255,255,.92) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%);
+  backdrop-filter: blur(32px) saturate(190%);
+  color: var(--lg-ink) !important;
+}
+body.skin-frost .alb-opt-sec { border-color: rgba(255,255,255,.38) !important; }
+body.skin-frost .alb-opt-sec-title {
+  color: var(--lg-ink-soft) !important;
+  font-weight: 600 !important;
+  letter-spacing: .3px;
+}
+body.skin-frost .alb-opt-perf-title { color: var(--lg-ink-soft) !important; }
+body.skin-frost .alb-opt-item,
+body.skin-frost .alb-ctx-item { color: var(--lg-ink) !important; }
+body.skin-frost .alb-opt-item.danger,
+body.skin-frost .alb-ctx-item.danger { color: #bd2838 !important; }
+body.skin-frost .alb-opt-item.danger:hover,
+body.skin-frost .alb-ctx-item.danger:hover { background: rgba(255,220,226,.72) !important; }
+body.skin-frost .alb-opt-item.dis,
+body.skin-frost .alb-ctx-item.dis { color: rgba(30,55,90,.34) !important; }
+body.skin-frost .alb-ctl-row { gap: 6px; }
+body.skin-frost .alb-opt-note { color: #6c5ce7 !important; }
+body.skin-frost .alb-perf-seg span {
+  color: var(--lg-ink-soft) !important;
+  border-color: rgba(255,255,255,.54) !important;
+  background: rgba(255,255,255,.28) !important;
+}
+body.skin-frost .alb-perf-seg span:hover { background: rgba(255,255,255,.50) !important; color: var(--lg-ink) !important; }
+body.skin-frost .alb-perf-seg span.on {
+  background: linear-gradient(145deg,#7bc0ff,#0a84ff) !important;
+  border-color: rgba(255,255,255,.75) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 14px rgba(10,110,220,.24), inset 0 1px 0 rgba(255,255,255,.5);
+}
+
+body.skin-frost .alb-modal-mask { background: rgba(22,36,60,.32) !important; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+body.skin-frost .alb-modal h3 { color: var(--lg-ink) !important; }
+body.skin-frost .alb-modal .hint { color: var(--lg-muted) !important; }
+body.skin-frost .alb-modal .list { background: rgba(255,255,255,.34) !important; border-color: rgba(255,255,255,.50) !important; color: var(--lg-ink-soft) !important; border-radius: 10px !important; }
+body.skin-frost .alb-modal .list div { border-color: rgba(255,255,255,.28) !important; }
+body.skin-frost .alb-modal .btn { color: var(--lg-ink) !important; }
+body.skin-frost .alb-modal .btn.pri { background: linear-gradient(145deg,#64baff,#0a84ff) !important; color:#fff !important; border-color: rgba(255,255,255,.7) !important; }
+body.skin-frost .alb-modal .btn.danger { color:#fff !important; }
+body.skin-frost .alb-modal .chkline { color: var(--lg-ink-soft) !important; }
+body.skin-frost .alb-modal .prog { background: rgba(255,255,255,.34) !important; border: 1px solid rgba(255,255,255,.48); }
+body.skin-frost .alb-modal .prog > div { background: linear-gradient(90deg,#59b6ff,#0a84ff) !important; }
+body.skin-frost .alb-curate-head { background: rgba(255,255,255,.38) !important; border-color: rgba(255,255,255,.48) !important; }
+body.skin-frost .alb-curate-tabs { background: rgba(255,255,255,.22) !important; border-color: rgba(255,255,255,.42) !important; }
+body.skin-frost .alb-curate-tab.on { background: rgba(255,255,255,.72) !important; color: #0a4f9c !important; border-color: rgba(255,255,255,.78) !important; }
+body.skin-frost .alb-curate-note { background: rgba(255,255,255,.32) !important; border-color: rgba(255,255,255,.46) !important; color: var(--lg-muted-strong) !important; }
+body.skin-frost .alb-curate-card { background: rgba(255,255,255,.36) !important; border-color: rgba(255,255,255,.52) !important; border-radius: 12px !important; }
+body.skin-frost .alb-curate-stat b { color: var(--lg-ink) !important; }
+body.skin-frost .alb-curate-row input { background: rgba(255,255,255,.56) !important; color: var(--lg-ink) !important; border-color: rgba(255,255,255,.66) !important; }
+
+body.skin-frost .alb-ctx { border-radius: 14px !important; }
+body.skin-frost .alb-ctx-item:hover { background: rgba(255,255,255,.44) !important; }
+body.skin-frost .lut-menu { border-radius: 14px !important; }
+body.skin-frost .lut-menu-item { color: var(--lg-ink) !important; border-radius: 9px; }
+body.skin-frost .lut-menu-item:hover { background: rgba(255,255,255,.42) !important; }
+body.skin-frost .lut-menu-item.danger { color: #bd2838 !important; }
+body.skin-frost .fx-card { background: var(--lg-pop) !important; border: 1px solid rgba(255,255,255,.64) !important; border-radius: 13px !important; box-shadow: var(--lg-shadow) !important; }
+body.skin-frost .fx-card .t { color: var(--lg-ink) !important; }
+body.skin-frost .fx-card .d { color: var(--lg-muted) !important; }
+
+/* ---------- 回收站 / 去重 ---------- */
+body.skin-frost .bin-overlay,
+body.skin-frost .dup-overlay { background: rgba(22,36,60,.28) !important; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); }
+body.skin-frost .bin-panel,
+body.skin-frost .dup-panel {
+  background: var(--lg-pop) !important;
+  border: 1px solid rgba(255,255,255,.74) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 32px 88px rgba(38,70,118,.26), inset 0 1px 0 rgba(255,255,255,.95) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(190%);
+  backdrop-filter: blur(34px) saturate(190%);
+  color: var(--lg-ink) !important;
+}
+/* 去重窗口的 panel 本身就是整窗，留出更多底色让玻璃折射可见 */
+body.skin-frost .dup-panel {
+  background: linear-gradient(148deg, rgba(255,255,255,.62) 0%, rgba(235,245,255,.40) 52%, rgba(249,239,255,.54) 100%) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+body.skin-frost .bin-head,
+body.skin-frost .bin-foot,
+body.skin-frost .dup-head,
+body.skin-frost .dup-tools {
+  background: linear-gradient(180deg, rgba(255,255,255,.44), rgba(255,255,255,.18)) !important;
+  border-color: rgba(255,255,255,.48) !important;
+}
+body.skin-frost .bin-title,
+body.skin-frost .dup-head .t { color: var(--lg-ink) !important; }
+body.skin-frost .bin-foot { color: var(--lg-muted) !important; }
+body.skin-frost .dup-head .t { color: var(--lg-ink) !important; }
+body.skin-frost .dup-tools { border-bottom: 1px solid rgba(255,255,255,.42) !important; }
+body.skin-frost .dup-rule,
+body.skin-frost .dup-thr { background: rgba(255,255,255,.48) !important; color: var(--lg-ink) !important; border-color: rgba(255,255,255,.62) !important; border-radius: 8px !important; }
+body.skin-frost .dup-kind { color: #226b42 !important; border-color: rgba(118,200,151,.7) !important; background: rgba(225,250,232,.36) !important; }
+body.skin-frost .dup-kind.sim { color: #8a5b0b !important; border-color: rgba(224,179,90,.72) !important; background: rgba(255,243,210,.4) !important; }
+body.skin-frost .dup-ignore { color: var(--lg-muted) !important; }
+body.skin-frost .dup-bar { background: rgba(255,255,255,.34) !important; border: 1px solid rgba(255,255,255,.48); }
+body.skin-frost .dup-bar > div { background: linear-gradient(90deg,#59b6ff,#0a84ff); }
+body.skin-frost .dup-list { background: transparent !important; }
+body.skin-frost .dup-group { background: rgba(255,255,255,.40) !important; border: 1px solid rgba(255,255,255,.56) !important; border-radius: 13px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+body.skin-frost .dup-group-h { color: var(--lg-muted) !important; }
+body.skin-frost .dup-cell { background: rgba(255,255,255,.34) !important; border: 1px solid rgba(255,255,255,.50) !important; border-radius: 11px !important; }
+body.skin-frost .dup-cell.keep { border-color: rgba(74,185,116,.7) !important; }
+body.skin-frost .dup-cell.out { border-color: rgba(210,85,85,.7) !important; }
+body.skin-frost .dup-cell .nm { color: var(--lg-ink) !important; }
+body.skin-frost .dup-cell .fd { color: var(--lg-muted) !important; }
+body.skin-frost .dup-cell .mt { color: var(--lg-muted) !important; }
+body.skin-frost .dup-cell label { color: var(--lg-ink-soft) !important; }
+body.skin-frost .dup-cell .mk { color: #267a4b !important; }
+body.skin-frost .dup-light { background: rgba(10,20,36,.92) !important; -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+body.skin-frost .dup-light-nav button { background: rgba(255,255,255,.16) !important; border-color: rgba(255,255,255,.20) !important; color: #fff !important; border-radius: 10px !important; }
+body.skin-frost .dup-light-nav button:hover { background: rgba(255,255,255,.26) !important; }
+
+/* ---------- 编辑器的专业面板 / 修复中心 ---------- */
+body.skin-frost .pro-box,
+body.skin-frost .pro-pane,
+body.skin-frost .pro-sec { color: var(--lg-ink) !important; }
+body.skin-frost .pro-box {
+  background: var(--lg-pop) !important;
+  border: 1px solid rgba(255,255,255,.74) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 34px 90px rgba(38,70,118,.28), inset 0 1px 0 rgba(255,255,255,.95) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(190%);
+  backdrop-filter: blur(34px) saturate(190%);
+}
+body.skin-frost .pro-head,
+body.skin-frost .pro-tabs { background: linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,.20)) !important; border-color: rgba(255,255,255,.46) !important; }
+body.skin-frost .pro-head b { color: var(--lg-ink) !important; }
+body.skin-frost .pro-head .sub { color: var(--lg-muted) !important; }
+body.skin-frost .pro-btn.green:not(#lg-none) {
+  background: linear-gradient(145deg,#8ce3b8,#2baa74 62%,#13875a) !important;
+  color: #fff !important;
+  border-color: rgba(176,240,207,.82) !important;
+  box-shadow: 0 8px 20px rgba(18,126,83,.22), inset 0 1px 0 rgba(255,255,255,.5) !important;
+}
+body.skin-frost .pro-btn.alt:not(#lg-none) {
+  background: linear-gradient(145deg, rgba(94,111,138,.82), rgba(49,61,82,.74)) !important;
+  color: #fff !important;
+  border-color: rgba(174,194,224,.52) !important;
+  box-shadow: 0 7px 18px rgba(28,46,76,.22), inset 0 1px 0 rgba(255,255,255,.28) !important;
+}
+body.skin-frost .pro-btn:disabled { opacity: .45 !important; cursor: not-allowed !important; transform: none !important; }
+body.skin-frost .pro-close { color: rgba(25,45,75,.55) !important; }
+body.skin-frost .pro-tab { color: var(--lg-muted-strong) !important; }
+body.skin-frost .pro-tab.on {
+  background: rgba(255,255,255,.52) !important;
+  color: #0a4f9c !important;
+  border-color: rgba(255,255,255,.66) !important;
+}
+body.skin-frost .pro-note {
+  background: rgba(255,255,255,.32) !important;
+  border: 1px solid rgba(255,255,255,.48) !important;
+  color: var(--lg-muted-strong) !important;
+  border-radius: 10px !important;
+}
+body.skin-frost .pro-row label { color: var(--lg-ink-soft) !important; }
+body.skin-frost .pro-group,
+body.skin-frost .pro-sec {
+  background: rgba(255,255,255,.34) !important;
+  border: 1px solid rgba(255,255,255,.50) !important;
+  border-radius: 13px !important;
+}
+body.skin-frost .pro-group .tag { color: #0a5aa8 !important; background: rgba(210,236,255,.62) !important; }
+body.skin-frost .pro-status {
+  background: rgba(255,255,255,.28) !important;
+  border-color: rgba(255,255,255,.42) !important;
+  color: var(--lg-ink-soft) !important;
+  border-radius: 10px !important;
+}
+body.skin-frost .pro-status.err { color: #b32d3c !important; border-color: rgba(216,104,120,.5) !important; background: rgba(255,229,232,.65) !important; }
+body.skin-frost .pro-file { border-color: rgba(255,255,255,.26) !important; color: var(--lg-ink-soft) !important; }
+body.skin-frost .pro-file .tp { color: var(--lg-muted) !important; }
+body.skin-frost .pro-badge { color: #226b42 !important; border-color: rgba(96,184,136,.58) !important; background: rgba(225,250,232,.44) !important; }
+body.skin-frost .pro-preview img { border-color: rgba(255,255,255,.50) !important; background: rgba(20,34,55,.30) !important; }
+
+/* 编辑器右侧分组 / 面板 */
+body.skin-frost .edx-groups {
+  background: linear-gradient(180deg, rgba(255,255,255,.42), rgba(255,255,255,.18)) !important;
+  border-bottom: 1px solid rgba(255,255,255,.42) !important;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+body.skin-frost .edx-curve-wrap { background: var(--lg-smoke) !important; }
+body.skin-frost .edx-ch button.on {
+  background: linear-gradient(145deg,#72c2ff,#0a84ff) !important;
+  color: #fff !important;
+  border-color: rgba(255,255,255,.68) !important;
+}
+body.skin-frost .edx-badge { background: rgba(210,236,255,.70) !important; color: #0a5aa8 !important; }
+body.skin-frost .edx-badge.off { background: rgba(255,255,255,.30) !important; color: var(--lg-muted) !important; }
+body.skin-frost .edx-mini button { color: var(--lg-ink) !important; }
+body.skin-frost .edx-hsl-row input { accent-color: var(--lg-accent) !important; }
+body.skin-frost .edx-video-row span { color: var(--lg-ink-soft) !important; }
+
+/* ---------- 滚动条 ---------- */
+body.skin-frost * { scrollbar-color: rgba(35,80,140,.62) rgba(33,62,102,.10); scrollbar-width: thin; }
+html.skin-frost-html { scrollbar-color: rgba(35,80,140,.62) rgba(33,62,102,.10); scrollbar-width: thin; }
+body.skin-frost ::-webkit-scrollbar { width: 8px; height: 8px; }
+body.skin-frost ::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.08);
+  border-radius: 10px;
+}
+body.skin-frost ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(72,111,168,.52), rgba(36,70,118,.34));
+  border: 1px solid rgba(255,255,255,.62);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
+}
+body.skin-frost ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(38,105,190,.72), rgba(20,68,138,.52)); }
+body.skin-frost ::-webkit-scrollbar-corner { background: transparent; }
+
+/* ---------- 切换进入动画：每个皮肤文件自己定义 ---------- */
+@keyframes lgSurfaceIn {
+  0%   { opacity: 0; transform: translateY(4px) scale(.995); filter: saturate(70%) brightness(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: saturate(100%) brightness(1); }
+}
+@keyframes lgPillIn {
+  0%   { opacity: 0; transform: translateY(3px) scale(.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+body.skin-frost.skin-entering .titlebar,
+body.skin-frost.skin-entering .left,
+body.skin-frost.skin-entering .right,
+body.skin-frost.skin-entering .bottombar,
+body.skin-frost.skin-entering .alb-head,
+body.skin-frost.skin-entering .alb-overlay { animation: lgSurfaceIn .58s cubic-bezier(.2,.9,.25,1) both; }
+body.skin-frost.skin-entering .btn,
+body.skin-frost.skin-entering .tool-btn,
+body.skin-frost.skin-entering .mini-btn,
+body.skin-frost.skin-entering .alb-cell { animation: lgPillIn .48s cubic-bezier(.2,.9,.25,1) both; }
+
+/* 皮肤菜单在液态玻璃下：更强折射 */
+body.skin-frost #skinMenu.skin-menu {
+  background: linear-gradient(148deg, rgba(250,255,255,.94) 0%, rgba(232,244,255,.74) 44%, rgba(247,237,255,.82) 100%) !important;
+  border: 1px solid rgba(255,255,255,.82) !important;
+  color: var(--lg-ink) !important;
+  box-shadow: 0 28px 72px rgba(38,70,118,.24), inset 0 1px 0 rgba(255,255,255,.98), inset 0 -1px 0 rgba(255,255,255,.34) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(200%);
+  backdrop-filter: blur(34px) saturate(200%);
+}
+body.skin-frost #skinMenu .skin-menu-head b { color: var(--lg-ink); }
+body.skin-frost #skinMenu .skin-menu-head,
+body.skin-frost #skinMenu .skin-menu-head span,
+body.skin-frost #skinMenu .skin-desc,
+body.skin-frost #skinMenu .skin-menu-foot { color: var(--lg-muted); }
+body.skin-frost #skinMenu .skin-item { color: var(--lg-ink); }
+body.skin-frost #skinMenu .skin-item:hover { background: rgba(255,255,255,.56); border-color: rgba(255,255,255,.72); }
+body.skin-frost #skinMenu .skin-item.on { background: rgba(255,255,255,.74); border-color: rgba(255,255,255,.86); }
+body.skin-frost #skinMenu .skin-check { border-color: rgba(32,60,100,.18); }
+body.skin-frost #skinMenu .skin-menu-foot { border-top-color: rgba(32,60,100,.10); }
+

@@ -1,0 +1,508 @@
+/* ==========================================================================
+   图片批处理工具 · 皮肤外壳（菜单 / 切换过渡）
+   这个文件只负责“皮肤选择器”和切换动画，不定义任何皮肤的外观。
+   新增皮肤：在 skins/skin-core.js 的 SKINS 里加一条，再放一个独立 CSS 文件。
+   ========================================================================== */
+
+#skinMenu.skin-menu {
+  position: fixed;
+  z-index: 10040;
+  width: 246px;
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(32,33,38,.94);
+  color: #e9edf4;
+  box-shadow: 0 22px 60px rgba(0,0,0,.52), inset 0 1px 0 rgba(255,255,255,.16);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  opacity: 0;
+  transform: translateY(-7px) scale(.96);
+  transform-origin: var(--skin-origin, 85% 0%);
+  pointer-events: none;
+  transition: opacity .20s ease, transform .28s cubic-bezier(.2,.9,.25,1);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft YaHei UI", sans-serif;
+  user-select: none;
+}
+#skinMenu.skin-menu.on {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+#skinMenu .skin-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 7px 8px;
+  font-size: 11px;
+  letter-spacing: .02em;
+  color: #9aa4b2;
+}
+#skinMenu .skin-menu-head b {
+  font-weight: 600;
+  font-size: 12px;
+  color: #f5f8fc;
+  letter-spacing: .01em;
+}
+#skinMenu .skin-menu-head span {
+  font-size: 9px;
+  color: #768193;
+}
+#skinMenu .skin-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 9px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, transform .18s cubic-bezier(.2,.9,.25,1), box-shadow .18s ease;
+}
+#skinMenu .skin-item:hover {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.12);
+  transform: translateX(1px);
+}
+#skinMenu .skin-item:active { transform: scale(.985); }
+#skinMenu .skin-item.on {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.20);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15);
+}
+#skinMenu .skin-swatch {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 4px 12px rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.24);
+}
+
+#skinMenu .skin-copy { flex: 1; min-width: 0; }
+#skinMenu .skin-name { display: block; font-size: 12px; font-weight: 600; line-height: 1.35; }
+#skinMenu .skin-desc { display: block; margin-top: 2px; font-size: 9.5px; line-height: 1.35; color: #9aa4b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#skinMenu .skin-check {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.22);
+  color: transparent;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+#skinMenu .skin-item.on .skin-check {
+  color: #fff;
+  background: linear-gradient(145deg,#42a5ff,#0a84ff);
+  border-color: rgba(90,180,255,.85);
+  box-shadow: 0 0 0 3px rgba(10,132,255,.16), inset 0 1px 0 rgba(255,255,255,.6);
+}
+#skinMenu .skin-menu-foot {
+  padding: 8px 7px 3px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255,255,255,.09);
+  font-size: 9px;
+  line-height: 1.5;
+  color: #768193;
+}
+
+/* 浅色皮肤下的菜单：仍然使用独立的菜单组件，不改浅色皮肤的其他控件 */
+body.skin-light #skinMenu.skin-menu {
+  background: rgba(250,250,252,.96);
+  border-color: rgba(0,0,0,.10);
+  color: #1d1d1f;
+  box-shadow: 0 22px 60px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.9);
+}
+body.skin-light #skinMenu .skin-menu-head b { color: #111; }
+body.skin-light #skinMenu .skin-menu-head,
+body.skin-light #skinMenu .skin-desc,
+body.skin-light #skinMenu .skin-menu-foot { color: #6e6e73; }
+body.skin-light #skinMenu .skin-item:hover { background: rgba(0,0,0,.055); border-color: rgba(0,0,0,.09); }
+body.skin-light #skinMenu .skin-item.on { background: rgba(0,0,0,.075); border-color: rgba(0,0,0,.12); }
+body.skin-light #skinMenu .skin-check { border-color: rgba(0,0,0,.18); color: transparent; }
+body.skin-light #skinMenu .skin-menu-foot { border-top-color: rgba(0,0,0,.08); }
+
+/* 皮肤触发按钮：只重设新按钮，不改变黑白皮肤的其它按钮 */
+.top-right .skin-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 切换时的柔光扫过：只在玻璃皮肤上启用，不改变黑白皮肤 */
+body.skin-smoke.skin-switching::after,
+body.skin-aurora.skin-switching::after {
+  content: "";
+  position: fixed;
+  inset: -12%;
+  z-index: 10020;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 52% at 18% 28%, rgba(255,255,255,.42), transparent 72%),
+    radial-gradient(30% 42% at 82% 12%, rgba(174,219,255,.35), transparent 74%),
+    radial-gradient(36% 44% at 55% 100%, rgba(255,208,247,.28), transparent 72%);
+  opacity: 0;
+  animation: skinSheenSweep .72s cubic-bezier(.18,.8,.25,1) both;
+}
+@keyframes skinSheenSweep {
+  0%   { opacity: 0; transform: translateX(-9%) scale(1.02); filter: blur(2px); }
+  22%  { opacity: .72; }
+  100% { opacity: 0; transform: translateX(5%) scale(1); filter: blur(0); }
+}
+
+/* 统一的颜色过渡；切换结束后类名移除，不影响常态交互。逐元素过渡只在玻璃皮肤上启用 */
+body.skin-fade,
+body.skin-smoke.skin-fade *,
+body.skin-aurora.skin-fade * {
+  transition:
+    background-color .42s cubic-bezier(.2,.8,.2,1),
+    color .34s ease,
+    border-color .34s ease,
+    box-shadow .45s cubic-bezier(.2,.8,.2,1),
+    -webkit-backdrop-filter .5s ease,
+    backdrop-filter .5s ease !important;
+}
+
+/* ==========================================================================
+   皮肤切换 · 液态转场层
+   JS 在切换时注入 .skin-transition，结束后自动移除；纯视觉覆盖，不参与布局。
+   ========================================================================== */
+.skin-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 10030;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity .18s ease;
+  contain: strict;
+}
+.skin-transition.on { opacity: 1; }
+.skin-transition.out { opacity: 0; transition: opacity .36s cubic-bezier(.4,0,.6,1); }
+
+.st-veil {
+  position: absolute;
+  inset: -22%;
+  background:
+    radial-gradient(34% 46% at 22% 34%, rgba(255,255,255,.38), transparent 72%),
+    radial-gradient(30% 40% at 78% 18%, rgba(174,235,255,.34), transparent 74%),
+    radial-gradient(38% 44% at 56% 96%, rgba(214,183,255,.30), transparent 72%),
+    conic-gradient(from 212deg at 52% 48%, rgba(80,220,255,.20), rgba(255,255,255,.05) 34%, rgba(255,155,230,.18) 62%, rgba(80,220,255,.20));
+  filter: blur(22px) saturate(160%);
+  transform: scale(.94);
+  animation: stVeilIn 1.02s cubic-bezier(.18,.82,.26,1) both;
+}
+@keyframes stVeilIn {
+  0% { opacity: 0; transform: scale(.88) rotate(-3deg); }
+  28% { opacity: .82; }
+  74% { opacity: .42; transform: scale(1.05) rotate(1deg); }
+  100% { opacity: 0; transform: scale(1.16) rotate(2deg); }
+}
+
+.st-prism {
+  position: absolute;
+  left: -30%;
+  top: -24%;
+  width: 160%;
+  height: 150%;
+  background: linear-gradient(112deg, transparent 20%, rgba(255,255,255,.36) 37%, rgba(167,239,255,.30) 45%, rgba(255,177,232,.24) 53%, transparent 70%);
+  mix-blend-mode: screen;
+  filter: blur(9px);
+  transform: rotate(-16deg) translateX(-44%);
+  animation: stPrismSweep 1.02s cubic-bezier(.2,.8,.2,1) both;
+}
+.st-prism.p2 {
+  top: 12%;
+  height: 88%;
+  opacity: .55;
+  background: linear-gradient(102deg, transparent 18%, rgba(151,234,255,.36) 42%, rgba(255,255,255,.20) 50%, transparent 68%);
+  transform: rotate(9deg) translateX(38%);
+  animation-delay: .06s;
+  animation-direction: reverse;
+}
+@keyframes stPrismSweep {
+  0% { opacity: 0; transform: rotate(-16deg) translateX(-58%); }
+  26% { opacity: .86; }
+  100% { opacity: 0; transform: rotate(-16deg) translateX(58%); }
+}
+
+.st-blob {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(30px);
+  opacity: .72;
+  transform: translate3d(0,0,0) scale(.7);
+  animation: stBlobDrift 1.1s cubic-bezier(.2,.7,.2,1) both;
+}
+.st-blob.b1 { width: 38vmax; height: 38vmax; left: -6vmax; top: -10vmax; background: radial-gradient(circle at 34% 30%, rgba(126,239,255,.75), rgba(67,183,255,.28) 46%, transparent 72%); }
+.st-blob.b2 { width: 32vmax; height: 32vmax; right: -7vmax; top: 8vmax; background: radial-gradient(circle at 60% 36%, rgba(255,167,239,.62), rgba(180,120,255,.24) 48%, transparent 72%); animation-delay: .08s; }
+.st-blob.b3 { width: 30vmax; height: 30vmax; left: 28vmax; bottom: -12vmax; background: radial-gradient(circle at 48% 40%, rgba(174,255,228,.58), rgba(78,210,255,.22) 46%, transparent 74%); animation-delay: .14s; }
+.st-blob.b4 { width: 24vmax; height: 24vmax; right: 22vmax; bottom: -8vmax; background: radial-gradient(circle at 46% 42%, rgba(255,255,255,.70), rgba(205,226,255,.18) 50%, transparent 72%); animation-delay: .04s; }
+@keyframes stBlobDrift {
+  0% { opacity: 0; transform: translate3d(0, 8vh, 0) scale(.45); }
+  30% { opacity: .72; }
+  100% { opacity: 0; transform: translate3d(0, -10vh, 0) scale(1.08); }
+}
+
+.st-streak {
+  position: absolute;
+  display: block;
+  width: 56vw;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.78), rgba(136,234,255,.65), transparent);
+  filter: blur(1px);
+  box-shadow: 0 0 18px rgba(105,222,255,.55), 0 0 40px rgba(255,190,247,.26);
+  transform: rotate(-24deg);
+  opacity: 0;
+  animation: stStreak 1.0s cubic-bezier(.22,.7,.2,1) both;
+}
+.st-streak.s1 { left: 8vw; top: 24vh; animation-delay: .05s; }
+.st-streak.s2 { right: -4vw; top: 66vh; transform: rotate(18deg); animation-delay: .16s; }
+@keyframes stStreak {
+  0% { opacity: 0; transform: translateX(-24vw) rotate(-24deg) scaleX(.4); }
+  24% { opacity: .9; }
+  100% { opacity: 0; transform: translateX(24vw) rotate(-24deg) scaleX(1.2); }
+}
+
+.st-ring {
+  position: absolute;
+  display: block;
+  left: 50%;
+  top: 50%;
+  width: 8vmax;
+  height: 8vmax;
+  margin: -4vmax 0 0 -4vmax;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.60);
+  box-shadow: 0 0 24px rgba(86,213,255,.28), inset 0 0 24px rgba(255,255,255,.18);
+  opacity: 0;
+  animation: stRing 1.0s cubic-bezier(.16,.8,.24,1) both;
+}
+.st-ring.r2 { animation-delay: .18s; border-color: rgba(255,176,240,.48); }
+@keyframes stRing {
+  0% { opacity: 0; transform: scale(.3); }
+  20% { opacity: .62; }
+  100% { opacity: 0; transform: scale(5.6); border-width: 1px; }
+}
+
+.st-grain {
+  position: absolute;
+  inset: 0;
+  opacity: .14;
+  mix-blend-mode: overlay;
+  background-image:
+    repeating-radial-gradient(circle at 17% 32%, rgba(255,255,255,.28) 0 1px, transparent 1px 4px),
+    repeating-radial-gradient(circle at 73% 68%, rgba(255,255,255,.20) 0 1px, transparent 1px 5px);
+  background-size: 9px 9px, 13px 13px;
+  animation: stGrain 0.7s steps(4) both;
+}
+@keyframes stGrain {
+  0% { opacity: 0; transform: scale(1.1); }
+  30% { opacity: .20; }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* 过渡层按目标皮肤换色：深色落点偏靛蓝，白色落点偏冰蓝珠光 */
+.skin-transition[data-to="dark"] .st-veil,
+.skin-transition[data-to="smoke"] .st-veil {
+  background:
+    radial-gradient(38% 50% at 28% 30%, rgba(88,117,255,.20), transparent 74%),
+    radial-gradient(34% 44% at 78% 20%, rgba(255,255,255,.16), transparent 72%),
+    radial-gradient(36% 44% at 56% 100%, rgba(147,109,255,.18), transparent 72%),
+    conic-gradient(from 212deg at 52% 48%, rgba(90,190,255,.18), rgba(255,255,255,.03) 34%, rgba(150,120,255,.16) 62%, rgba(90,190,255,.18));
+}
+.skin-transition[data-to="light"] .st-veil,
+.skin-transition[data-to="frost"] .st-veil,
+.skin-transition[data-to="aurora"] .st-veil {
+  background:
+    radial-gradient(36% 48% at 24% 28%, rgba(255,255,255,.42), transparent 72%),
+    radial-gradient(30% 42% at 82% 18%, rgba(169,239,255,.38), transparent 74%),
+    radial-gradient(38% 44% at 56% 96%, rgba(255,205,246,.30), transparent 72%),
+    conic-gradient(from 212deg at 52% 48%, rgba(96,226,255,.24), rgba(255,255,255,.06) 34%, rgba(255,170,236,.20) 62%, rgba(96,226,255,.24));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skin-transition { display: none !important; }
+}
+
+/* 五套皮肤菜单：留出足够高度，避免液态玻璃被裁切 */
+#skinMenu.skin-menu { width: 252px; }
+
+/* ==========================================================================
+   v2.27 · 液态玻璃高级转场：玻璃棱镜撕裂 + 液体透镜 + 折射碎片
+   ========================================================================== */
+.st-lens {
+  position: absolute;
+  inset: -8%;
+  background:
+    radial-gradient(circle at var(--st-x, 50%) var(--st-y, 50%), rgba(255,255,255,.56) 0%, rgba(137,232,255,.22) 24%, rgba(255,150,236,.12) 40%, transparent 62%),
+    conic-gradient(from 210deg at var(--st-x, 50%) var(--st-y, 50%), rgba(118,231,255,.18), transparent 26%, rgba(255,170,240,.14) 58%, transparent 82%);
+  filter: blur(2px) saturate(150%);
+  opacity: 0;
+  transform: scale(.9);
+  animation: stLens 1.12s cubic-bezier(.16,.78,.2,1) both;
+  mix-blend-mode: screen;
+}
+@keyframes stLens {
+  0% { opacity: 0; transform: scale(.72) rotate(-2deg); }
+  24% { opacity: .78; }
+  100% { opacity: 0; transform: scale(1.24) rotate(1.6deg); }
+}
+.st-core {
+  position: absolute;
+  left: var(--st-x, 50%);
+  top: var(--st-y, 50%);
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 24px 10px rgba(255,255,255,.72), 0 0 90px 38px rgba(102,225,255,.28);
+  opacity: 0;
+  animation: stCore 1.1s cubic-bezier(.12,.8,.2,1) both;
+}
+@keyframes stCore {
+  0% { opacity: 0; transform: scale(.2); }
+  18% { opacity: 1; transform: scale(1.6); }
+  100% { opacity: 0; transform: scale(24); }
+}
+.st-shard {
+  position: absolute;
+  left: var(--st-x, 50%);
+  top: var(--st-y, 50%);
+  width: 42vmax;
+  height: 42vmax;
+  margin: -21vmax 0 0 -21vmax;
+  opacity: 0;
+  background:
+    linear-gradient(132deg, rgba(255,255,255,.62) 0%, rgba(153,238,255,.20) 34%, rgba(255,167,239,.18) 62%, rgba(255,255,255,.38) 100%);
+  border: 1px solid rgba(255,255,255,.46);
+  box-shadow: inset 0 0 18px rgba(255,255,255,.55), 0 0 26px rgba(113,226,255,.22);
+  filter: blur(.4px) saturate(150%);
+  mix-blend-mode: screen;
+  transform: translate3d(0,0,0) rotate(0deg) scale(.42);
+  animation: stShard 1.18s cubic-bezier(.14,.74,.18,1) both;
+}
+.sh1 { clip-path: polygon(5% 0%, 48% 0%, 33% 58%, 0% 76%); --dx:-36vw; --dy:-30vh; --rot:-26deg; animation-delay:.02s; }
+.sh2 { clip-path: polygon(48% 0%, 100% 0%, 100% 33%, 58% 52%); --dx:34vw; --dy:-27vh; --rot:22deg; animation-delay:.05s; }
+.sh3 { clip-path: polygon(100% 33%, 100% 100%, 52% 100%, 58% 54%); --dx:38vw; --dy:30vh; --rot:28deg; animation-delay:.08s; }
+.sh4 { clip-path: polygon(0% 76%, 34% 58%, 52% 100%, 0% 100%); --dx:-34vw; --dy:31vh; --rot:-23deg; animation-delay:.11s; }
+.sh5 { clip-path: polygon(22% 12%, 52% 6%, 45% 45%, 18% 42%); --dx:-13vw; --dy:-38vh; --rot:17deg; animation-delay:.14s; }
+.sh6 { clip-path: polygon(56% 6%, 88% 18%, 82% 44%, 46% 43%); --dx:19vw; --dy:-35vh; --rot:-17deg; animation-delay:.17s; }
+.sh7 { clip-path: polygon(14% 48%, 43% 46%, 47% 82%, 20% 88%); --dx:-18vw; --dy:37vh; --rot:20deg; animation-delay:.20s; }
+.sh8 { clip-path: polygon(55% 48%, 84% 46%, 78% 84%, 52% 82%); --dx:16vw; --dy:38vh; --rot:-21deg; animation-delay:.23s; }
+@keyframes stShard {
+  0% { opacity: 0; transform: translate3d(0,0,0) rotate(0deg) scale(.35); filter: blur(5px) saturate(170%); }
+  12% { opacity: .82; }
+  34% { opacity: .64; }
+  100% { opacity: 0; transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rot)) scale(1.16); filter: blur(1px) saturate(160%); }
+}
+
+/* 页面入场：整页玻璃揭幕 + 面板错峰浮入 */
+body.skin-aurora.lg-page-enter::after {
+  content: "";
+  position: fixed;
+  inset: -20% -35%;
+  z-index: 10020;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, transparent 25%, rgba(255,255,255,.44) 40%, rgba(155,238,255,.24) 47%, rgba(255,174,240,.16) 56%, transparent 72%);
+  filter: blur(16px) saturate(160%);
+  mix-blend-mode: screen;
+  animation: lgPageWipe .98s cubic-bezier(.2,.78,.18,1) both;
+}
+@keyframes lgPageWipe {
+  0% { opacity: 0; transform: translateX(-68%) skewX(-8deg); }
+  20% { opacity: .78; }
+  100% { opacity: 0; transform: translateX(68%) skewX(8deg); }
+}
+body.skin-aurora.lg-page-enter .titlebar,
+body.skin-aurora.lg-page-enter .toolbar,
+body.skin-aurora.lg-page-enter .alb-overlay,
+body.skin-aurora.lg-page-enter .bottombar,
+body.skin-aurora.lg-page-enter .bin-panel,
+body.skin-aurora.lg-page-enter .dup-panel {
+  animation: lgSurfaceIn .82s cubic-bezier(.18,.82,.22,1) both;
+}
+body.skin-aurora.lg-page-enter .left {
+  animation: lgSlideLeft .82s cubic-bezier(.18,.82,.22,1) both;
+}
+body.skin-aurora.lg-page-enter .right {
+  animation: lgSlideRight .82s cubic-bezier(.18,.82,.22,1) both;
+}
+body.skin-aurora.lg-page-enter .center {
+  animation: lgCenterIn .9s cubic-bezier(.18,.82,.22,1) both;
+}
+@keyframes lgSurfaceIn {
+  0% { opacity: .55; transform: translateY(-8px) scale(.994); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes lgSlideLeft {
+  0% { opacity: .5; transform: translateX(-18px) scale(.994); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes lgSlideRight {
+  0% { opacity: .5; transform: translateX(18px) scale(.994); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes lgCenterIn {
+  0% { opacity: .4; transform: scale(.985); filter: blur(6px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
+/* 覆盖层 / 弹窗 / 菜单入场：液体玻璃拉开 */
+body.skin-aurora .bin-panel,
+body.skin-aurora .dup-panel {
+  animation: lgOverlayIn .56s cubic-bezier(.18,.82,.22,1) both;
+}
+body.skin-aurora .alb-modal,
+body.skin-aurora .fx-modal > .fx-card,
+body.skin-aurora .skin-menu,
+body.skin-aurora .alb-opt-menu,
+body.skin-aurora .alb-ctx {
+  animation: lgPopIn .42s cubic-bezier(.16,.86,.26,1) both;
+}
+@keyframes lgOverlayIn {
+  0% { opacity: 0; transform: translateY(16px) scale(.982); filter: blur(8px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes lgPopIn {
+  0% { opacity: 0; transform: translateY(10px) scale(.96); filter: blur(5px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* 切皮肤时，当前界面本身做一次轻微液态缩放，强化换肤体感 */
+body.skin-switching .alb-overlay,
+body.skin-switching .dup-panel,
+body.skin-switching .bin-panel,
+body.skin-switching .main,
+body.skin-switching .titlebar,
+body.skin-switching .toolbar,
+body.skin-switching .bottombar {
+  animation: lgSkinBreathe 1.12s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes lgSkinBreathe {
+  0% { transform: scale(1); filter: saturate(1); }
+  24% { transform: scale(.995); filter: saturate(1.18); }
+  58% { transform: scale(1.004); filter: saturate(1.05); }
+  100% { transform: scale(1); filter: saturate(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skin-transition, body.skin-aurora.lg-page-enter::after { display: none !important; }
+}
+
+/* 去重子窗口标题栏：与主窗口几何完全一致，颜色由各皮肤覆盖 */
+body[class*="skin-"] .dup-head {
+  height: 38px;
+  padding: 0 14px;
+  gap: 10px;
+}
+body[class*="skin-"] .dup-head .light { width: 12px; height: 12px; flex-basis: 12px; }

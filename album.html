@@ -724,16 +724,7 @@ body.skin-light .alb-pcard .nm { color:#222; }
 body.skin-light .alb-vexif { border-color:#ddd; }
 body.skin-light .alb-vexif .v { color:#222; }
 </style>
-<script>
-// 启动时先读皮肤偏好（URL 参数由 C# 注入），避免闪烁
-(function(){
-  try {
-    var m = location.search.match(/skin=([a-z]+)/i);
-    var s = m ? m[1].toLowerCase() : 'dark';
-    if (s === 'light') document.documentElement.className = 'skin-light-html';
-  } catch(e){}
-})();
-</script>
+<script src="skins/skin-core.js?v=2288"></script>
 <style>body.mode-album .alb-titlebar .top-right span[onclick*="albOptDo('editor')"]{display:none!important;}</style></head>
 <body>
 
@@ -743,7 +734,7 @@ body.skin-light .alb-vexif .v { color:#222; }
   <div class="light green" onclick="post('winmax')" title="最大化"></div>
   <div style="margin-left:20px"></div>
   <div class="title-spacer"></div>
-  <div class="top-right"><span onclick="openAlbum()">▤ 相册</span><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+  <div class="top-right"><span onclick="openAlbum()">▤ 相册</span><span class="skin-trigger" onclick="toggleSkinMenu(event,this)">◐ 皮肤 <b style="font-weight:400;opacity:.65">▾</b></span><span onclick="post('about')">关于</span></div>
 </div>
 <script>
 let _tbDown = null, _tbDragged = false, _tbLastUp = 0;
@@ -1175,7 +1166,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="light green" onclick="post('winmax')" title="最大化"></div>
     <div style="margin-left:20px"></div>
     <div class="title-spacer"></div>
-    <div class="top-right"><span onclick="albOptDo('editor')" title="打开图片编辑"> <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;fill:currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>图片编辑</span><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+    <div class="top-right"><span onclick="albOptDo('editor')" title="打开图片编辑"> <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;fill:currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>图片编辑</span><span class="skin-trigger" onclick="toggleSkinMenu(event,this)">◐ 皮肤 <b style="font-weight:400;opacity:.65">▾</b></span><span onclick="post('about')">关于</span></div>
   </div>
   <div class="alb-head">
     <div class="alb-tabs" id="albTabs">
@@ -1330,7 +1321,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="light green" onclick="post('winmax')" title="最大化"></div>
     <div style="margin-left:20px"></div>
     <div class="title-spacer"></div>
-    <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span></div>
+    <div class="top-right"><span class="skin-trigger" onclick="toggleSkinMenu(event,this)">◐ 皮肤 <b style="font-weight:400;opacity:.65">▾</b></span></div>
   </div>
   <div class="alb-view-body">
     <div class="alb-view-main">
@@ -1956,36 +1947,8 @@ function setLutMode(mode) {
   });
   post('setparam|lut_mode|' + mode);
 }
-// 皮肤切换
-function toggleSkin() {
-  document.body.classList.toggle('skin-light');
-  const light = document.body.classList.contains('skin-light');
-  try { localStorage.setItem('skin', light ? 'light' : 'dark'); } catch(e){}
-  try { post('setskin|' + (light ? 'light' : 'dark')); } catch(e){}
-  document.documentElement.classList.toggle('skin-light-html', light);
-  const dark = !light;
-  document.body.style.background = dark ? '#2b2b2b' : '#f5f5f7';
-  document.body.style.color = dark ? '#e0e0e0' : '#222';
-  document.getElementById('statusBox').style.background = dark ? '#1f1f1f' : '#fff';
-  document.getElementById('statusBox').style.borderColor = dark ? '#333' : '#ccc';
-  if (window._lastHist) drawHist(window._lastHist); else drawHist(null);
-  document.body.classList.add('skin-fade');
-  setTimeout(function(){ document.body.classList.remove('skin-fade'); }, 340);
-}
-// 启动时应用已保存的皮肤
-(function(){
-  var m = location.search.match(/skin=([a-z]+)/i);
-  var s = m ? m[1].toLowerCase() : 'dark';
-  if (s === 'light') {
-    document.body.classList.add('skin-light');
-    document.body.style.background = '#f5f5f7';
-    document.body.style.color = '#222';
-    document.addEventListener('DOMContentLoaded', function(){
-      var sb = document.getElementById('statusBox');
-      if (sb) { sb.style.background = '#fff'; sb.style.borderColor = '#ccc'; }
-    });
-  }
-})();
+// 皮肤切换由 skins/skin-core.js 统一处理（菜单、持久化、跨窗口同步）
+
 // 裁切
 let _cropOn = false, _cropRect = null; // _cropRect 为基于图片的归一化 {x,y,w,h}
 function toggleCrop() {
@@ -5782,6 +5745,7 @@ body.skin-light .alb-curate-row input{background:#fff;color:#222;border-color:#c
 </script>
 
 </body></html>
+
 
 
 

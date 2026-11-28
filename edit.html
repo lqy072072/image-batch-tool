@@ -680,16 +680,7 @@ body.skin-light .edx-curve-wrap { background:#fff; border-color:#d7d9e0; }
 body.skin-light .edx-hsl-row { color:#444; }
 body.skin-light .edx-xmp input[type=text], body.skin-light .edx-xmp input[type=password], body.skin-light .edx-xmp textarea, body.skin-light .edx-video-row input { background:#fff; color:#222; border-color:#d7d9e0; }
 </style>
-<script>
-// 启动时先读皮肤偏好（URL 参数由 C# 注入），避免闪烁
-(function(){
-  try {
-    var m = location.search.match(/skin=([a-z]+)/i);
-    var s = m ? m[1].toLowerCase() : 'dark';
-    if (s === 'light') document.documentElement.className = 'skin-light-html';
-  } catch(e){}
-})();
-</script>
+<script src="skins/skin-core.js?v=2288"></script>
 <style>body:not(.mode-album) .top-right span[onclick="openAlbum()"]{display:none!important;}</style></head>
 <body>
 
@@ -699,7 +690,7 @@ body.skin-light .edx-xmp input[type=text], body.skin-light .edx-xmp input[type=p
   <div class="light green" onclick="post('winmax')" title="最大化"></div>
   <div style="margin-left:20px"></div>
   <div class="title-spacer"></div>
-  <div class="top-right"><span onclick="openAlbum()">▤ 相册</span><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+  <div class="top-right"><span onclick="openAlbum()">▤ 相册</span><span class="skin-trigger" onclick="toggleSkinMenu(event,this)">◐ 皮肤 <b style="font-weight:400;opacity:.65">▾</b></span><span onclick="post('about')">关于</span></div>
 </div>
 <script>
 let _tbDown = null, _tbDragged = false, _tbLastUp = 0;
@@ -1087,6 +1078,50 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
+    <div class="right-section" id="genEditSection">
+      <div class="section-header"><span>AI 生成式修图 <span class="gen-badge">FLUX.2 Klein 4B</span></span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div class="gen-status-line">
+          <span class="gen-dot" id="genStatusDot"></span>
+          <span id="genStatusText">正在检测本地模型…</span>
+          <button class="mini-btn" onclick="genStatus()">刷新</button>
+        </div>
+        <div class="gen-tabs">
+          <button class="gen-tab on" data-mode="edit" onclick="genMode('edit')">修图</button>
+          <button class="gen-tab" data-mode="portrait" onclick="genMode('portrait')">人像</button>
+        </div>
+        <textarea id="genPrompt" class="gen-prompt" rows="4" placeholder="描述你想怎么改，例如：把背景换成雨夜霓虹街头，保留人物和构图"></textarea>
+        <div class="gen-chips" id="genChips"></div>
+        <div class="gen-controls">
+          <div class="slider-row"><span>步数</span><input type="range" id="genSteps" min="2" max="12" value="4" oninput="document.getElementById('genStepsV').textContent=this.value"><span class="val" id="genStepsV">4</span></div>
+          <div class="slider-row"><span>强度</span><input type="range" id="genStrength" min="20" max="100" value="78" oninput="document.getElementById('genStrengthV').textContent=this.value"><span class="val" id="genStrengthV">78</span></div>
+          <div class="gen-line">
+            <span>长边</span>
+            <select id="genMaxSide" class="mini-sel" onchange="_gen.userSize=true">
+              <option value="768">768 · 快</option>
+              <option value="1024" selected>1024 · 标准</option>
+              <option value="1280">1280 · 慢</option>
+            </select>
+            <span>种子</span>
+            <input id="genSeed" class="gen-seed" type="number" value="-1" title="-1 为每次随机">
+            <button class="mini-btn" onclick="genRandomSeed()">随机</button>
+          </div>
+        </div>
+        <label class="chk"><input type="checkbox" id="genProtect" checked> 人像保脸：只回注 18% 原图五官纹理，保留妆容/换装效果</label>
+        <div class="gen-actions">
+          <button class="gen-primary" id="genRunBtn" onclick="genRun()">生成修图</button>
+          <button class="mini-btn" onclick="genStatus()">检测模型</button>
+        </div>
+        <div class="gen-progress" id="genProgress" style="display:none"><span class="gen-spin"></span><span id="genProgressText">正在生成…</span></div>
+        <div class="gen-note" id="genNote">首次使用需下载推理运行时和约 5.3GB 模型，合计约 6GB；安装包不预装大模型。</div>
+        <div class="gen-install-row">
+          <button class="mini-btn" id="genInstallBtn" onclick="genInstall()">下载模型</button>
+          <button class="mini-btn" onclick="post('genedit_openmodels')">打开模型目录</button>
+        </div>
+        <div class="gen-help">修图：风格化 / 换背景 / 去物体 / 局部重绘；人像：美颜 / 换妆 / 换装 / 瘦身粗调。生成结果不会覆盖原图。</div>
+      </div>
+    </div>
+
     <div class="right-section">
       <div class="section-header"><span>美颜</span><span class="arrow">▼</span></div>
       <div class="section-body">
@@ -1277,7 +1312,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="light green" onclick="post('winmax')" title="最大化"></div>
     <div style="margin-left:20px"></div>
     <div class="title-spacer"></div>
-    <div class="top-right"><span onclick="albOptDo('editor')" title="打开图片编辑"> <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;fill:currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>图片编辑</span><span onclick="toggleSkin()">◐ 皮肤</span><span onclick="post('about')">关于</span></div>
+    <div class="top-right"><span onclick="albOptDo('editor')" title="打开图片编辑"> <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;fill:currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>图片编辑</span><span class="skin-trigger" onclick="toggleSkinMenu(event,this)">◐ 皮肤 <b style="font-weight:400;opacity:.65">▾</b></span><span onclick="post('about')">关于</span></div>
   </div>
   <div class="alb-head">
     <div class="alb-tabs" id="albTabs">
@@ -1397,7 +1432,7 @@ window.addEventListener('mouseup', function(e) {
     <div class="light green" onclick="post('winmax')" title="最大化"></div>
     <div style="margin-left:20px"></div>
     <div class="title-spacer"></div>
-    <div class="top-right"><span onclick="toggleSkin()">◐ 皮肤</span></div>
+    <div class="top-right"><span class="skin-trigger" onclick="toggleSkinMenu(event,this)">◐ 皮肤 <b style="font-weight:400;opacity:.65">▾</b></span></div>
   </div>
   <div class="alb-view-body">
     <div class="alb-view-main">
@@ -2026,36 +2061,7 @@ function setLutMode(mode) {
   });
   post('setparam|lut_mode|' + mode);
 }
-// 皮肤切换
-function toggleSkin() {
-  document.body.classList.toggle('skin-light');
-  const light = document.body.classList.contains('skin-light');
-  try { localStorage.setItem('skin', light ? 'light' : 'dark'); } catch(e){}
-  try { post('setskin|' + (light ? 'light' : 'dark')); } catch(e){}
-  document.documentElement.classList.toggle('skin-light-html', light);
-  const dark = !light;
-  document.body.style.background = dark ? '#2b2b2b' : '#f5f5f7';
-  document.body.style.color = dark ? '#e0e0e0' : '#222';
-  document.getElementById('statusBox').style.background = dark ? '#1f1f1f' : '#fff';
-  document.getElementById('statusBox').style.borderColor = dark ? '#333' : '#ccc';
-  if (window._lastHist) drawHist(window._lastHist); else drawHist(null);
-  document.body.classList.add('skin-fade');
-  setTimeout(function(){ document.body.classList.remove('skin-fade'); }, 340);
-}
-// 启动时应用已保存的皮肤
-(function(){
-  var m = location.search.match(/skin=([a-z]+)/i);
-  var s = m ? m[1].toLowerCase() : 'dark';
-  if (s === 'light') {
-    document.body.classList.add('skin-light');
-    document.body.style.background = '#f5f5f7';
-    document.body.style.color = '#222';
-    document.addEventListener('DOMContentLoaded', function(){
-      var sb = document.getElementById('statusBox');
-      if (sb) { sb.style.background = '#fff'; sb.style.borderColor = '#ccc'; }
-    });
-  }
-})();
+// 皮肤切换由 skins/skin-core.js 统一处理（菜单、持久化、跨窗口同步）
 // 裁切
 let _cropOn = false, _cropRect = null; // _cropRect 为基于图片的归一化 {x,y,w,h}
 function toggleCrop() {
@@ -2349,6 +2355,10 @@ if (window.chrome && chrome.webview) {
     if (m.type === 'protool') { try{ if(window.proOnResult) proOnResult(m); }catch(e){ try{ post('log|proOnResult '+e); }catch(_){} } return; }
     if (m.type === 'pro_preview') { try{ if(window.proOnPreview) proOnPreview(m); }catch(e){} return; }
     if (m.type === 'iccpath') { var pi=document.getElementById('proProofIcc'); if(pi)pi.value=m.path||''; return; }
+    if (m.type === 'genedit' || m.type === 'genedit_preview' || m.type === 'genedit_status' || m.type === 'genedit_install' || m.type === 'genedit_start') {
+      try{ if(window.genHandle) genHandle(m); }catch(e){ try{ post('log|genHandle '+e); }catch(_){} }
+      return;
+    }
     if (m.type === 'setparam') {
       const sl = document.getElementById('s_'+m.key);
       const vl = document.getElementById('v_'+m.key);
@@ -5707,7 +5717,7 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
-<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(s.id==='tsPanel') grp='fx'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
+<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(s.id==='tsPanel') grp='fx'; else if(s.id==='genEditSection'||/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
 try{ edxGroup('basic'); }catch(e){}
 </script>
 <style>
@@ -5773,6 +5783,68 @@ body.skin-light .edx-gr{color:#555}
 body.skin-light .edx-gr.on{color:#12558f;background:#dceaf8;border-color:#b8d3ec}
 .pro-hub-grid{display:grid;grid-template-columns:1fr;gap:6px}
 .pro-hub-grid .pro-btn{padding:9px}
+.gen-badge{font-weight:400;color:#9dd4a8;background:#1d3525;border:1px solid #376a47;border-radius:4px;padding:1px 5px;font-size:9px;vertical-align:1px}
+.gen-status-line{display:flex;align-items:center;gap:6px;font-size:11px;color:#e3eaf3;margin-bottom:8px;line-height:1.45;flex-wrap:wrap}
+.gen-status-line .mini-btn{margin-left:auto;padding:3px 7px;font-size:10px;flex:0 0 auto}
+.gen-status-line #genStatusText{flex:1 1 190px;min-width:0;white-space:normal;word-break:break-word}
+.gen-dot{width:7px;height:7px;border-radius:50%;background:#c88b3a;box-shadow:0 0 0 2px rgba(200,139,58,.14);flex:0 0 auto}
+.gen-dot.ok{background:#49b36b;box-shadow:0 0 0 2px rgba(73,179,107,.16)}
+.gen-dot.err{background:#d45b5b;box-shadow:0 0 0 2px rgba(212,91,91,.16)}
+.gen-tabs{display:flex;gap:4px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:3px;margin-bottom:8px}
+.gen-tab{flex:1;border:0;background:transparent;color:#c4cedb;font-size:12px;padding:6px;border-radius:5px;cursor:pointer}
+.gen-tab.on{background:#365a7c;color:#fff}
+.gen-prompt{width:100%;box-sizing:border-box;background:#171b20;color:#f0f3f7;border:1px solid #3c4652;border-radius:7px;padding:8px 9px;font-size:12px;line-height:1.55;resize:vertical;outline:none;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.gen-prompt::placeholder{color:#9aa6b5}
+.gen-prompt:focus{border-color:#5e9fd4;box-shadow:0 0 0 2px rgba(78,143,199,.18)}
+.gen-chips{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 9px}
+.gen-chip{border:1px solid #46515f;background:#262d36;color:#d6deea;border-radius:12px;padding:3px 8px;font-size:10px;cursor:pointer;white-space:nowrap}
+.gen-chip:hover{border-color:#69a4d4;color:#f3f9ff;background:#2d3b49}
+.gen-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#cbd5e1;margin:4px 0 6px}
+.gen-line select{max-width:105px}
+.gen-controls .slider-row span,.gen-controls .slider-row label{color:#cbd5e1}
+.gen-seed{width:82px;background:#171b20;color:#eef2f7;border:1px solid #3c4652;border-radius:4px;font-size:11px;padding:3px 4px}
+.gen-actions{display:flex;gap:6px;margin:8px 0}
+.gen-primary{flex:1;border:1px solid #4b7fae;background:linear-gradient(180deg,#3b7fb3,#2d628f);color:#fff;border-radius:7px;padding:9px;font-size:13px;font-weight:600;cursor:pointer}
+.gen-primary:hover{background:linear-gradient(180deg,#478fc5,#3472a2)}
+.gen-primary:disabled{opacity:.55;cursor:wait}
+.gen-progress{display:flex;align-items:center;gap:7px;font-size:11px;color:#e0e8f2;background:rgba(65,110,155,.2);border:1px solid rgba(90,140,190,.38);border-radius:6px;padding:7px 8px;margin:7px 0;line-height:1.5}
+.gen-spin{width:11px;height:11px;border:2px solid rgba(255,255,255,.25);border-top-color:#7fc3ff;border-radius:50%;animation:genSpin .8s linear infinite;flex:0 0 auto}
+@keyframes genSpin{to{transform:rotate(360deg)}}
+.gen-note{font-size:10px;line-height:1.55;color:#c2ccda;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.11);border-radius:6px;padding:6px 8px;margin:7px 0;white-space:normal;word-break:break-word}
+.gen-install-row{display:flex;gap:6px;margin:6px 0}
+.gen-install-row .mini-btn{flex:1;padding:5px 6px;font-size:10px}
+.gen-help{font-size:10px;line-height:1.6;color:#a6b1c1;margin-top:6px}
+#genOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:20px}
+#genOverlay.on{display:flex}
+.gen-result-box{width:min(1120px,96vw);max-height:94vh;background:#202328;color:#e7e9ee;border:1px solid #424852;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.gen-result-head{display:flex;align-items:center;gap:9px;padding:12px 16px;border-bottom:1px solid #363b44;background:#1b1e23}
+.gen-result-head b{font-size:14px}
+.gen-result-head .sub{font-size:10px;color:#8f96a3;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gen-result-close{border:0;background:transparent;color:#9aa0aa;font-size:22px;cursor:pointer;line-height:1}
+.gen-result-body{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px;overflow:auto;min-height:260px}
+.gen-result-pane{display:flex;flex-direction:column;gap:5px;min-width:0}
+.gen-result-pane span{font-size:10px;color:#8f96a3}
+.gen-result-pane img{width:100%;max-height:62vh;object-fit:contain;background:#111;border:1px solid #3a4049;border-radius:7px}
+.gen-result-foot{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid #363b44;background:#1b1e23;font-size:10px;color:#8f96a3;flex-wrap:wrap}
+.gen-result-foot .grow{flex:1}
+.gen-result-foot button{border:1px solid #4b6c93;background:#2f5f8f;color:#fff;border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer}
+.gen-result-foot button.alt{background:#3b3f47;border-color:#555b66}
+.gen-result-foot button.green{background:#2d7a50;border-color:#3e9a66}
+body.skin-light .gen-badge,body.skin-frost .gen-badge,body.skin-aurora .gen-badge{background:#eaf7ee;border-color:#b9dfc5;color:#257544}
+body.skin-light .gen-status-line,body.skin-frost .gen-status-line,body.skin-aurora .gen-status-line{color:#3f4856}
+body.skin-light .gen-tabs,body.skin-frost .gen-tabs,body.skin-aurora .gen-tabs{background:#fff;border-color:#d9dde5}
+body.skin-light .gen-tab,body.skin-frost .gen-tab,body.skin-aurora .gen-tab{color:#697386}
+body.skin-light .gen-tab.on,body.skin-frost .gen-tab.on,body.skin-aurora .gen-tab.on{background:#dceaf8;color:#12558f}
+body.skin-light .gen-prompt,body.skin-frost .gen-prompt,body.skin-aurora .gen-prompt{background:#fff;color:#25282e;border-color:#cfd4dd}
+body.skin-light .gen-chip,body.skin-frost .gen-chip,body.skin-aurora .gen-chip{background:#f4f6fa;border-color:#d6dbe4;color:#536071}
+body.skin-light .gen-seed,body.skin-frost .gen-seed,body.skin-aurora .gen-seed{background:#fff;color:#222;border-color:#cfd4dd}
+body.skin-light .gen-note,body.skin-frost .gen-note,body.skin-aurora .gen-note{background:#f7f9fc;border-color:#e1e5eb;color:#4b5563}
+body.skin-light .gen-help,body.skin-frost .gen-help,body.skin-aurora .gen-help{color:#55606e}
+body.skin-light .gen-progress,body.skin-frost .gen-progress,body.skin-aurora .gen-progress{background:#eef6ff;border-color:#c9def2;color:#31516d}
+body.skin-light .gen-result-box,body.skin-frost .gen-result-box,body.skin-aurora .gen-result-box{background:#fff;color:#25282e;border-color:#d7d9df}
+body.skin-light .gen-result-head,body.skin-frost .gen-result-head,body.skin-aurora .gen-result-head{background:#f4f5f8;border-color:#e3e4e8}
+body.skin-light .gen-result-foot,body.skin-frost .gen-result-foot,body.skin-aurora .gen-result-foot{background:#f4f5f8;border-color:#e3e4e8}
+body.skin-light .gen-result-pane img,body.skin-frost .gen-result-pane img,body.skin-aurora .gen-result-pane img{border-color:#d5d9e0}
 </style>
 <div id="proOverlay" onclick="if(event.target===this)proClose()">
   <div class="pro-box" role="dialog" aria-modal="true" aria-label="专业工具">
@@ -5850,6 +5922,163 @@ body.skin-light .edx-gr.on{color:#12558f;background:#dceaf8;border-color:#b8d3ec
     </div>
   </div>
 </div>
+
+<div id="genOverlay" onclick="if(event.target===this)genClose()">
+  <div class="gen-result-box" role="dialog" aria-modal="true" aria-label="生成式修图结果">
+    <div class="gen-result-head"><b>生成式修图结果</b><span class="sub" id="genResultSub">FLUX.2 Klein 4B</span><button class="gen-result-close" onclick="genClose()" title="关闭">×</button></div>
+    <div class="gen-result-body">
+      <div class="gen-result-pane"><span>原图 / 当前裁切</span><img id="genOrigImg" alt="原图"></div>
+      <div class="gen-result-pane"><span>生成结果</span><img id="genResultImg" alt="生成结果"></div>
+    </div>
+    <div class="gen-result-foot">
+      <span id="genResultMeta">等待生成</span><span class="grow"></span>
+      <button class="green" onclick="genApply()">作为新图片加入编辑器</button>
+      <button class="alt" onclick="genSave()">保存到输出目录</button>
+      <button class="alt" onclick="genClose()">关闭</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var GEN = window._gen = { mode:'edit', ready:false, busy:false, installBusy:false, lastResult:'', lastMeta:'', userSize:false };
+  function el(id){ return document.getElementById(id); }
+  function toast(s){ try{ toastMsg(s); }catch(e){ console.log(s); } }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  var CHIPS = {
+    edit: [
+      ['电影感青橙','电影感青橙色调，保留人物与构图，真实肤色，轻微胶片颗粒'],
+      ['雨夜霓虹','把背景换成雨夜霓虹街头，地面有湿润反光，保留人物和构图'],
+      ['去掉路人','去掉画面里多余的游客和杂物，保留主体、地面与建筑结构'],
+      ['水彩插画','改成水彩插画风格，保留人物五官和主要构图，纸张纹理'],
+      ['干净产品图','把背景换成干净浅灰摄影棚背景，柔和顶光，产品边缘清晰'],
+      ['黑白纪实','黑白纪实摄影风格，高对比，保留皮肤纹理和现场细节']
+    ],
+    portrait: [
+      ['自然美颜','自然美颜：均匀肤色、淡化痘印和黑眼圈，保留毛孔与真实皮肤纹理'],
+      ['日常妆','换成日常通勤妆容：轻薄底妆、自然眉形、淡珊瑚唇色，保留本人五官'],
+      ['黑色西装','把衣服换成合身黑色西装和白衬衫，保留姿势、脸型和背景'],
+      ['脸部瘦一圈','脸部轻微瘦一圈，收紧下颌线，保留五官比例和身份特征'],
+      ['棚拍柔光','棚拍柔光人像：柔光箱主光、浅灰背景、干净通透的肤色'],
+      ['换发色','换成深棕色微卷长发，保留脸型、五官和原有光线']
+    ]
+  };
+  function setDot(cls, txt){ var d=el('genStatusDot'), t=el('genStatusText'); if(d)d.className='gen-dot'+(cls?(' '+cls):''); if(t)t.textContent=txt||''; }
+  function setProgress(on, txt){ var p=el('genProgress'); if(p)p.style.display=on?'flex':'none'; if(txt&&el('genProgressText'))el('genProgressText').textContent=txt; }
+  window.genMode=function(mode){
+    GEN.mode = (mode==='portrait')?'portrait':'edit';
+    document.querySelectorAll('.gen-tab').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode')===GEN.mode); });
+    var p=el('genPrompt');
+    if(p) p.placeholder = GEN.mode==='portrait'
+      ? '描述人像怎么修，例如：自然美颜，换成日常妆，保留五官和皮肤纹理'
+      : '描述你想怎么改，例如：把背景换成雨夜霓虹街头，保留人物和构图';
+    var pr=el('genProtect');
+    if(pr){ pr.disabled = GEN.mode!=='portrait'; pr.checked = GEN.mode==='portrait'; }
+    renderChips();
+  };
+  function renderChips(){
+    var box=el('genChips'); if(!box)return;
+    box.innerHTML='';
+    (CHIPS[GEN.mode]||[]).forEach(function(c){
+      var b=document.createElement('button'); b.type='button'; b.className='gen-chip'; b.textContent=c[0];
+      b.onclick=function(){ var p=el('genPrompt'); if(p){ p.value=c[1]; p.focus(); } };
+      box.appendChild(b);
+    });
+  }
+  window.genStatus=function(){
+    setDot('', '正在检测本地模型…');
+    post('genedit_status');
+  };
+  window.genRandomSeed=function(){ var s=el('genSeed'); if(s)s.value=String(Math.floor(Math.random()*2147483647)); };
+  window.genRun=function(){
+    if(GEN.busy){ toast('正在生成，请等这一张完成'); return; }
+    var p=el('genPrompt'); var prompt=(p?p.value:'')||'';
+    prompt=prompt.trim();
+    if(!prompt){ toast('先写一句想怎么修，或点一个预设'); if(p)p.focus(); return; }
+    if(!GEN.ready){ toast('本地模型还没就绪，先点「下载模型」或「检测模型」'); genStatus(); return; }
+    var steps=parseInt((el('genSteps')||{}).value||'4',10); if(!steps)steps=4;
+    var strength=parseInt((el('genStrength')||{}).value||'78',10); if(!strength)strength=78;
+    var maxSide=parseInt((el('genMaxSide')||{}).value||'1024',10); if(!maxSide)maxSide=1024;
+    var seed=parseInt((el('genSeed')||{}).value||'-1',10); if(isNaN(seed))seed=-1;
+    var protect=!!(el('genProtect')&&el('genProtect').checked&&GEN.mode==='portrait');
+    var cfg={mode:GEN.mode,prompt:prompt,steps:steps,strength:strength/100,max_side:maxSide,seed:seed,protect_face:protect};
+    GEN.busy=true; GEN.lastResult=''; GEN.lastCfg=cfg;
+    var btn=el('genRunBtn'); if(btn){ btn.disabled=true; btn.textContent='生成中…'; }
+    setProgress(true, GEN.mode==='portrait'?'人像生成中：首次加载模型约 1–3 分钟…':'生成中：首次加载模型约 1–3 分钟…');
+    post('genedit|'+edxB64(JSON.stringify(cfg)));
+  };
+  window.genInstall=function(){
+    if(GEN.installBusy){ toast('模型正在下载，请稍候'); return; }
+    GEN.installBusy=true;
+    var b=el('genInstallBtn'); if(b){ b.disabled=true; b.textContent='下载中…'; }
+    setProgress(true,'正在准备下载…');
+    post('genedit_install');
+  };
+  window.genApply=function(){ if(!GEN.lastResult){ toast('还没有生成结果'); return; } post('genedit_add|'+edxB64(GEN.lastResult)); genClose(); };
+  window.genSave=function(){ if(!GEN.lastResult){ toast('还没有生成结果'); return; } post('genedit_save|'+edxB64(GEN.lastResult)); genClose(); };
+  window.genClose=function(){ var o=el('genOverlay'); if(o)o.classList.remove('on'); };
+  window.genHandle=function(m){
+    var t=m.type;
+    if(t==='genedit_start'){ setProgress(true,'正在读取当前裁切并启动模型…'); return; }
+    if(t==='genedit_status'){
+      var ready=!!m.ready; GEN.ready=ready;
+      var gpu=m.gpu?String(m.gpu):'未检测到 NVIDIA';
+      var vr=(typeof m.vramGb==='number'&&m.vramGb>0)?(' · '+m.vramGb+'GB 显存'):'';
+      if(ready) setDot('ok','本地就绪 · '+gpu+vr+' · '+(m.backend||'cuda0'));
+      else setDot('err','缺少：'+(m.missing||'模型或运行时')+'（'+gpu+vr+'）');
+      var note=el('genNote');
+      if(note) note.textContent = ready ? '模型已就绪。首次生成会加载模型，6GB 显卡建议 768 长边、4 步；8GB 可试 1024。' : ('首次使用需要下载约 6GB 模型。当前缺少：'+(m.missing||'模型或运行时')+'。下载后会自动校验并放到安装目录。');
+      var ib=el('genInstallBtn'); if(ib){ ib.disabled=false; ib.textContent = ready?'模型已安装':'下载模型（约 6GB）'; }
+      if((m.recommendedMaxSide===768||m.recommendedMaxSide===1024||m.recommendedMaxSide===1280)&&!GEN.userSize){ var ms=el('genMaxSide'); if(ms)ms.value=String(m.recommendedMaxSide); }
+      return;
+    }
+    if(t==='genedit'){
+      var d=m.data||{};
+      if(!d.ok){
+        GEN.busy=false; var btn=el('genRunBtn'); if(btn){btn.disabled=false;btn.textContent='生成修图';}
+        setProgress(false);
+        var msg=d.error||'生成失败';
+        if(d.detail) msg += '：'+String(d.detail).slice(0,160);
+        var note=el('genNote'); if(note)note.textContent=msg;
+        toast('生成失败：'+msg);
+        if(d.code==='model_missing') genStatus();
+        return;
+      }
+      GEN.lastResult=d.output||'';
+      GEN.lastMeta=(d.model||'FLUX.2 Klein 4B')+' · '+(d.width||'?')+'×'+(d.height||'?')+' · '+(d.elapsed||'?')+'s · seed '+(d.seed||'?');
+      setProgress(true,'生成完成，正在加载预览…');
+      return;
+    }
+    if(t==='genedit_preview'){
+      if(!m.result) return;
+      var oi=el('genOrigImg'), ri=el('genResultImg');
+      if(oi)oi.src=m.orig||'';
+      if(ri)ri.src=m.result||'';
+      var sub=el('genResultSub'); if(sub)sub.textContent=(GEN.lastCfg&&GEN.lastCfg.mode==='portrait'?'人像模式':'修图模式')+' · FLUX.2 Klein 4B';
+      var meta=el('genResultMeta'); if(meta)meta.textContent=GEN.lastMeta||'生成完成';
+      var ov=el('genOverlay'); if(ov)ov.classList.add('on');
+      GEN.busy=false; var b=el('genRunBtn'); if(b){b.disabled=false;b.textContent='生成修图';}
+      setProgress(false);
+      return;
+    }
+    if(t==='genedit_install'){
+      if(m.done){
+        GEN.installBusy=false; var ib=el('genInstallBtn'); if(ib){ib.disabled=false;ib.textContent='下载模型（约 6GB）';}
+        setProgress(false);
+        var dd=m.data||{};
+        if(dd.ok){ toast('模型安装完成'); genStatus(); }
+        else { var note=el('genNote'); if(note)note.textContent=(dd.error||'下载失败'); toast('下载失败：'+(dd.error||'未知错误')); }
+      } else {
+        var phase=m.phase||'下载';
+        var pct=(typeof m.percent==='number')?m.percent.toFixed(1):'0.0';
+        setProgress(true,'下载 '+phase+' '+pct+'%'+(m.detail?(' · '+m.detail):''));
+      }
+      return;
+    }
+  };
+  document.addEventListener('DOMContentLoaded', function(){ genMode('edit'); setTimeout(genStatus, 420); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') genClose(); });
+})();
+</script>
 <script>
 (function(){
   function files(){ return (window._files||[]).map(function(f){ return (typeof f==='object') ? (f.path||f.name) : f; }).filter(Boolean); }
@@ -6025,6 +6254,7 @@ body.skin-light .edx-gr.on{color:#12558f;background:#dceaf8;border-color:#b8d3ec
 </script>
 
 </body></html>
+
 
 
 
