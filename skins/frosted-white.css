@@ -828,3 +828,108 @@ body.skin-frost #skinMenu .skin-item.on { background: rgba(255,255,255,.74); bor
 body.skin-frost #skinMenu .skin-check { border-color: rgba(32,60,100,.18); }
 body.skin-frost #skinMenu .skin-menu-foot { border-top-color: rgba(32,60,100,.10); }
 
+/* ==========================================================================
+   v2.30 · 可读性补强（只改颜色与不透明度，不改功能与布局）
+   柔光白在明亮桌面照片上会透出高亮底色，选中行仍用白字会看不清。
+   ========================================================================== */
+body.skin-frost {
+  --lg-ink: #061a33;
+  --lg-ink-soft: #173252;
+  --lg-muted: rgba(10, 30, 55, .84);
+  --lg-muted-strong: rgba(5, 22, 44, .95);
+}
+body.skin-frost .left,
+body.skin-frost .right {
+  background:
+    linear-gradient(148deg, rgba(255,255,255,.92) 0%, rgba(248,252,255,.78) 42%, rgba(239,247,255,.86) 100%) !important;
+}
+body.skin-frost .section-header {
+  background: linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(246,252,255,.76) 100%) !important;
+  color: var(--lg-ink) !important;
+  text-shadow: none !important;
+}
+body.skin-frost .section-header .arrow,
+body.skin-frost .section-header .arrow span { color: #53657c !important; }
+body.skin-frost .file-item:not(.sel),
+body.skin-frost .lut-item:not(.sel),
+body.skin-frost .lut-group-title,
+body.skin-frost .lut-header,
+body.skin-frost .output-info,
+body.skin-frost .bottom-label,
+body.skin-frost .zoom-label,
+body.skin-frost .status,
+body.skin-frost .status-pct,
+body.skin-frost .preview-empty,
+body.skin-frost .hist-labels,
+body.skin-frost .row-line,
+body.skin-frost .row-line > span,
+body.skin-frost .slider-row label,
+body.skin-frost .slider-row .val,
+body.skin-frost .chk,
+body.skin-frost .edx-tip,
+body.skin-frost .pro-note,
+body.skin-frost .gen-note,
+body.skin-frost .gen-help,
+body.skin-frost .gen-status-line,
+body.skin-frost .gen-result-meta {
+  color: var(--lg-ink) !important;
+  text-shadow: none !important;
+}
+body.skin-frost .file-item .fsize,
+body.skin-frost .left-header,
+body.skin-frost .left-header .count,
+body.skin-frost .sub-title,
+body.skin-frost .edx-tip,
+body.skin-frost .output-info,
+body.skin-frost .status,
+body.skin-frost .status-pct,
+body.skin-frost .bottom-label,
+body.skin-frost .zoom-label,
+body.skin-frost .hist-labels,
+body.skin-frost .gen-help,
+body.skin-frost .gen-note {
+  color: var(--lg-muted) !important;
+}
+body.skin-frost .file-item.sel {
+  color: #06345f !important;
+  background: rgba(72,166,255,.22) !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.34) !important;
+}
+body.skin-frost .file-item.sel .fsize { color: rgba(6,52,95,.78) !important; }
+body.skin-frost .lut-item.sel {
+  color: #06345f !important;
+  background: rgba(72,166,255,.20) !important;
+}
+body.skin-frost .left [style*="color:#555"],
+body.skin-frost .left [style*="color:#666"],
+body.skin-frost .left [style*="color:#888"],
+body.skin-frost .left [style*="color:#999"],
+body.skin-frost .left [style*="color:#aaa"],
+body.skin-frost .right [style*="color:#555"],
+body.skin-frost .right [style*="color:#666"],
+body.skin-frost .right [style*="color:#888"],
+body.skin-frost .right [style*="color:#999"],
+body.skin-frost .right [style*="color:#aaa"] {
+  color: #40546f !important;
+  text-shadow: none !important;
+}
+body.skin-frost .left [style*="color:#bbb"],
+body.skin-frost .left [style*="color:#ccc"],
+body.skin-frost .left [style*="color:#ddd"],
+body.skin-frost .right [style*="color:#bbb"],
+body.skin-frost .right [style*="color:#ccc"],
+body.skin-frost .right [style*="color:#ddd"] {
+  color: var(--lg-ink) !important;
+}
+body.skin-frost input::placeholder,
+body.skin-frost textarea::placeholder { color: rgba(19,42,70,.55) !important; }
+
+/* AI 面板里的控件标签单独压深，避免滑块两侧出现浅灰字 */
+body.skin-frost .gen-controls .slider-row > span,
+body.skin-frost .gen-controls .slider-row > .val,
+body.skin-frost .gen-line,
+body.skin-frost .gen-line > span { color: var(--lg-ink) !important; text-shadow: none !important; }
+body.skin-frost .gen-prompt::placeholder { color: rgba(19,42,70,.55) !important; }
+
+
+

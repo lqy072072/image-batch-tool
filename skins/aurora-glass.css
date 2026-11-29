@@ -4,39 +4,45 @@
    新增皮肤时复制本文件改名，并在 skins/skin-core.js 的 SKINS 中登记即可。
    ========================================================================== */
 
+/* v2.32 真透明：根元素必须完全透明，否则 WebView2 下方仍会被 #2d2d2d 盖住。 */
+html.skin-aurora-html {
+  background: transparent !important;
+}
+
 body.skin-aurora {
-  --lg-ink: #10223d;
-  --lg-ink-soft: #27405f;
-  --lg-muted: rgba(22,40,66,.68);
-  --lg-muted-strong: rgba(22,40,66,.84);
-  --lg-line: rgba(255,255,255,.58);
-  --lg-line-strong: rgba(255,255,255,.78);
+  --lg-ink: #05182d;
+  --lg-ink-soft: #12314f;
+  --lg-muted: rgba(7, 29, 52, .78);
+  --lg-muted-strong: rgba(4, 22, 42, .93);
+  --lg-line: rgba(255,255,255,.50);
+  --lg-line-strong: rgba(255,255,255,.74);
   --lg-accent: #0a84ff;
   --lg-accent-deep: #3867ff;
   --lg-violet: #7b61ff;
   --lg-panel:
-    linear-gradient(148deg, rgba(255,255,255,.72) 0%, rgba(247,252,255,.42) 42%, rgba(236,246,255,.58) 100%);
+    linear-gradient(154deg, rgba(207,228,244,.54) 0%, rgba(226,241,251,.32) 44%, rgba(174,205,229,.46) 100%);
   --lg-panel-soft:
-    linear-gradient(152deg, rgba(255,255,255,.56) 0%, rgba(247,251,255,.28) 48%, rgba(239,247,255,.46) 100%);
+    linear-gradient(152deg, rgba(216,234,247,.42) 0%, rgba(230,243,251,.22) 48%, rgba(186,214,234,.36) 100%);
   --lg-control:
-    linear-gradient(145deg, rgba(255,255,255,.84) 0%, rgba(241,248,255,.52) 52%, rgba(255,255,255,.66) 100%);
+    linear-gradient(145deg, rgba(255,255,255,.48) 0%, rgba(208,230,246,.24) 52%, rgba(235,247,254,.38) 100%);
   --lg-control-hi:
-    linear-gradient(145deg, rgba(255,255,255,.96) 0%, rgba(236,246,255,.68) 52%, rgba(255,255,255,.82) 100%);
+    linear-gradient(145deg, rgba(255,255,255,.64) 0%, rgba(218,237,250,.38) 52%, rgba(244,252,255,.52) 100%);
   --lg-pop:
-    linear-gradient(148deg, rgba(253,255,255,.92) 0%, rgba(240,247,255,.76) 48%, rgba(248,244,255,.84) 100%);
+    linear-gradient(150deg, rgba(225,240,251,.80) 0%, rgba(199,223,241,.68) 48%, rgba(229,243,252,.76) 100%);
   --lg-smoke:
     linear-gradient(148deg, rgba(31,47,74,.80) 0%, rgba(45,64,96,.52) 52%, rgba(31,45,70,.72) 100%);
-  --lg-shadow: 0 16px 42px rgba(48,82,136,.18), 0 3px 10px rgba(28,54,96,.10);
-  --lg-shadow-lift: 0 22px 56px rgba(48,82,136,.24), 0 7px 18px rgba(28,54,96,.12);
-  --lg-inner: inset 0 1px 0 rgba(255,255,255,.92), inset 0 -1px 0 rgba(255,255,255,.26);
+  --lg-shadow: 0 18px 46px rgba(4,22,46,.20), 0 3px 10px rgba(4,20,42,.12);
+  --lg-shadow-lift: 0 24px 60px rgba(4,22,46,.26), 0 8px 20px rgba(4,20,42,.14);
+  --lg-inner: inset 0 1px 0 rgba(255,255,255,.88), inset 0 -1px 0 rgba(255,255,255,.28);
   --lg-inner-dark: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(0,0,0,.20);
 
+  /* 只铺一层很淡的极光色；真正透出的是窗口下方实时桌面/其它窗口。 */
   background:
-    radial-gradient(980px 620px at 5% -12%, rgba(255,191,235,.72) 0%, rgba(255,191,235,0) 63%),
-    radial-gradient(900px 580px at 98% 2%, rgba(146,215,255,.76) 0%, rgba(146,215,255,0) 64%),
-    radial-gradient(820px 660px at 74% 108%, rgba(174,151,255,.58) 0%, rgba(174,151,255,0) 65%),
-    radial-gradient(680px 500px at 12% 94%, rgba(137,255,226,.46) 0%, rgba(137,255,226,0) 66%),
-    linear-gradient(150deg, #f7fbff 0%, #e9f0ff 32%, #f4ebff 66%, #eaf9ff 100%) !important;
+    radial-gradient(980px 620px at 5% -12%, rgba(255,191,235,.20) 0%, rgba(255,191,235,0) 63%),
+    radial-gradient(900px 580px at 98% 2%, rgba(146,215,255,.22) 0%, rgba(146,215,255,0) 64%),
+    radial-gradient(820px 660px at 74% 108%, rgba(174,151,255,.18) 0%, rgba(174,151,255,0) 65%),
+    radial-gradient(680px 500px at 12% 94%, rgba(137,255,226,.16) 0%, rgba(137,255,226,0) 66%),
+    linear-gradient(150deg, rgba(247,251,255,.16) 0%, rgba(233,240,255,.10) 32%, rgba(244,235,255,.13) 66%, rgba(234,249,255,.11) 100%) !important;
   color: var(--lg-ink) !important;
   color-scheme: light;
   background-attachment: fixed !important;
@@ -837,10 +843,10 @@ body.skin-aurora #skinMenu .skin-menu-foot { border-top-color: rgba(32,60,100,.1
    ========================================================================== */
 
 html.skin-aurora-html {
-  background: #071426 !important;
+  background: transparent !important;
 }
 html.skin-aurora-html body.skin-aurora {
-  background-color: #071426 !important;
+  background-color: transparent !important;
 }
 
 body.skin-aurora {
@@ -926,12 +932,17 @@ body.skin-aurora .left { border-right: 1px solid rgba(255,255,255,.44) !importan
 body.skin-aurora .right { border-left: 1px solid rgba(255,255,255,.44) !important; }
 body.skin-aurora .center { background: transparent !important; }
 body.skin-aurora .preview-area {
+  /* 预览区需要稳定的深色底看照片，同时保留一点玻璃透感，不能把桌面文字透进来。 */
   background:
-    radial-gradient(circle at 50% 34%, rgba(255,255,255,.16) 0%, rgba(25,45,70,.26) 54%, rgba(9,20,35,.40) 100%) !important;
+    radial-gradient(circle at 50% 34%, rgba(255,255,255,.08) 0%, rgba(255,255,255,0) 38%),
+    linear-gradient(#0a1524,#0a1524) !important;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.34), inset 0 30px 100px rgba(8,22,42,.22) !important;
   -webkit-backdrop-filter: blur(34px) saturate(170%);
   backdrop-filter: blur(34px) saturate(170%);
 }
+/* 深色画布上的空状态文字，不能沿用浅色面板的深墨色，否则几乎看不见。 */
+body.skin-aurora .preview-area .preview-empty { color: rgba(226,239,255,.70) !important; text-shadow: 0 1px 8px rgba(0,0,0,.35) !important; }
+body.skin-aurora .preview-area .preview-empty .icon { opacity: .62; }
 body.skin-aurora .ruler-row,
 body.skin-aurora .ruler-v-col { background: rgba(255,255,255,.22) !important; border-color: rgba(255,255,255,.42) !important; }
 body.skin-aurora .ruler-corner { border-color: rgba(255,255,255,.42) !important; }
@@ -1392,8 +1403,9 @@ body.skin-aurora .lut-menu,
 body.skin-aurora .alb-opt-menu,
 body.skin-aurora .alb-ctx-menu {
   background:
-    radial-gradient(120% 90% at 18% 0%, rgba(255,255,255,.46), rgba(255,255,255,0) 56%),
-    linear-gradient(145deg, rgba(252,255,255,.64) 0%, rgba(230,247,255,.40) 48%, rgba(246,235,255,.46) 100%) !important;
+    radial-gradient(120% 90% at 18% 0%, rgba(255,255,255,.34), rgba(255,255,255,0) 56%),
+    linear-gradient(145deg, rgba(246,253,255,.94) 0%, rgba(214,235,248,.92) 48%, rgba(232,245,253,.93) 100%) !important;
+  background-color: #d8e9f6 !important;
   color: var(--lg-ink) !important;
   border: 1px solid rgba(255,255,255,.62) !important;
   box-shadow:
@@ -1884,16 +1896,9 @@ body.skin-aurora .alb-dedup-btn {
    - 相册覆盖层不再画深色底，只留极薄乳白膜，让真实桌面从卡片四周透出。
    ========================================================================== */
 html.skin-aurora-html {
-  background-color: #071426 !important;
-  background-image:
-    radial-gradient(1200px 800px at 8% -14%, rgba(80, 208, 255, .16) 0%, rgba(80,208,255,0) 62%),
-    radial-gradient(1000px 760px at 98% -2%, rgba(255, 138, 226, .14) 0%, rgba(255,138,226,0) 64%),
-    linear-gradient(180deg, rgba(255,255,255,.10) 0%, rgba(6,22,44,.08) 48%, rgba(255,255,255,.06) 100%),
-    var(--live-glass, linear-gradient(135deg, #0a2038 0%, #061426 100%)) !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
-  background-position: center center !important;
-  background-attachment: scroll !important;
+  /* 真透明：根背景必须完全透明，不能再垫 #071426 或静态桌面图。 */
+  background: transparent !important;
+  background-image: none !important;
 }
 html.skin-aurora-html body.skin-aurora { background: transparent !important; }
 
@@ -2090,4 +2095,804 @@ body.skin-aurora .dup-head .title-wrap {
 body.skin-aurora .dup-head .s {
   color: #41617f !important;
   text-shadow: none !important;
+}
+
+/* v2.29 静态玻璃：底图已在 C# 端做过 BoxBlur，页面不再对整屏图像反复做 backdrop-filter。
+   这样既保留“透过磨砂玻璃看到桌面”的观感，也避免 WebView2 每帧重算大图模糊。 */
+html.skin-aurora-html.glass-static *,
+html.skin-aurora-html.glass-static *::before,
+html.skin-aurora-html.glass-static *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* 顶栏的 8 秒无限扫光是玻璃静态模式下最大的持续重绘源；关掉它，CPU 从约 15% 降到 1% 以下。
+   静态底图本身已带模糊与极光，不再需要这条动态高光。 */
+html.skin-aurora-html.glass-static .titlebar::after,
+html.skin-aurora-html.glass-static .alb-titlebar::after,
+html.skin-aurora-html.glass-static .alb-head::after,
+html.skin-aurora-html.glass-static .dup-head::after,
+html.skin-aurora-html.glass-static .pro-head::after {
+  animation: none !important;
+}
+
+/* ==========================================================================
+   v2.30 · 可读性补强（只改颜色与玻璃不透明度，不改任何功能与布局）
+   静态底图可能来自深色桌面，原面板透出后会把深色字压在深色玻璃上。
+   这里把左右面板与顶栏提高到接近乳白玻璃，并统一左/右栏正文与说明文字的
+   对比度；选中、激活、错误等语义色仍由原规则控制。
+   ========================================================================== */
+body.skin-aurora {
+  --lg-ink: #061a33;
+  --lg-ink-soft: #173252;
+  --lg-muted: rgba(10, 30, 55, .84);
+  --lg-muted-strong: rgba(5, 22, 44, .95);
+}
+
+body.skin-aurora .left,
+body.skin-aurora .right {
+  background:
+    radial-gradient(130% 74% at 18% -18%, rgba(255,255,255,.94) 0%, rgba(255,255,255,.70) 58%),
+    linear-gradient(142deg, rgba(251,253,255,.94) 0%, rgba(241,249,255,.86) 45%, rgba(230,243,255,.90) 100%) !important;
+  border-color: rgba(255,255,255,.78) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(8,38,76,.14),
+    0 18px 46px rgba(4,22,48,.14) !important;
+}
+
+body.skin-aurora .titlebar,
+body.skin-aurora .toolbar,
+body.skin-aurora .bottombar {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255,255,255,.92) 0%, rgba(255,255,255,.56) 54%),
+    linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(244,251,255,.78) 58%, rgba(255,255,255,.88) 100%) !important;
+  border-color: rgba(255,255,255,.80) !important;
+}
+
+body.skin-aurora .section-header {
+  background: linear-gradient(180deg, rgba(255,255,255,.94) 0%, rgba(245,251,255,.80) 100%) !important;
+  color: var(--lg-ink) !important;
+  border-bottom: 1px solid rgba(58,95,138,.20) !important;
+  text-shadow: none !important;
+}
+body.skin-aurora .section-header .arrow,
+body.skin-aurora .section-header .arrow span { color: #53657c !important; }
+
+/* 左/右栏基础正文：统一为深墨色 */
+body.skin-aurora .file-item:not(.sel),
+body.skin-aurora .lut-item:not(.sel),
+body.skin-aurora .lut-group-title,
+body.skin-aurora .lut-header,
+body.skin-aurora .output-info,
+body.skin-aurora .bottom-label,
+body.skin-aurora .zoom-label,
+body.skin-aurora .status,
+body.skin-aurora .status-pct,
+body.skin-aurora .preview-empty,
+body.skin-aurora .hist-labels,
+body.skin-aurora .row-line,
+body.skin-aurora .row-line > span,
+body.skin-aurora .slider-row label,
+body.skin-aurora .slider-row .val,
+body.skin-aurora .chk,
+body.skin-aurora .edx-tip,
+body.skin-aurora .pro-note,
+body.skin-aurora .gen-note,
+body.skin-aurora .gen-help,
+body.skin-aurora .gen-status-line,
+body.skin-aurora .gen-result-meta {
+  color: var(--lg-ink) !important;
+  text-shadow: none !important;
+}
+
+/* 次要说明保持层级但提高最低对比度 */
+body.skin-aurora .file-item .fsize,
+body.skin-aurora .left-header,
+body.skin-aurora .left-header .count,
+body.skin-aurora .sub-title,
+body.skin-aurora .edx-tip,
+body.skin-aurora .output-info,
+body.skin-aurora .status,
+body.skin-aurora .status-pct,
+body.skin-aurora .bottom-label,
+body.skin-aurora .zoom-label,
+body.skin-aurora .hist-labels,
+body.skin-aurora .gen-help,
+body.skin-aurora .gen-note {
+  color: var(--lg-muted) !important;
+}
+
+/* 选中行：浅蓝底上的深蓝字，避免浅灰/白字消失 */
+body.skin-aurora .file-item.sel {
+  color: #06345f !important;
+  background: rgba(72,166,255,.22) !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.34) !important;
+}
+body.skin-aurora .file-item.sel .fsize { color: rgba(6,52,95,.78) !important; }
+body.skin-aurora .lut-item.sel {
+  color: #06345f !important;
+  background: rgba(72,166,255,.20) !important;
+}
+
+/* 内联灰色说明文字在浅色玻璃上要压深 */
+body.skin-aurora .left [style*="color:#555"],
+body.skin-aurora .left [style*="color:#666"],
+body.skin-aurora .left [style*="color:#888"],
+body.skin-aurora .left [style*="color:#999"],
+body.skin-aurora .left [style*="color:#aaa"],
+body.skin-aurora .right [style*="color:#555"],
+body.skin-aurora .right [style*="color:#666"],
+body.skin-aurora .right [style*="color:#888"],
+body.skin-aurora .right [style*="color:#999"],
+body.skin-aurora .right [style*="color:#aaa"] {
+  color: #40546f !important;
+  text-shadow: none !important;
+}
+body.skin-aurora .left [style*="color:#bbb"],
+body.skin-aurora .left [style*="color:#ccc"],
+body.skin-aurora .left [style*="color:#ddd"],
+body.skin-aurora .right [style*="color:#bbb"],
+body.skin-aurora .right [style*="color:#ccc"],
+body.skin-aurora .right [style*="color:#ddd"] {
+  color: var(--lg-ink) !important;
+}
+
+body.skin-aurora input::placeholder,
+body.skin-aurora textarea::placeholder { color: rgba(19,42,70,.55) !important; }
+
+/* AI 面板里的控件标签单独压深，避免滑块两侧出现浅灰字 */
+body.skin-aurora .gen-controls .slider-row > span,
+body.skin-aurora .gen-controls .slider-row > .val,
+body.skin-aurora .gen-line,
+body.skin-aurora .gen-line > span { color: var(--lg-ink) !important; text-shadow: none !important; }
+body.skin-aurora .gen-prompt::placeholder { color: rgba(19,42,70,.55) !important; }
+
+/* ==========================================================================
+   v2.31 · 液态玻璃观感重做
+   1) 背景加入固定的彩色环境光，不依赖桌面快照，深色桌面也有玻璃层次；
+   2) 面板降到半透明乳白玻璃，保留深墨字对比度，同时透出环境色与高光；
+   3) 加厚边缘高光/内侧反光，让玻璃像“立起来”的实体，而不是灰色蒙版。
+   ========================================================================== */
+body.skin-aurora {
+  /* v2.32：这里不能再垫不透明底色，否则色键透出的桌面会被整层盖住。 */
+  background:
+    radial-gradient(820px 620px at 6% -10%, rgba(255,166,235,.22) 0%, rgba(255,166,235,0) 64%),
+    radial-gradient(900px 660px at 102% 0%, rgba(92,214,255,.24) 0%, rgba(92,214,255,0) 66%),
+    radial-gradient(760px 760px at 78% 108%, rgba(154,122,255,.20) 0%, rgba(154,122,255,0) 70%),
+    radial-gradient(640px 520px at 10% 96%, rgba(122,255,219,.16) 0%, rgba(122,255,219,0) 68%),
+    linear-gradient(150deg, rgba(247,251,255,.14) 0%, rgba(233,240,255,.08) 32%, rgba(244,235,255,.12) 66%, rgba(234,249,255,.10) 100%) !important;
+  background-color: transparent !important;
+  background-size: cover, cover, cover, cover, cover !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  background-blend-mode: normal, normal, normal, normal, normal;
+}
+
+body.skin-aurora .left,
+body.skin-aurora .right {
+  background:
+    radial-gradient(120% 70% at 16% -16%, rgba(255,255,255,.94) 0%, rgba(255,255,255,.82) 56%, rgba(255,255,255,.56) 100%),
+    linear-gradient(145deg, rgba(252,255,255,.90) 0%, rgba(235,248,255,.80) 46%, rgba(245,237,255,.84) 100%) !important;
+  background-color: rgba(249,253,255,.90) !important;
+  border-color: rgba(255,255,255,.72) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 0 26px rgba(255,255,255,.16),
+    inset 0 -1px 0 rgba(8,38,76,.16),
+    0 22px 56px rgba(3,18,40,.24),
+    0 6px 16px rgba(6,28,58,.12) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(205%) brightness(1.04);
+  backdrop-filter: blur(40px) saturate(205%) brightness(1.04);
+}
+
+body.skin-aurora .titlebar,
+body.skin-aurora .toolbar,
+body.skin-aurora .bottombar {
+  background:
+    radial-gradient(110% 90% at 16% 0%, rgba(255,255,255,.94) 0%, rgba(255,255,255,.64) 58%),
+    linear-gradient(180deg, rgba(255,255,255,.88) 0%, rgba(239,249,255,.72) 58%, rgba(255,255,255,.82) 100%) !important;
+  background-color: rgba(249,253,255,.86) !important;
+  border-color: rgba(255,255,255,.68) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(195%) brightness(1.03);
+  backdrop-filter: blur(34px) saturate(195%) brightness(1.03);
+}
+
+body.skin-aurora .section-header {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.62) 0%, rgba(246,252,255,.40) 100%) !important;
+  background-color: rgba(250,254,255,.80) !important;
+  color: var(--lg-ink) !important;
+  border-bottom: 1px solid rgba(255,255,255,.56) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92) !important;
+  text-shadow: none !important;
+}
+
+body.skin-aurora .file-item,
+body.skin-aurora .lut-item,
+body.skin-aurora .ai-tool {
+  background: linear-gradient(145deg, rgba(255,255,255,.44) 0%, rgba(247,252,255,.26) 100%) !important;
+  border-color: rgba(255,255,255,.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+body.skin-aurora .file-item:hover,
+body.skin-aurora .lut-item:hover {
+  background: linear-gradient(145deg, rgba(255,255,255,.60) 0%, rgba(240,250,255,.38) 100%) !important;
+  border-color: rgba(255,255,255,.68) !important;
+}
+body.skin-aurora .ai-tool>summary { color: var(--lg-ink) !important; }
+body.skin-aurora .ai-tool-body { color: var(--lg-ink-soft) !important; }
+body.skin-aurora .ai-group-title { color: #0a4c86 !important; text-shadow: 0 1px 0 rgba(255,255,255,.55); }
+body.skin-aurora .ai-line { color: var(--lg-ink-soft) !important; }
+body.skin-aurora .ai-tool-status { color: var(--lg-muted-strong) !important; }
+body.skin-aurora .ai-mini-note,
+body.skin-aurora .ai-path { color: var(--lg-muted) !important; }
+
+body.skin-aurora #skinMenu.skin-menu {
+  background:
+    radial-gradient(120% 100% at 12% 0%, rgba(255,255,255,.97) 0%, rgba(245,252,255,.86) 48%, rgba(249,238,255,.91) 100%) !important;
+  border: 1px solid rgba(255,255,255,.92) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(8,40,80,.12),
+    0 30px 78px rgba(2,16,38,.38),
+    0 8px 24px rgba(4,24,52,.20) !important;
+  -webkit-backdrop-filter: blur(44px) saturate(215%) brightness(1.05);
+  backdrop-filter: blur(44px) saturate(215%) brightness(1.05);
+}
+
+
+
+
+/* v2.31：相册顶栏/路径栏/底栏/回收站加一点实体感，避免白字发灰、透底难读 */
+body.skin-aurora .alb-head {
+  background: linear-gradient(180deg, rgba(255,255,255,.88) 0%, rgba(236,249,255,.74) 54%, rgba(248,240,255,.82) 100%) !important;
+  backdrop-filter: blur(34px) saturate(190%) brightness(1.03) !important;
+  border-bottom-color: rgba(255,255,255,.72) !important;
+}
+body.skin-aurora .alb-paths,
+body.skin-aurora .alb-foot {
+  background: linear-gradient(180deg, rgba(255,255,255,.86) 0%, rgba(236,249,255,.72) 100%) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  border-color: rgba(255,255,255,.62) !important;
+}
+body.skin-aurora #binOverlay .bin-panel.bin-panel {
+  background: linear-gradient(145deg, rgba(252,255,255,.90) 0%, rgba(234,246,255,.80) 100%) !important;
+  backdrop-filter: blur(38px) saturate(185%) !important;
+}
+body.skin-aurora #binOverlay .bin-head.bin-head {
+  background: linear-gradient(180deg, rgba(255,255,255,.94) 0%, rgba(240,250,255,.86) 100%) !important;
+}
+/* v2.32：相册网格是一整片内容区，不能只靠窗口透明；加一层乳白磨砂承托照片，
+   让桌面色只从边缘透进来，避免缩略图缝隙里全是壁纸文字。 */
+body.skin-aurora .alb-body {
+  margin: 0 12px 10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(252,255,255,.90) 0%, rgba(243,250,255,.94) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.92),
+    0 14px 38px rgba(8,28,54,.10) !important;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   v2.35 · 液态玻璃皮肤（冷蓝烟玻璃 / 可读性优先，只改皮肤）
+   1) 窗口仍是“不透明窗口 + 桌面模糊底图”，照片与缩略图 100% 不透明；
+   2) 界面玻璃改为饱和冷蓝灰，降低白色占比，保留高光边与斜向反光；
+   3) 菜单/子界面改为近实底浅玻璃，正文压深、字重提高，保证小字可读；
+   4) 不改任何 DOM、事件、协议与业务函数，只覆盖 body.skin-aurora 下的样式。
+   ========================================================================== */
+
+/* 窗口底色：桌面模糊图 + 冷蓝薄雾，避免整窗发白 */
+body.skin-aurora {
+  background:
+    radial-gradient(960px 620px at 4% -14%, rgba(70,146,198,.18) 0%, rgba(70,146,198,0) 64%),
+    radial-gradient(860px 600px at 100% 0%, rgba(84,178,226,.16) 0%, rgba(84,178,226,0) 66%),
+    radial-gradient(820px 700px at 78% 108%, rgba(112,126,210,.14) 0%, rgba(112,126,210,0) 70%),
+    linear-gradient(155deg, rgba(3,15,30,.42) 0%, rgba(7,27,50,.26) 44%, rgba(3,18,36,.40) 100%),
+    var(--live-glass, linear-gradient(135deg, #0a2038 0%, #061426 100%)) !important;
+  background-color: #07182a !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+  background-attachment: scroll !important;
+  color: var(--lg-ink) !important;
+}
+
+/* ---------- 骨架：冷蓝烟玻璃 ---------- */
+body.skin-aurora .titlebar,
+body.skin-aurora .toolbar,
+body.skin-aurora .bottombar {
+  background:
+    linear-gradient(112deg, rgba(255,255,255,0) 16%, rgba(255,255,255,.16) 38%, rgba(255,255,255,0) 58%),
+    radial-gradient(100% 80% at 12% 0%, rgba(255,255,255,.28) 0%, rgba(255,255,255,0) 62%),
+    linear-gradient(180deg, rgba(112,158,192,.74) 0%, rgba(154,190,214,.58) 56%, rgba(92,136,172,.72) 100%) !important;
+  border-color: rgba(206,238,255,.46) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.74),
+    inset 0 -1px 0 rgba(2,24,48,.20),
+    0 6px 20px rgba(2,14,30,.16) !important;
+}
+
+body.skin-aurora .left,
+body.skin-aurora .right {
+  background:
+    linear-gradient(116deg, rgba(255,255,255,0) 10%, rgba(255,255,255,.15) 34%, rgba(255,255,255,0) 56%),
+    radial-gradient(120% 58% at 16% -12%, rgba(255,255,255,.26) 0%, rgba(255,255,255,0) 66%),
+    linear-gradient(154deg, rgba(127,170,202,.72) 0%, rgba(152,190,216,.60) 47%, rgba(106,150,186,.72) 100%) !important;
+  border-color: rgba(206,238,255,.44) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.76),
+    inset 0 0 34px rgba(166,206,234,.10),
+    inset 0 -1px 0 rgba(2,24,48,.20),
+    0 22px 52px rgba(2,14,30,.22) !important;
+}
+
+/* 分区标题 / 小节标题 */
+body.skin-aurora .section-header,
+body.skin-aurora .left-header,
+body.skin-aurora .panel-divider {
+  background:
+    linear-gradient(180deg, rgba(108,154,188,.56) 0%, rgba(140,180,208,.34) 100%) !important;
+  color: var(--lg-ink) !important;
+  border-color: rgba(210,240,255,.40) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.64) !important;
+}
+
+/* 文件 / LUT / AI 工具条目 */
+body.skin-aurora .file-item,
+body.skin-aurora .lut-item,
+body.skin-aurora .ai-tool {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.22) 0%, rgba(120,166,200,.13) 100%) !important;
+  border-color: rgba(210,240,255,.30) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.42) !important;
+  color: var(--lg-ink) !important;
+}
+body.skin-aurora .file-item:hover,
+body.skin-aurora .lut-item:hover {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.34) 0%, rgba(132,180,214,.18) 100%) !important;
+  border-color: rgba(222,246,255,.56) !important;
+}
+body.skin-aurora .file-item.sel,
+body.skin-aurora .lut-item.sel {
+  background: linear-gradient(145deg, rgba(45,135,229,.92), rgba(18,98,188,.86)) !important;
+  border-color: rgba(147,209,255,.72) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 4px 14px rgba(6,70,140,.20) !important;
+}
+body.skin-aurora .file-item.sel .fsize { color: rgba(255,255,255,.84) !important; }
+
+/* ---------- 按钮：冷蓝玻璃，字重 600，避免“白底白字” ---------- */
+body.skin-aurora button:not(.pro-close):not(.dup-ignore):not(.skin-item):not(.alb-search-btn):not(.alb-ctl.on):not(.bin-btn.danger):not(.dup-btn.danger),
+body.skin-aurora .btn,
+body.skin-aurora .tool-btn,
+body.skin-aurora .lut-mode-btn,
+body.skin-aurora .hist-tab,
+body.skin-aurora .mini-btn,
+body.skin-aurora .alb-btn,
+body.skin-aurora .alb-ctl,
+body.skin-aurora .alb-tab,
+body.skin-aurora .alb-opt-item,
+body.skin-aurora .alb-ctx-item,
+body.skin-aurora .alb-curate-tab,
+body.skin-aurora .edx-tab,
+body.skin-aurora .edx-gr,
+body.skin-aurora .pro-btn {
+  background:
+    radial-gradient(100% 78% at 20% 0%, rgba(255,255,255,.24) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(145deg, rgba(150,190,218,.58) 0%, rgba(108,154,190,.42) 100%) !important;
+  color: var(--lg-ink) !important;
+  border-color: rgba(214,242,255,.54) !important;
+  font-weight: 600 !important;
+  text-shadow: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.62),
+    inset 0 -1px 0 rgba(2,26,52,.10),
+    0 4px 12px rgba(2,24,52,.10) !important;
+}
+body.skin-aurora button:not(.pro-close):not(.dup-ignore):not(.skin-item):not(.alb-search-btn):not(.alb-ctl.on):not(.bin-btn.danger):not(.dup-btn.danger):hover,
+body.skin-aurora .btn:hover,
+body.skin-aurora .tool-btn:hover,
+body.skin-aurora .mini-btn:hover,
+body.skin-aurora .alb-ctl:hover,
+body.skin-aurora .alb-tab:hover,
+body.skin-aurora .edx-gr:hover,
+body.skin-aurora .pro-btn:hover {
+  background:
+    radial-gradient(100% 78% at 20% 0%, rgba(255,255,255,.34) 0%, rgba(255,255,255,0) 62%),
+    linear-gradient(145deg, rgba(186,216,238,.66) 0%, rgba(140,184,214,.50) 100%) !important;
+  border-color: rgba(234,250,255,.74) !important;
+}
+
+/* 主操作 / 选中标签：蓝色玻璃，白色字 */
+body.skin-aurora .tab.active,
+body.skin-aurora .btn-start:not(#lg-none),
+body.skin-aurora .alb-tab.on,
+body.skin-aurora .alb-search-btn,
+body.skin-aurora .alb-search-btn.on,
+body.skin-aurora .alb-ctl.on,
+body.skin-aurora .lut-mode-btn.on,
+body.skin-aurora .hist-tab.on,
+body.skin-aurora .edx-tab.on,
+body.skin-aurora .edx-gr.on,
+body.skin-aurora .pro-btn.primary,
+body.skin-aurora .btn.pri {
+  background:
+    radial-gradient(100% 80% at 22% 0%, rgba(255,255,255,.34) 0%, rgba(255,255,255,0) 58%),
+    linear-gradient(180deg, #329df6 0%, #0a7ce0 100%) !important;
+  border-color: rgba(166,224,255,.80) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(3,44,90,.34) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.50),
+    0 5px 16px rgba(10,92,180,.26) !important;
+}
+body.skin-aurora .alb-ctl.on.warn { background: linear-gradient(180deg,#d59a3e,#a76b1e) !important; color:#fff !important; }
+body.skin-aurora .alb-ctl.on.idle { background: linear-gradient(180deg,#4c9f77,#2f6d4e) !important; color:#fff !important; }
+body.skin-aurora .bin-btn.danger,
+body.skin-aurora .dup-btn.danger,
+body.skin-aurora .alb-opt-item.danger,
+body.skin-aurora .alb-ctx-item.danger,
+body.skin-aurora .alb-modal .btn.danger {
+  background: linear-gradient(180deg, #b24a4a, #8c2f2f) !important;
+  border-color: rgba(240,150,150,.74) !important;
+  color: #fff !important;
+}
+
+/* 输入框 / 下拉框：浅玻璃底，深色字 */
+body.skin-aurora input[type=text],
+body.skin-aurora input[type=search],
+body.skin-aurora input[type=number],
+body.skin-aurora input[type=password],
+body.skin-aurora input:not([type]),
+body.skin-aurora textarea,
+body.skin-aurora select {
+  background:
+    linear-gradient(180deg, rgba(242,251,255,.58) 0%, rgba(208,232,246,.38) 100%) !important;
+  color: #02162c !important;
+  border-color: rgba(224,244,255,.62) !important;
+  font-weight: 500 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.74),
+    inset 0 1px 8px rgba(2,30,60,.10) !important;
+}
+body.skin-aurora input::placeholder,
+body.skin-aurora textarea::placeholder {
+  color: rgba(3,28,52,.62) !important;
+}
+body.skin-aurora select option { background: #eaf6ff !important; color: #02162c !important; }
+
+/* 小字可读性：标签与说明文字统一压深、加粗一级 */
+body.skin-aurora .right label,
+body.skin-aurora .left label,
+body.skin-aurora .slider-row label,
+body.skin-aurora .hist-labels span,
+body.skin-aurora .sub-title,
+body.skin-aurora .left-header .count,
+body.skin-aurora .file-item .fsize,
+body.skin-aurora .edx-tip,
+body.skin-aurora .pro-note,
+body.skin-aurora .status,
+body.skin-aurora .status-pct,
+body.skin-aurora .zoom-label,
+body.skin-aurora .bottom-label {
+  color: var(--lg-muted-strong) !important;
+  font-weight: 600 !important;
+}
+body.skin-aurora .right .sub-title,
+body.skin-aurora .left .sub-title,
+body.skin-aurora .alb-vinfo,
+body.skin-aurora .alb-empty,
+body.skin-aurora .alb-foot,
+body.skin-aurora .alb-foot #albFootInfo,
+body.skin-aurora .alb-foot #albSub,
+body.skin-aurora .alb-paths,
+body.skin-aurora .alb-search-box .mag,
+body.skin-aurora .alb-search-count,
+body.skin-aurora .alb-search-cancel {
+  color: var(--lg-muted) !important;
+}
+body.skin-aurora .alb-foot #albFootInfo .stat b { color: var(--lg-ink) !important; }
+body.skin-aurora .alb-foot #albFootInfo .sep { background: rgba(6,38,70,.28) !important; }
+
+/* 所有骨架/面板不再叠文字白影，避免小字发虚 */
+body.skin-aurora .titlebar,
+body.skin-aurora .toolbar,
+body.skin-aurora .bottombar,
+body.skin-aurora .left,
+body.skin-aurora .right,
+body.skin-aurora .alb-head,
+body.skin-aurora .alb-paths,
+body.skin-aurora .alb-foot,
+body.skin-aurora .alb-body,
+body.skin-aurora .bin-panel,
+body.skin-aurora .dup-panel {
+  text-shadow: none !important;
+}
+
+/* ---------- 皮肤菜单：近实底浅玻璃，深色字 ---------- */
+body.skin-aurora #skinMenu.skin-menu {
+  width: 258px !important;
+  background:
+    radial-gradient(120% 96% at 12% 0%, rgba(255,255,255,.30) 0%, rgba(255,255,255,.04) 54%, rgba(255,255,255,0) 74%),
+    linear-gradient(148deg, rgba(226,241,252,.975) 0%, rgba(204,227,243,.955) 48%, rgba(232,245,253,.965) 100%) !important;
+  background-color: #d8e9f6 !important;
+  border: 1px solid rgba(244,253,255,.86) !important;
+  color: var(--lg-ink) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.94),
+    inset 0 -1px 0 rgba(6,34,64,.12),
+    0 28px 72px rgba(2,14,30,.34),
+    0 8px 22px rgba(3,18,38,.18) !important;
+}
+body.skin-aurora #skinMenu .skin-menu-head b {
+  color: var(--lg-ink) !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+}
+body.skin-aurora #skinMenu .skin-menu-head,
+body.skin-aurora #skinMenu .skin-menu-head span,
+body.skin-aurora #skinMenu .skin-menu-foot {
+  color: rgba(4,28,52,.86) !important;
+  font-size: 10.8px !important;
+}
+body.skin-aurora #skinMenu .skin-item {
+  color: var(--lg-ink) !important;
+  font-weight: 600 !important;
+  border-color: transparent !important;
+}
+body.skin-aurora #skinMenu .skin-name {
+  color: #02162c !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+}
+body.skin-aurora #skinMenu .skin-desc {
+  color: rgba(4,28,52,.86) !important;
+  font-size: 10.8px !important;
+  font-weight: 500 !important;
+}
+body.skin-aurora #skinMenu .skin-item:hover {
+  background: rgba(10,100,180,.10) !important;
+  border-color: rgba(28,118,196,.20) !important;
+}
+body.skin-aurora #skinMenu .skin-item.on {
+  background: linear-gradient(145deg, rgba(70,164,255,.22), rgba(18,112,216,.16)) !important;
+  border-color: rgba(30,132,224,.42) !important;
+}
+body.skin-aurora #skinMenu .skin-check { border-color: rgba(4,42,80,.26) !important; }
+body.skin-aurora #skinMenu .skin-menu-foot { border-top-color: rgba(6,40,76,.14) !important; }
+body.skin-aurora #skinMenu .skin-swatch { box-shadow: inset 0 0 0 1px rgba(255,255,255,.38), 0 2px 6px rgba(2,18,38,.16) !important; }
+
+/* ---------- 预览：深色不透明承托，照片不被透明 ---------- */
+body.skin-aurora .preview-area {
+  background:
+    radial-gradient(circle at 50% 32%, rgba(88,122,166,.28) 0%, rgba(22,38,60,.84) 48%, rgba(5,13,26,1) 100%) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(186,223,250,.22),
+    inset 0 26px 90px rgba(2,9,20,.50) !important;
+  isolation: isolate;
+}
+body.skin-aurora .preview-area img,
+body.skin-aurora .alb-cell img,
+body.skin-aurora .alb-cell .ph img,
+body.skin-aurora .bin-thumb,
+body.skin-aurora .dup-cell img {
+  opacity: 1 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+body.skin-aurora .preview-empty { color: rgba(222,241,255,.88) !important; text-shadow: 0 1px 2px rgba(0,0,0,.45) !important; }
+
+/* 相册/回收站缩略图上的装饰高光会盖住照片，全部去掉 */
+body.skin-aurora .alb-cell::before,
+body.skin-aurora .alb-cell::after,
+body.skin-aurora .bin-cell::before,
+body.skin-aurora .bin-cell::after,
+body.skin-aurora .dup-cell::before,
+body.skin-aurora .dup-cell::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  background: none !important;
+}
+
+/* ---------- 相册：冷蓝玻璃 + 可读小字 ---------- */
+body.skin-aurora .alb-overlay {
+  background:
+    radial-gradient(900px 540px at 4% 0%, rgba(70,150,200,.14) 0%, rgba(70,150,200,0) 66%),
+    radial-gradient(760px 560px at 100% 8%, rgba(96,180,232,.16) 0%, rgba(96,180,232,0) 66%),
+    linear-gradient(155deg, rgba(3,18,34,.18), rgba(8,32,56,.08) 55%, rgba(4,20,38,.16)) !important;
+}
+body.skin-aurora .alb-head {
+  background:
+    linear-gradient(112deg, rgba(255,255,255,0) 16%, rgba(255,255,255,.14) 38%, rgba(255,255,255,0) 58%),
+    radial-gradient(100% 76% at 10% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,0) 62%),
+    linear-gradient(180deg, rgba(112,158,192,.74) 0%, rgba(154,190,214,.58) 56%, rgba(92,136,172,.72) 100%) !important;
+  border-bottom-color: rgba(206,238,255,.42) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 8px 22px rgba(2,14,30,.14) !important;
+}
+body.skin-aurora .alb-paths,
+body.skin-aurora .alb-foot {
+  background: linear-gradient(180deg, rgba(126,170,202,.62) 0%, rgba(156,192,216,.46) 100%) !important;
+  border-color: rgba(206,238,255,.36) !important;
+}
+body.skin-aurora .alb-body {
+  background:
+    linear-gradient(116deg, rgba(255,255,255,0) 12%, rgba(255,255,255,.12) 38%, rgba(255,255,255,0) 58%),
+    linear-gradient(180deg, rgba(127,170,202,.80) 0%, rgba(150,188,214,.72) 52%, rgba(110,154,190,.78) 100%) !important;
+  border-color: rgba(206,240,255,.42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.60),
+    inset 0 0 30px rgba(20,60,96,.08),
+    0 14px 38px rgba(2,14,30,.16) !important;
+}
+body.skin-aurora .alb-cell,
+body.skin-aurora .bin-cell {
+  background: linear-gradient(145deg, rgba(255,255,255,.24) 0%, rgba(152,190,216,.14) 100%) !important;
+  border-color: rgba(212,242,255,.38) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.50),
+    0 8px 22px rgba(2,22,46,.14) !important;
+}
+body.skin-aurora .alb-tree {
+  background: linear-gradient(180deg, rgba(122,166,198,.46), rgba(146,184,210,.30)) !important;
+  border-right-color: rgba(206,238,255,.34) !important;
+  color: var(--lg-ink) !important;
+}
+body.skin-aurora .alb-tree .tr-root { color: rgba(4,30,56,.80) !important; font-weight: 600 !important; }
+body.skin-aurora .alb-tree .tr-row { color: var(--lg-ink) !important; }
+body.skin-aurora .alb-tree .tr-row .n { color: rgba(4,30,56,.62) !important; }
+body.skin-aurora .alb-tree .tr-row:hover,
+body.skin-aurora .alb-tree .tr-root:hover { background: rgba(255,255,255,.28) !important; color: var(--lg-ink) !important; }
+body.skin-aurora .alb-tree .tr-row.sel { background: rgba(20,112,205,.30) !important; color: #02162c !important; }
+body.skin-aurora .alb-tree .tr-row.sel .n { color: rgba(2,22,44,.72) !important; }
+body.skin-aurora .alb-tree .tr-none { color: rgba(4,30,56,.62) !important; }
+body.skin-aurora .alb-search-box {
+  background: linear-gradient(180deg, rgba(242,251,255,.52), rgba(206,230,246,.34)) !important;
+  border-color: rgba(224,244,255,.56) !important;
+}
+body.skin-aurora .alb-search-box input { color: #02162c !important; }
+body.skin-aurora .alb-search-box input::placeholder { color: rgba(3,28,52,.58) !important; }
+body.skin-aurora .alb-search-hints span {
+  background: rgba(255,255,255,.20) !important;
+  border-color: rgba(212,240,255,.34) !important;
+  color: var(--lg-muted-strong) !important;
+}
+body.skin-aurora .alb-tab { color: var(--lg-ink) !important; }
+body.skin-aurora .alb-tab.on { color: #ffffff !important; }
+body.skin-aurora .alb-empty { color: rgba(4,30,56,.76) !important; font-weight: 600 !important; }
+body.skin-aurora .alb-vinfo { color: rgba(4,30,56,.68) !important; }
+body.skin-aurora .alb-foot { color: rgba(4,30,56,.72) !important; }
+body.skin-aurora .alb-foot #albSub { color: rgba(4,30,56,.84) !important; }
+body.skin-aurora .alb-foot #albFootInfo { color: rgba(4,30,56,.68) !important; }
+body.skin-aurora .alb-foot #albFootInfo .stat b { color: var(--lg-ink) !important; }
+body.skin-aurora .alb-foot #albSub::before { background: #0a84ff !important; box-shadow: 0 0 6px rgba(10,132,255,.50) !important; }
+
+/* 相册下拉菜单 / 右键 / 设置弹窗：近实底浅玻璃 */
+body.skin-aurora .alb-opt-menu,
+body.skin-aurora .alb-ctx,
+body.skin-aurora .alb-modal {
+  background:
+    radial-gradient(120% 90% at 12% 0%, rgba(255,255,255,.24) 0%, rgba(255,255,255,.02) 60%, rgba(255,255,255,0) 76%),
+    linear-gradient(148deg, rgba(226,241,252,.97) 0%, rgba(206,228,243,.95) 50%, rgba(230,244,253,.96) 100%) !important;
+  background-color: #d8e9f6 !important;
+  border-color: rgba(244,253,255,.82) !important;
+  color: var(--lg-ink) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.92),
+    0 22px 56px rgba(2,14,30,.30) !important;
+}
+body.skin-aurora .alb-opt-sec { border-bottom-color: rgba(6,40,76,.12) !important; }
+body.skin-aurora .alb-opt-sec-title,
+body.skin-aurora .alb-opt-perf-title { color: rgba(5,28,54,.92) !important; font-weight: 600 !important; font-size: 11px !important; }
+body.skin-aurora .alb-opt-note { color: #0a5aa8 !important; border-color: rgba(10,90,168,.42) !important; }
+body.skin-aurora .alb-opt-item,
+body.skin-aurora .alb-ctx-item { color: var(--lg-ink) !important; }
+body.skin-aurora .alb-opt-item:hover,
+body.skin-aurora .alb-ctx-item:hover { background: rgba(10,100,180,.12) !important; color: var(--lg-ink) !important; }
+body.skin-aurora .alb-opt-item.danger,
+body.skin-aurora .alb-ctx-item.danger { color: #b02525 !important; }
+body.skin-aurora .alb-opt-item.danger:hover,
+body.skin-aurora .alb-ctx-item.danger:hover { background: rgba(180,40,40,.12) !important; color: #8c1818 !important; }
+body.skin-aurora .alb-opt-item.dis,
+body.skin-aurora .alb-ctx-item.dis { color: rgba(4,30,56,.46) !important; }
+body.skin-aurora .alb-modal h3,
+body.skin-aurora .alb-modal .row,
+body.skin-aurora .alb-modal .row label,
+body.skin-aurora .alb-modal .chkline { color: var(--lg-ink) !important; }
+body.skin-aurora .alb-modal .hint { color: rgba(4,30,56,.62) !important; }
+body.skin-aurora .alb-modal .list { background: rgba(238,249,255,.56) !important; border-color: rgba(206,236,255,.44) !important; color: #02182e !important; }
+body.skin-aurora .alb-modal .list div { border-bottom-color: rgba(6,40,76,.10) !important; }
+body.skin-aurora .alb-modal .prog { background: rgba(4,34,64,.18) !important; }
+body.skin-aurora .alb-modal .prog > div { background: #0a84ff !important; }
+body.skin-aurora .alb-modal-mask { background: rgba(4,12,24,.58) !important; }
+
+/* ---------- 回收站：高层级浮层，近实底，保证缩略图外的小字清楚 ---------- */
+body.skin-aurora .bin-overlay {
+  background: rgba(4,12,24,.62) !important;
+}
+body.skin-aurora #binOverlay .bin-panel.bin-panel,
+body.skin-aurora .bin-panel {
+  background:
+    radial-gradient(120% 90% at 10% 0%, rgba(255,255,255,.20) 0%, rgba(255,255,255,.02) 60%, rgba(255,255,255,0) 76%),
+    linear-gradient(148deg, rgba(146,186,214,.95) 0%, rgba(174,204,226,.92) 50%, rgba(126,168,200,.94) 100%) !important;
+  border-color: rgba(240,252,255,.78) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.88),
+    0 32px 86px rgba(2,14,30,.32) !important;
+}
+body.skin-aurora #binOverlay .bin-head.bin-head,
+body.skin-aurora .bin-head { background: linear-gradient(180deg, rgba(116,160,194,.74) 0%, rgba(150,188,214,.58) 100%) !important; border-color: rgba(206,238,255,.40) !important; }
+body.skin-aurora .bin-foot { background: linear-gradient(180deg, rgba(118,162,196,.70) 0%, rgba(146,184,210,.54) 100%) !important; border-color: rgba(206,238,255,.36) !important; }
+body.skin-aurora .bin-title { color: var(--lg-ink) !important; font-weight: 700 !important; }
+body.skin-aurora .bin-title .s { color: rgba(4,30,56,.64) !important; }
+body.skin-aurora .bin-dir { color: rgba(4,30,56,.68) !important; }
+body.skin-aurora .bin-name { color: var(--lg-ink) !important; font-weight: 600 !important; }
+body.skin-aurora .bin-sub { color: rgba(4,30,56,.66) !important; }
+body.skin-aurora .bin-empty { color: rgba(4,30,56,.64) !important; }
+body.skin-aurora .bin-foot { color: rgba(4,30,56,.72) !important; }
+body.skin-aurora .bin-btn {
+  background: linear-gradient(145deg, rgba(172,206,230,.62), rgba(124,168,200,.44)) !important;
+  color: var(--lg-ink) !important;
+  border-color: rgba(222,246,255,.58) !important;
+  font-weight: 600 !important;
+}
+body.skin-aurora .bin-btn:hover { background: linear-gradient(145deg, rgba(202,228,244,.70), rgba(152,192,220,.52)) !important; }
+body.skin-aurora .bin-cell { background: linear-gradient(145deg, rgba(255,255,255,.26), rgba(150,188,216,.16)) !important; }
+body.skin-aurora .bin-thumb { background-color: #0b1724 !important; color: rgba(220,240,255,.72) !important; }
+
+/* ---------- 去重窗口：近实底，照片 100% 不透明 ---------- */
+body.skin-aurora .dup-panel {
+  background:
+    radial-gradient(120% 90% at 10% 0%, rgba(255,255,255,.20) 0%, rgba(255,255,255,.02) 60%, rgba(255,255,255,0) 76%),
+    linear-gradient(148deg, rgba(146,186,214,.95) 0%, rgba(174,204,226,.92) 50%, rgba(126,168,200,.94) 100%) !important;
+  color: var(--lg-ink) !important;
+}
+body.skin-aurora .dup-head { background: linear-gradient(180deg, rgba(114,158,192,.76) 0%, rgba(150,188,214,.58) 100%) !important; border-color: rgba(206,238,255,.40) !important; }
+body.skin-aurora .dup-head .t { color: var(--lg-ink) !important; font-weight: 700 !important; }
+body.skin-aurora .dup-head .s { color: rgba(4,30,56,.68) !important; }
+body.skin-aurora .dup-head .x { color: var(--lg-ink) !important; }
+body.skin-aurora .dup-head .x:hover { background: rgba(255,255,255,.24) !important; color: var(--lg-ink) !important; }
+body.skin-aurora .dup-tools { background: linear-gradient(180deg, rgba(126,168,200,.64) 0%, rgba(154,190,216,.50) 100%) !important; border-color: rgba(206,238,255,.36) !important; color: rgba(4,30,56,.80) !important; }
+body.skin-aurora .dup-tools > span,
+body.skin-aurora .dup-tools > #dupDstPath { color: rgba(4,30,56,.78) !important; }
+body.skin-aurora .dup-group {
+  background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(148,188,216,.14)) !important;
+  border-color: rgba(212,242,255,.36) !important;
+}
+body.skin-aurora .dup-group-h { color: rgba(4,30,56,.76) !important; }
+body.skin-aurora .dup-cell { background: linear-gradient(145deg, rgba(255,255,255,.30), rgba(150,188,216,.18)) !important; border-color: rgba(212,242,255,.40) !important; }
+body.skin-aurora .dup-cell .nm { color: var(--lg-ink) !important; font-weight: 600 !important; }
+body.skin-aurora .dup-cell .fd { color: rgba(6,48,92,.82) !important; }
+body.skin-aurora .dup-cell .mt { color: rgba(4,30,56,.64) !important; }
+body.skin-aurora .dup-cell label { color: rgba(4,30,56,.86) !important; }
+body.skin-aurora .dup-cell .mk { color: #176b3c !important; }
+body.skin-aurora .dup-empty { color: rgba(4,30,56,.64) !important; }
+body.skin-aurora .dup-cell img,
+body.skin-aurora .dup-cell .ph { background-color: #0b1724 !important; }
+
+/* 其余浮层：统一到浅玻璃，避免个别面板仍是纯白 */
+body.skin-aurora #albOptMenu,
+body.skin-aurora #albCtx {
+  color: var(--lg-ink) !important;
+}
+body.skin-aurora .fx-modal,
+body.skin-aurora .gen-overlay,
+body.skin-aurora .pro-overlay { background-color: rgba(4,12,24,.62) !important; }
+body.skin-aurora .pro-box,
+body.skin-aurora .fx-box {
+  background:
+    linear-gradient(148deg, rgba(226,241,252,.97) 0%, rgba(206,228,243,.95) 50%, rgba(230,244,253,.96) 100%) !important;
+  border-color: rgba(244,253,255,.82) !important;
+  color: var(--lg-ink) !important;
+}
+
+/* 页面底图已在 C# 端模糊；关闭逐控件 backdrop-filter，避免重复模糊和重绘 */
+html.skin-aurora-html body.skin-aurora,
+html.skin-aurora-html body.skin-aurora *,
+html.skin-aurora-html body.skin-aurora *::before,
+html.skin-aurora-html body.skin-aurora *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }

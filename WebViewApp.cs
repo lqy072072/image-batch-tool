@@ -25,6 +25,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
@@ -324,6 +325,9 @@ namespace ImageBatchTool
         [DllImport("user32.dll")] public static extern bool ReleaseCapture();
         [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] public static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+        [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
         [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         [DllImport("dwmapi.dll")] public static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
         [StructLayout(LayoutKind.Sequential)]
@@ -339,6 +343,56 @@ namespace ImageBatchTool
             WINCOMPDATA d = new WINCOMPDATA { Attr = 19, Data = Marshal.AllocHGlobal(Marshal.SizeOf(a)), Size = Marshal.SizeOf(a) };
             try { Marshal.StructureToPtr(a, d.Data, false); return SetWindowCompositionAttribute(hwnd, ref d); }
             finally { Marshal.FreeHGlobal(d.Data); }
+        }
+
+        // 整窗半透明：WS_EX_LAYERED + LWA_ALPHA。
+        // WebView2 的透明页面不能叠加 TransparencyKey（会把子窗口命中测试整层跳过，
+        // 鼠标全部落到下层窗口），但整窗 alpha 不影响命中测试，窗口仍可正常点击。
+        public static bool SetAlpha(IntPtr hwnd, int alpha) {
+            try {
+                if (hwnd == IntPtr.Zero || alpha < 0 || alpha > 255) return false;
+                int ex = GetWindowLong(hwnd, -20);
+                if ((ex & 0x80000) == 0) {
+                    SetWindowLong(hwnd, -20, ex | 0x80000);
+                }
+                return SetLayeredWindowAttributes(hwnd, 0, (byte)alpha, 0x2);
+            } catch { return false; }
+        }
+
+        // v2.34：液态玻璃不再需要整窗 alpha；切回不透明时把 WS_EX_LAYERED 摘掉，
+        // 避免旧皮肤残留的分层样式继续影响 WebView2 的合成与圆角裁剪。
+        public static bool ClearLayered(IntPtr hwnd) {
+            try {
+                if (hwnd == IntPtr.Zero) return false;
+                int ex = GetWindowLong(hwnd, -20);
+                if ((ex & 0x80000) != 0) SetWindowLong(hwnd, -20, ex & ~0x80000);
+                return true;
+            } catch { return false; }
+        }
+
+        // 原生 Acrylic：Win11 走 DWM 系统背景，Win10 退回 SetWindowCompositionAttribute。
+        // 两者都由系统合成器做模糊，不抓屏、不做 JPEG、不跨进程推帧。
+        public static bool ApplyAcrylic(IntPtr hwnd) {
+            try {
+                int dark = 0;
+                DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
+                int round = 2;
+                DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));
+                int type = 3; // DWMSBT_TRANSIENTWINDOW = Acrylic
+                int hr = DwmSetWindowAttribute(hwnd, 38, ref type, sizeof(int));
+                if (hr == 0) {
+                    var m = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+                    DwmExtendFrameIntoClientArea(hwnd, ref m);
+                    return true;
+                }
+                int accent = Accent(hwnd, 4, unchecked((int)0x44FFFFFF));
+                if (accent == 0) {
+                    var m = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+                    DwmExtendFrameIntoClientArea(hwnd, ref m);
+                    return true;
+                }
+            } catch { }
+            return false;
         }
         [DllImport("imgproc.dll", CallingConvention=CallingConvention.Cdecl)]
         public static extern void lut_apply(byte[] buf, int W, int H, int stride,
@@ -392,7 +446,7 @@ namespace ImageBatchTool
         {
             this.host = host;
             this.web = web;
-            timer = new System.Windows.Forms.Timer { Interval = 170 };
+            timer = new System.Windows.Forms.Timer { Interval = 420 };
             timer.Tick += (s, e) => Capture();
         }
 
@@ -414,7 +468,6 @@ namespace ImageBatchTool
                     g.CopyFromScreen(vs.Location, Point.Empty, vs.Size, CopyPixelOperation.SourceCopy);
                 deskOrigin = vs.Location;
                 deskSize = vs.Size;
-                try { fullDesktop.Save(Path.Combine(Application.StartupPath, "cache", "logs", "glass_desktop.png"), ImageFormat.Png); } catch { }
                 try { MainForm.Log("液态玻璃底图 " + vs.Width + "x" + vs.Height + " @" + vs.X + "," + vs.Y); } catch { }
             }
             catch (Exception ex) { try { MainForm.Log("液态玻璃底图失败: " + ex.Message); } catch { } }
@@ -422,8 +475,9 @@ namespace ImageBatchTool
 
         public bool Enable()
         {
-            if (enabled || failed || host == null || host.IsDisposed) return enabled;
+            if (failed || host == null || host.IsDisposed) return enabled;
             if (!host.IsHandleCreated || !host.Visible) return false;
+            if (enabled) { Capture(); return true; }
             try
             {
                 enabled = true;
@@ -435,12 +489,42 @@ namespace ImageBatchTool
             catch { failed = true; return false; }
         }
 
+        // v2.29 性能版：只在窗口显示后取一帧（启动底图已提前拍好），不启动 170ms 定时器。
+        public bool Snapshot()
+        {
+            try { MainForm.Log("静态玻璃 Snapshot 请求 full=" + (fullDesktop != null) + " visible=" + (host != null && host.Visible) + " enabled=" + enabled + " failed=" + failed); } catch { }
+            if (failed || host == null || host.IsDisposed || !host.IsHandleCreated || !host.Visible) return false;
+            if (fullDesktop == null) return false;
+            if (enabled) { PushFrame(); return true; }
+            try
+            {
+                enabled = true;
+                host.BackgroundImageLayout = ImageLayout.Stretch;
+                Capture();
+                try { MainForm.Log("静态玻璃 Snapshot 完成 bg=" + (host.BackgroundImage != null) + " frame=" + lastFrame.Length); } catch { }
+                return true;
+            }
+            catch (Exception ex) { failed = true; try { MainForm.Log("静态玻璃 Snapshot 失败 " + ex.Message); } catch { } return false; }
+        }
+
         public void Disable()
         {
             try { timer.Stop(); } catch { }
             enabled = false;
             try { if (host != null) { host.BackgroundImage = null; host.Invalidate(); } } catch { }
             DisposeBitmaps();
+        }
+
+        // 切到真透明方案时，清掉页面里残留的上一张静态玻璃底图。
+        public void ClearFrame()
+        {
+            lastFrame = "";
+            try
+            {
+                if (web != null && web.CoreWebView2 != null)
+                    web.CoreWebView2.PostWebMessageAsJson("{\"type\":\"glassbg\",\"clear\":true}");
+            }
+            catch { }
         }
 
         void DisposeBitmaps()
@@ -553,6 +637,7 @@ namespace ImageBatchTool
                     lastFrame = b64;
                     string json = "{\"type\":\"glassbg\",\"data\":\"data:image/jpeg;base64," + b64 + "\"}";
                     web.CoreWebView2.PostWebMessageAsJson(json);
+                    try { MainForm.Log("静态玻璃帧已推送 " + bytes.Length + "B"); } catch { }
                     if (lastFrame == b64) { }
                     // 帧日志会每 170ms 刷屏，正常运行不写
                 }
@@ -1993,12 +2078,21 @@ namespace ImageBatchTool
         public static string RestartMode = "album";
         const int WM_SYSCOMMAND = 0x0112;
         const int SC_MINIMIZE = 0xF020;
+        // v2.33：WebView2 透明页不能用 TransparencyKey（会把整层鼠标命中测试跳过），
+        // 改用整窗 LWA_ALPHA 半透明；页面仍透明，窗口可正常点击。
+        // IBT_AURORA_GLASS=0 可退回完全不透明的液态玻璃（仍可点击）。
+        static readonly bool AuroraWindowGlass = !string.Equals(
+            Environment.GetEnvironmentVariable("IBT_AURORA_GLASS"), "0", StringComparison.OrdinalIgnoreCase);
+        int auroraAlpha = AppModule.IsAlbum ? 244 : 238;
+        bool webPageReady = false;
         volatile bool allowMinimizeOnce = false;
         WebView2 web;
         WebView2 dedupWeb;
         AlbumMeta albMeta;
         Form dedupForm;
         GlassBackdrop mainGlass;
+        GlassMouseBridge glassBridge;
+        bool glassBridgeReady;
         GlassBackdrop dedupGlass;
         System.Windows.Forms.Timer skinSyncTimer;
         volatile string lastSkinSync = "";
@@ -2134,23 +2228,21 @@ namespace ImageBatchTool
             // 透明色键 + 分层窗口与 Opacity/DoubleBuffer 混用会丢掉色键合成。
             if (startupSkin == "aurora") DoubleBuffered = false;
             if (startupSkin != "aurora") Opacity = 0;
-            BackColor = startupSkin == "aurora" ? Color.FromArgb(8,18,32) : Color.FromArgb(32,32,36);
-
-            // 液态玻璃走实时捕获毛玻璃，不再使用透明色键；
-            // TransparencyKey 会把窗口变成分层窗口，导致无法从屏幕捕获中排除自身。
-            try {
-                if (startupSkin == "aurora") {
-                    TransparencyKey = Color.Empty;
-                }
-            } catch { }
+            // 液态玻璃不再使用 TransparencyKey：WebView2 透明页会让整窗鼠标穿透。
+            // 改用整窗 alpha，窗口下方内容仍能实时透出，且所有控件可点击。
+            BackColor = startupSkin == "aurora" ? Color.FromArgb(8, 18, 32) : Color.FromArgb(32, 32, 36);
+            TransparencyKey = Color.Empty;
+            auroraAlpha = AppModule.IsAlbum ? 244 : 238;
 
             if (AppModule.IsAlbum) { try { MigrateLegacyCache(); } catch {} }
             web = new WebView2();
             web.Dock = DockStyle.Fill;
             Controls.Add(web);
             mainGlass = new GlassBackdrop(this, web);
+            // v2.34：液态玻璃改为“窗口内桌面模糊底图 + 页面玻璃层”。
+            // 底图在窗口显示前抓取，之后只补窗口四周；页面照片/缩略图保持完全不透明。
+            try { mainGlass.PrimeDesktop(); } catch { }
             try { MainForm.Log("构造 startupSkin=" + startupSkin); } catch { }
-            if (startupSkin == "aurora") { try { mainGlass.PrimeDesktop(); } catch { } }
             // WebView2 的透明合成必须等窗体真正显示后再初始化；在构造函数里提前初始化时，
             // DWM 毛玻璃与 WebView2 的 DirectComposition 会互相顶掉，页面会整层不可见。
             this.Shown += (s, e) => { try { if (web != null && web.CoreWebView2 == null) InitWeb(); } catch { } };
@@ -2212,7 +2304,11 @@ namespace ImageBatchTool
 
             this.Load += (s, e) => { ApplyNativeSkin(ReadSkinName()); ApplyRoundedCorner(); };
             this.Resize += (s, e) => ApplyRoundedCorner();
+            this.Move += (s, e) => { if (glassBridge != null && glassBridge.Visible) glassBridge.Sync(); };
+            this.Activated += (s, e) => ShowGlassBridge();
+            this.Deactivate += (s, e) => HideGlassBridge();
             this.FormClosed += (s, e) => {
+                try { if (glassBridge != null) { glassBridge.Close(); glassBridge.Dispose(); glassBridge = null; } } catch {}
                 try { if (mainGlass != null) { mainGlass.Dispose(); mainGlass = null; } } catch {}
                 try { if (skinSyncTimer != null) { skinSyncTimer.Stop(); skinSyncTimer.Dispose(); skinSyncTimer = null; } } catch {}
             };
@@ -2237,6 +2333,25 @@ namespace ImageBatchTool
             base.WndProc(ref m);
         }
 
+        void ShowGlassBridge()
+        {
+            try
+            {
+                if (!AuroraWindowGlass || !glassBridgeReady) return;
+                if (NormalizeSkin(ReadSkinName()) != "aurora") { HideGlassBridge(); return; }
+                if (!Visible || WindowState == FormWindowState.Minimized) return;
+                if (glassBridge == null) glassBridge = new GlassMouseBridge(this);
+                glassBridge.Sync();
+                if (!glassBridge.Visible) glassBridge.Show();
+            }
+            catch { }
+        }
+
+        void HideGlassBridge()
+        {
+            try { if (glassBridge != null && glassBridge.Visible) glassBridge.Hide(); } catch { }
+        }
+
         void MinimizeFromUi()
         {
             try
@@ -2250,24 +2365,38 @@ namespace ImageBatchTool
 
         void ApplyRoundedCorner()
         {
-            try {
-                // 液态玻璃的圆角已在 ApplyNativeSkin 里按 DWM 要求的顺序写入；
-                // 这里再写一次 33 会把系统 Acrylic 顶回不透明灰，必须跳过。
-                if (ReadSkinName() == "aurora") return;
+            try
+            {
+                if (WindowState == FormWindowState.Maximized)
+                {
+                    this.Region = null;
+                    return;
+                }
+                if (ReadSkinName() == "aurora")
+                {
+                    // v2.34：液态玻璃改用不透明合成，不能再跳过 GDI 裁剪；
+                    // DWM 在分层/透明窗口上不会稳定给圆角，这里直接裁窗口区域。
+                    int radius = 14;
+                    if (Width <= radius * 2 || Height <= radius * 2) return;
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddArc(0, 0, radius * 2, radius * 2, 180, 90);
+                        path.AddArc(Width - radius * 2, 0, radius * 2, radius * 2, 270, 90);
+                        path.AddArc(Width - radius * 2, Height - radius * 2, radius * 2, radius * 2, 0, 90);
+                        path.AddArc(0, Height - radius * 2, radius * 2, radius * 2, 90, 90);
+                        path.CloseAllFigures();
+                        var old = this.Region;
+                        this.Region = new Region(path);
+                        if (old != null) old.Dispose();
+                    }
+                    return;
+                }
+                // 其它皮肤继续交给 DWM 绘制系统圆角。
+                this.Region = null;
                 int attr = 2;
                 Native.DwmSetWindowAttribute(this.Handle, 33, ref attr, sizeof(int));
-                if (WindowState == FormWindowState.Maximized) this.Region = null;
-                return;
-            } catch {}
-            if (WindowState == FormWindowState.Maximized) { this.Region = null; return; }
-            int r = 12;
-            var path = new GraphicsPath();
-            path.AddArc(0, 0, r*2, r*2, 180, 90);
-            path.AddArc(this.Width - r*2, 0, r*2, r*2, 270, 90);
-            path.AddArc(this.Width - r*2, this.Height - r*2, r*2, r*2, 0, 90);
-            path.AddArc(0, this.Height - r*2, r*2, r*2, 90, 90);
-            path.CloseAllFigures();
-            this.Region = new Region(path);
+            }
+            catch { }
         }
 
         async void InitWeb()
@@ -2366,7 +2495,12 @@ namespace ImageBatchTool
             // 去重窗口接收去重消息和皮肤同步消息，避免预览等大消息重复传输。
             if (json != null && (json.StartsWith("{\"type\":\"dup", StringComparison.Ordinal) ||
                 json.StartsWith("{\"type\":\"skin\"", StringComparison.Ordinal)))
-                PostToWeb(dedupWeb, json);
+            {
+                string dupJson = json;
+                if (json.StartsWith("{\"type\":\"skin\"", StringComparison.Ordinal) && json.Contains("\"aurora\""))
+                    dupJson = "{\"type\":\"skin\",\"skin\":\"dark\"}";
+                PostToWeb(dedupWeb, dupJson);
+            }
         }
 
         string ReadSkinName()
@@ -2435,13 +2569,27 @@ namespace ImageBatchTool
             ApplyNativeSkin(NormalizeSkin(skin), this, web);
         }
 
-        // 液态玻璃使用“透明色键 + 系统实时 Acrylic + WebView2 透明”：
-        // 页面玻璃里透出的不是静态图片，而是窗口下方真实的桌面 / 其它窗口；
-        // 窗口移动、下方内容变化时，透出的背景也会实时变化。
+        // v2.34 液态玻璃改为“窗口内桌面模糊底图”：窗口本身保持不透明，
+        // 页面背景是模糊桌面，照片/缩略图因此不会再被整窗 alpha 变透明。
+        int AuroraAlphaFor(Form targetForm)
+        {
+            return 255;
+        }
+
+        void SetAuroraAlpha(int alpha)
+        {
+            auroraAlpha = Math.Max(225, Math.Min(255, alpha));
+            // 页面里旧的 glassalpha 消息只保留协议兼容，不再改变窗口透明度。
+            try { Log("Aurora glassalpha 忽略（模糊底图模式） alpha=" + auroraAlpha); } catch { }
+        }
+
         void ApplyNativeSkin(string skin, Form targetForm, WebView2 targetWeb)
         {
             if (targetForm == null || targetForm.IsDisposed) return;
             skin = NormalizeSkin(skin);
+            // 去重窗口是独立顶层窗口，没有玻璃鼠标桥接层；液态玻璃的透明页会让它既难读也点不中，
+            // 因此去重窗口统一用不透明的深色皮肤。
+            if (targetForm == dedupForm && skin == "aurora") skin = "dark";
             try
             {
                 if (!targetForm.IsHandleCreated) return;
@@ -2449,18 +2597,33 @@ namespace ImageBatchTool
                 try { Log("原生皮肤=" + skin + " aurora=" + aurora + " key=" + targetForm.TransparencyKey + " back=" + targetForm.BackColor + " op=" + targetForm.Opacity); } catch { }
                 if (aurora)
                 {
-                    // 不使用 TransparencyKey / DWM Acrylic：DWM 在本应用窗口上会退回不透明灰。
-                    // 改为“窗口排除屏幕捕获 + 实时截取背景缩小模糊 + WebView2 透明”，
-                    // 毛玻璃里始终是窗口下方真实桌面，移动窗口时会立即换背景。
+                    // v2.34：窗口不再整窗 alpha。背景改为窗口内“桌面模糊底图”，
+                    // 页面只叠半透明玻璃层；照片像素保持 100% 不透明。
+                    GlassBackdrop glass0 = targetForm == this ? mainGlass : (targetForm == dedupForm ? dedupGlass : null);
                     targetForm.TransparencyKey = Color.Empty;
                     targetForm.BackColor = Color.FromArgb(8, 18, 32);
-                    try { int v = 1; Native.DwmSetWindowAttribute(targetForm.Handle, 38, ref v, sizeof(int)); } catch { }
-                    try { var m = new Native.MARGINS { Left = 0, Top = 0, Right = 0, Bottom = 0 }; Native.DwmExtendFrameIntoClientArea(targetForm.Handle, ref m); } catch { }
-                    try { int v = 2; Native.DwmSetWindowAttribute(targetForm.Handle, 33, ref v, sizeof(int)); } catch { }
-                    if (targetWeb != null) targetWeb.DefaultBackgroundColor = Color.FromArgb(255, 8, 18, 32);
-                    GlassBackdrop glass = targetForm == this ? mainGlass : (targetForm == dedupForm ? dedupGlass : null);
-                    if (glass != null) glass.Enable();
-                    try { Log("Aurora 实时背景=" + (glass != null && glass.Enabled)); } catch { }
+                    targetForm.Opacity = 1;
+                    try { Native.ClearLayered(targetForm.Handle); } catch { }
+                    try
+                    {
+                        var margins = new Native.MARGINS { Left = 0, Top = 0, Right = 0, Bottom = 0 };
+                        Native.DwmExtendFrameIntoClientArea(targetForm.Handle, ref margins);
+                        int none = 1;
+                        Native.DwmSetWindowAttribute(targetForm.Handle, 38, ref none, sizeof(int));
+                    }
+                    catch { }
+                    if (targetWeb != null)
+                    {
+                        // 页面自身绘制模糊底图；WebView2 背景必须透明。
+                        targetWeb.DefaultBackgroundColor = Color.Transparent;
+                    }
+                    if (glass0 != null)
+                    {
+                        try { glass0.ClearFrame(); } catch { }
+                        try { glass0.Enable(); } catch { }
+                    }
+                    bool webReady = webPageReady && targetWeb != null && targetWeb.CoreWebView2 != null;
+                    try { Log("Aurora 模糊底图模式 key=" + targetForm.TransparencyKey + " alpha=255 webReady=" + webReady + " glass=" + (glass0 != null && glass0.Enabled)); } catch { }
                 }
                 else
                 {
@@ -2468,14 +2631,17 @@ namespace ImageBatchTool
                     if (glass != null) glass.Disable();
                     targetForm.TransparencyKey = Color.Empty;
                     targetForm.BackColor = OpaqueBackFor(skin);
+                    targetForm.Opacity = 1;
                     var margins = new Native.MARGINS { Left = 0, Top = 0, Right = 0, Bottom = 0 };
                     try { Native.DwmExtendFrameIntoClientArea(targetForm.Handle, ref margins); } catch { }
                     try { int v = 1; Native.DwmSetWindowAttribute(targetForm.Handle, 38, ref v, sizeof(int)); } catch { }
                     try { int v = 2; Native.DwmSetWindowAttribute(targetForm.Handle, 33, ref v, sizeof(int)); } catch { }
                     if (targetWeb != null)
                         targetWeb.DefaultBackgroundColor = skin == "light" ? Color.FromArgb(255, 255, 255) : skin == "frost" ? Color.FromArgb(250, 250, 252) : Color.FromArgb(32, 32, 36);
+                    Native.SetAlpha(targetForm.Handle, 255);
                 }
                 targetForm.Invalidate(true);
+                if (targetForm == this) { try { ApplyRoundedCorner(); } catch { } }
             }
             catch (Exception ex) { try { Log("应用原生皮肤失败 " + skin + ": " + ex.Message); } catch { } }
         }
@@ -2790,6 +2956,170 @@ namespace ImageBatchTool
             catch (Exception ex) { Send("{\"type\":\"toast\",\"msg\":\"保存失败：" + ex.Message.Replace("\"", "'") + "\"}"); }
         }
 
+        void AiToolRun(string json)
+        {
+            string preOp = ReadJsonString(json ?? "{}", "op");
+            bool searchOnly0 = preOp.Equals("a6_search", StringComparison.OrdinalIgnoreCase);
+            int idx = selected;
+            if (!searchOnly0 && (idx < 0 || idx >= files.Count))
+            {
+                Send("{\"type\":\"aitool\",\"op\":\"\",\"data\":{\"ok\":false,\"error\":\"请先在左侧选中一张图片。\"}}");
+                return;
+            }
+            string srcPath = (idx >= 0 && idx < files.Count) ? files[idx] : "";
+            if (!string.IsNullOrEmpty(srcPath)) genEditSource = srcPath;
+            Send("{\"type\":\"aitool_start\"}");
+            new Thread(() =>
+            {
+                string inFile = Path.Combine(Path.GetTempPath(), "ibt_ai_" + Guid.NewGuid().ToString("N") + ".json");
+                string outFile = Path.Combine(Path.GetTempPath(), "ibt_ai_" + Guid.NewGuid().ToString("N") + ".out.json");
+                string snap = CacheStore.TempFile("aitool_in_", ".png");
+                string outPath = Path.Combine(CacheStore.Sub("aitools"),
+                    "ai_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 6) + ".png");
+                string op = "";
+                string maskTemp = "";
+                try
+                {
+                    string cfg = (json ?? "{}").Trim();
+                    if (cfg.Length == 0) cfg = "{}";
+                    if (!cfg.StartsWith("{")) throw new Exception("AI 工具参数格式错误。");
+                    op = ReadJsonString(cfg, "op");
+                    bool searchOnly = op.Equals("a6_search", StringComparison.OrdinalIgnoreCase);
+                    bool noPreview = searchOnly || op.Equals("a5_score", StringComparison.OrdinalIgnoreCase);
+
+                    if (!searchOnly)
+                    {
+                        Bitmap snapBmp = null;
+                        InvokeUi(() =>
+                        {
+                            try
+                            {
+                                if (cachedBase != null && cachedFile == srcPath)
+                                    snapBmp = (Bitmap)cachedBase.Clone();
+                                else
+                                    snapBmp = LoadBase(srcPath);
+                            }
+                            catch (Exception ex) { Log("AI 工具取底图失败: " + ex.Message); }
+                        });
+                        if (snapBmp == null) throw new Exception("无法读取当前图片底图。");
+                        using (snapBmp) snapBmp.Save(snap, ImageFormat.Png);
+
+                        if (cfg.EndsWith("}")) cfg = cfg.Substring(0, cfg.Length - 1).TrimEnd();
+                        if (cfg.Length > 1) cfg += ",";
+                        cfg += "\"input\":" + JsonStr(snap) + ",\"output\":" + JsonStr(outPath) + "}";
+
+                        string maskData = ReadJsonString((json ?? "{}"), "mask_data");
+                        if (!string.IsNullOrEmpty(maskData))
+                        {
+                            int comma = maskData.IndexOf(',');
+                            string b64 = comma >= 0 ? maskData.Substring(comma + 1) : maskData;
+                            byte[] bytes = Convert.FromBase64String(b64);
+                            maskTemp = CacheStore.TempFile("aitool_mask_", ".png");
+                            File.WriteAllBytes(maskTemp, bytes);
+                            if (cfg.EndsWith("}")) cfg = cfg.Substring(0, cfg.Length - 1).TrimEnd();
+                            if (cfg.Length > 1) cfg += ",";
+                            cfg += "\"mask\":" + JsonStr(maskTemp) + "}";
+                        }
+                    }
+                    else
+                    {
+                        // 找图不需要当前底图，paths 由页面传入。
+                        if (!cfg.EndsWith("}")) cfg += "}";
+                    }
+                    File.WriteAllText(inFile, cfg, new UTF8Encoding(false));
+
+                    string engine = ReadJsonString(cfg, "engine");
+                    string script = engine.Equals("flux", StringComparison.OrdinalIgnoreCase) ? "gen_edit.py" : "ai_tools.py";
+                    int timeout = engine.Equals("flux", StringComparison.OrdinalIgnoreCase) ? 1800000 : 300000;
+                    string err;
+                    string stdout = PyTools.Run(BeautyRunner.PythonExe, script,
+                        new string[] { "run", inFile, outFile }, timeout, out err);
+                    if (!File.Exists(outFile))
+                        throw new Exception("AI 工具没有返回结果：" + (err ?? stdout ?? ""));
+                    string result = File.ReadAllText(outFile, Encoding.UTF8);
+                    Send("{\"type\":\"aitool\",\"op\":" + JsonStr(op) + ",\"data\":" + result + "}");
+                    if (!noPreview && (result.IndexOf("\"ok\":true", StringComparison.Ordinal) >= 0 ||
+                        result.IndexOf("\"ok\": true", StringComparison.Ordinal) >= 0))
+                    {
+                        if (!File.Exists(outPath)) throw new Exception("结果文件未生成。");
+                        string orig64, res64;
+                        using (var ob = new Bitmap(snap)) orig64 = GenEditPreviewData(ob, 1000);
+                        using (var rb = new Bitmap(outPath)) res64 = GenEditPreviewData(rb, 1000);
+                        Send("{\"type\":\"aitool_preview\",\"op\":" + JsonStr(op) + ",\"path\":" + JsonStr(outPath) +
+                             ",\"orig\":\"" + orig64 + "\",\"result\":\"" + res64 + "\"}");
+                    }
+                    Log("AI 工具 " + op + " 完成: " + Path.GetFileName(outPath));
+                }
+                catch (Exception ex)
+                {
+                    string e = (ex.Message ?? "").Replace("\\", "\\\\").Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
+                    Send("{\"type\":\"aitool\",\"op\":" + JsonStr(op) + ",\"data\":{\"ok\":false,\"error\":" + JsonStr(e) + "}}");
+                    Log("AI 工具失败: " + e);
+                }
+                finally
+                {
+                    try { if (File.Exists(inFile)) File.Delete(inFile); } catch { }
+                    try { if (File.Exists(outFile)) File.Delete(outFile); } catch { }
+                    try { if (File.Exists(snap)) File.Delete(snap); } catch { }
+                    try { if (!string.IsNullOrEmpty(maskTemp) && File.Exists(maskTemp)) File.Delete(maskTemp); } catch { }
+                }
+            }) { IsBackground = true }.Start();
+        }
+
+        void AiToolPickBackground()
+        {
+            try
+            {
+                using (var d = new OpenFileDialog())
+                {
+                    d.Title = "选择背景图片";
+                    d.Filter = "图片|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tif;*.tiff";
+                    if (d.ShowDialog() == DialogResult.OK)
+                        Send("{\"type\":\"aitool_bgpath\",\"path\":" + JsonStr(d.FileName) + "}");
+                }
+            }
+            catch (Exception ex) { Log("选择背景图失败: " + ex.Message); }
+        }
+
+        void AiToolMaskBase()
+        {
+            int idx = selected;
+            if (idx < 0 || idx >= files.Count)
+            {
+                Send("{\"type\":\"toast\",\"msg\":\"请先在左侧选中一张图片。\"}");
+                return;
+            }
+            string srcPath = files[idx];
+            Bitmap snapBmp = null;
+            InvokeUi(() =>
+            {
+                try
+                {
+                    if (cachedBase != null && cachedFile == srcPath)
+                        snapBmp = (Bitmap)cachedBase.Clone();
+                    else
+                        snapBmp = LoadBase(srcPath);
+                }
+                catch (Exception ex) { Log("消除底图读取失败: " + ex.Message); }
+            });
+            if (snapBmp == null)
+            {
+                Send("{\"type\":\"toast\",\"msg\":\"无法读取当前图片底图。\"}");
+                return;
+            }
+            try
+            {
+                using (snapBmp)
+                {
+                    int ow = snapBmp.Width, oh = snapBmp.Height;
+                    string data = GenEditPreviewData(snapBmp, 1200);
+                    Send("{\"type\":\"aitool_maskbase\",\"orig\":" + JsonStr(data) +
+                         ",\"width\":" + ow + ",\"height\":" + oh + "}");
+                }
+            }
+            catch (Exception ex) { Log("消除底图发送失败: " + ex.Message); }
+        }
+
         void GenEditInstall()
         {
             if (genEditInstalling) { Send("{\"type\":\"toast\",\"msg\":\"模型正在下载，请稍候\"}"); return; }
@@ -2893,7 +3223,6 @@ namespace ImageBatchTool
                 dedupForm = f;
                 dedupWeb = w;
                 dedupGlass = new GlassBackdrop(f, w);
-                dedupGlass.PrimeDesktop();
                 f.FormClosed += (s, e) =>
                 {
                     try { if (dedupGlass != null) { dedupGlass.Dispose(); dedupGlass = null; } } catch { }
@@ -2927,6 +3256,7 @@ namespace ImageBatchTool
                 w.CoreWebView2.WebMessageReceived += DupWeb_Message;
                 w.CoreWebView2.NavigationCompleted += (s, e) => Log("去重窗口页面加载完成 success=" + e.IsSuccess + " url=" + w.Source);
                 string skin = ReadSkinName();
+                if (skin == "aurora") skin = "dark";
                 Log("去重窗口开始导航");
                 w.CoreWebView2.Navigate("http://app.local/dedup.html?skin=" + skin + "&v=" + DateTime.Now.Ticks);
             }
@@ -3090,10 +3420,26 @@ namespace ImageBatchTool
                 {
                     case "ready":
                         Log("页面 ready，显示主窗口");
+                        webPageReady = true;
                         if (Splash != null) { Splash.Close(); Splash.Dispose(); Splash = null; }
-                        ApplyNativeSkin(ReadSkinName());
+                        string readySkin = ReadSkinName();
+                        bool deferGlass = AuroraWindowGlass && NormalizeSkin(readySkin) == "aurora";
+                        if (!deferGlass) ApplyNativeSkin(readySkin);
                         if (Opacity < 1) Opacity = 1;
                         Show(); Activate();
+                        if (deferGlass)
+                        {
+                            // 先让 WebView2 真正画出一帧，再加分层透明；过早设置会让整块网页不显示。
+                            var glassTimer = new System.Windows.Forms.Timer { Interval = 260 };
+                            glassTimer.Tick += (s2, e2) =>
+                            {
+                                glassTimer.Stop(); glassTimer.Dispose();
+                                try { ApplyNativeSkin(readySkin); if (Opacity < 1) Opacity = 1; } catch { }
+                                glassBridgeReady = true;
+                                ShowGlassBridge();
+                            };
+                            glassTimer.Start();
+                        }
                         if (AppModule.IsAlbum)
                         {
                             LoadAlbRoots();
@@ -3208,6 +3554,12 @@ namespace ImageBatchTool
                             if (parts[1].StartsWith("crop_") || parts[1].StartsWith("level_")) cachedBase = null;
                         }
                         QueuePreview();
+                        break;
+                    case "glassalpha": {
+                            int ga = 238;
+                            try { if (parts.Length > 1) int.TryParse(parts[1], out ga); } catch { }
+                            SetAuroraAlpha(ga);
+                        }
                         break;
                     case "setbatchparams": {
                             var map = new System.Web.Script.Serialization.JavaScriptSerializer().DeserializeObject(B64Text(parts[1])) as Dictionary<string, object>;
@@ -3696,6 +4048,8 @@ namespace ImageBatchTool
                             File.WriteAllText(Path.Combine(Application.StartupPath, "skin.txt"), skin);
                             File.WriteAllText(AppModule.SharedSkinFile(), skin);
                             ApplyNativeSkin(skin);
+                            glassBridgeReady = skin == "aurora";
+                            if (skin == "aurora") ShowGlassBridge(); else HideGlassBridge();
                             if (dedupForm != null && !dedupForm.IsDisposed) ApplyNativeSkin(skin, dedupForm, dedupWeb);
                         } catch {}
                         break;
@@ -3788,6 +4142,15 @@ namespace ImageBatchTool
                         break;
                     case "genedit":
                         if (parts.Length > 1) GenEditRun(B64Text(parts[1]));
+                        break;
+                    case "aitool":
+                        if (parts.Length > 1) AiToolRun(B64Text(parts[1]));
+                        break;
+                    case "aitool_pickbg":
+                        AiToolPickBackground();
+                        break;
+                    case "aitool_maskbase":
+                        AiToolMaskBase();
                         break;
                     case "genedit_status":
                         SendGenEditStatus();
@@ -11973,6 +12336,18 @@ namespace ImageBatchTool
         }
 
         string JsonStr(string s) { return "\"" + (s??"").Replace("\\","\\\\").Replace("\"","\\\"") + "\""; }
+
+        string ReadJsonString(string json, string key)
+        {
+            try
+            {
+                var m = Regex.Match(json ?? "", "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+                if (!m.Success) return "";
+                string v = m.Groups[1].Value;
+                try { return Regex.Unescape(v); } catch { return v; }
+            }
+            catch { return ""; }
+        }
         static List<object> JList(object o)
         {
             var l = o as List<object>;

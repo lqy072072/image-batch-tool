@@ -77,11 +77,78 @@
   body.skin-light .dup-cell .mt { color:#777; }
   body.skin-light .dup-cell label { color:#444; }
   body.skin-light .dup-list { background:#f7f7fa; }
+  /* v2.30：去重页新皮肤可读性覆盖，浅色皮肤用实体浅底深字，墨色玻璃用实体深底白字 */
+  body.skin-aurora .dup-panel,body.skin-frost .dup-panel{background:#f8fbfe !important;background-image:none !important;color:#1b2b40 !important}
+  body.skin-aurora .dup-head,body.skin-frost .dup-head{background:#fff !important;background-image:none !important;border-color:#d7e0ea !important}
+  body.skin-aurora .dup-head .t,body.skin-frost .dup-head .t{color:#12223a !important}
+  body.skin-aurora .dup-head .s,body.skin-frost .dup-head .s{color:#41536a !important}
+  body.skin-aurora .dup-head .x,body.skin-frost .dup-head .x{color:#41536a !important}
+  body.skin-aurora .dup-tools,body.skin-frost .dup-tools{background:#f2f7fc !important;background-image:none !important;border-color:#d7e0ea !important}
+  body.skin-aurora .mini-btn,body.skin-frost .mini-btn{background:#fff !important;color:#1d334d !important;border-color:#c2d0e0 !important}
+  body.skin-aurora .mini-btn:hover,body.skin-frost .mini-btn:hover{background:#e8f0fa !important}
+  body.skin-aurora .dup-tools > span,body.skin-frost .dup-tools > span,body.skin-aurora .dup-tools > #dupDstPath,body.skin-frost .dup-tools > #dupDstPath{color:#3c4f65 !important}
+  body.skin-aurora .dup-thr,body.skin-frost .dup-thr,body.skin-aurora .dup-rule,body.skin-frost .dup-rule{background:#fff !important;color:#1b2b40 !important;border-color:#c2d0e0 !important}
+  body.skin-aurora .dup-stat,body.skin-frost .dup-stat,body.skin-aurora .dup-path,body.skin-frost .dup-path{color:#41536a !important}
+  body.skin-aurora .dup-list,body.skin-frost .dup-list{background:#f8fbfe !important;background-image:none !important}
+  body.skin-aurora .dup-group,body.skin-frost .dup-group{background:#fff !important;background-image:none !important;border-color:#d3dde8 !important}
+  body.skin-aurora .dup-group-h,body.skin-frost .dup-group-h{color:#33465c !important}
+  body.skin-aurora .dup-cell,body.skin-frost .dup-cell{background:#f7fafd !important;border-color:#d3dde8 !important}
+  body.skin-aurora .dup-cell .nm,body.skin-frost .dup-cell .nm{color:#1b2735 !important}
+  body.skin-aurora .dup-cell .fd,body.skin-frost .dup-cell .fd{color:#435a75 !important}
+  body.skin-aurora .dup-cell .mt,body.skin-frost .dup-cell .mt{color:#4a5c70 !important}
+  body.skin-aurora .dup-cell label,body.skin-frost .dup-cell label{color:#25384d !important}
+  body.skin-aurora .dup-cell .mk,body.skin-frost .dup-cell .mk{color:#216e3d !important}
+  body.skin-aurora .dup-kind,body.skin-frost .dup-kind{color:#226b42 !important;border-color:#8dbb9c !important}
+  body.skin-aurora .dup-kind.sim,body.skin-frost .dup-kind.sim{color:#8a5a00 !important;border-color:#cba45a !important}
+  body.skin-aurora .dup-ignore,body.skin-frost .dup-ignore{color:#3c5268 !important}
+  body.skin-aurora .dup-empty,body.skin-frost .dup-empty{color:#5a6a7c !important}
+  body.skin-smoke .dup-panel{background:#0c1526 !important;background-image:none !important;color:#eef5ff !important}
+  body.skin-smoke .dup-head{background:#121f34 !important;background-image:none !important;border-color:#31435c !important}
+  body.skin-smoke .dup-head .t{color:#f4f8ff !important}
+  body.skin-smoke .dup-head .s{color:#a9bacf !important}
+  body.skin-smoke .dup-head .x{color:#b9c9dd !important}
+  body.skin-smoke .dup-tools{background:#101b2f !important;background-image:none !important;border-color:#31435c !important}
+  body.skin-smoke .mini-btn{background:#22334b !important;color:#eaf3ff !important;border-color:#40556f !important}
+  body.skin-smoke .mini-btn:hover{background:#2d4260 !important}
+  body.skin-smoke .dup-tools > span,body.skin-smoke .dup-tools > #dupDstPath{color:#b9c9dd !important}
+  body.skin-smoke .dup-thr,body.skin-smoke .dup-rule{background:#1b2a42 !important;color:#eef5ff !important;border-color:#40556f !important}
+  body.skin-smoke .dup-stat,body.skin-smoke .dup-path{color:#a3b5ca !important}
+  body.skin-smoke .dup-list{background:#0c1526 !important;background-image:none !important}
+  body.skin-smoke .dup-group{background:#142238 !important;background-image:none !important;border-color:#34465f !important}
+  body.skin-smoke .dup-group-h{color:#c0d0e4 !important}
+  body.skin-smoke .dup-cell{background:#1a2840 !important;border-color:#34465f !important}
+  body.skin-smoke .dup-cell .nm{color:#f0f6ff !important}
+  body.skin-smoke .dup-cell .fd{color:#a2b8d3 !important}
+  body.skin-smoke .dup-cell .mt{color:#a5b6ca !important}
+  body.skin-smoke .dup-cell label{color:#c9d8ea !important}
+  body.skin-smoke .dup-cell .mk{color:#8fd6a4 !important}
+  body.skin-smoke .dup-kind{color:#9fe0b2 !important;border-color:#3d6e49 !important}
+  body.skin-smoke .dup-kind.sim{color:#f0c979 !important;border-color:#6b562c !important}
+  body.skin-smoke .dup-ignore{color:#a3b5ca !important}
+  body.skin-smoke .dup-empty{color:#9fb1c7 !important}
+  /* 用 ID 提高优先级，压过 aurora 皮肤里 .dup-panel 透明玻璃的 !important 规则 */
+  body.skin-aurora #dupPanel,body.skin-frost #dupPanel{background:#f8fbfe !important;background-image:none !important}
+  body.skin-aurora #dupPanel *,body.skin-frost #dupPanel *{color:#1b2b40 !important;text-shadow:none !important}
+  body.skin-aurora #dupPanel .dup-head,body.skin-frost #dupPanel .dup-head{background:#fff !important;background-image:none !important;border-bottom:1px solid #d7e0ea !important}
+  body.skin-aurora #dupPanel .dup-tools,body.skin-frost #dupPanel .dup-tools{background:#f2f7fc !important;background-image:none !important;border-bottom:1px solid #d7e0ea !important}
+  body.skin-aurora #dupPanel .dup-group,body.skin-frost #dupPanel .dup-group,body.skin-aurora #dupPanel .dup-cell,body.skin-frost #dupPanel .dup-cell{background:#fff !important;background-image:none !important}
+  body.skin-aurora #dupPanel .mini-btn,body.skin-frost #dupPanel .mini-btn{background:#fff !important;border-color:#c2d0e0 !important}
+  body.skin-aurora #dupPanel .dup-thr,body.skin-frost #dupPanel .dup-thr,body.skin-aurora #dupPanel .dup-rule,body.skin-frost #dupPanel .dup-rule{background:#fff !important;border-color:#c2d0e0 !important}
+  body.skin-aurora #dupPanel .dup-kind,body.skin-frost #dupPanel .dup-kind{color:#226b42 !important;border-color:#8dbb9c !important}
+  body.skin-aurora #dupPanel .dup-kind.sim,body.skin-frost #dupPanel .dup-kind.sim{color:#8a5a00 !important;border-color:#cba45a !important}
+  body.skin-smoke #dupPanel{background:#0c1526 !important;background-image:none !important}
+  body.skin-smoke #dupPanel *{color:#eef5ff !important;text-shadow:none !important}
+  body.skin-smoke #dupPanel .dup-head{background:#121f34 !important;background-image:none !important;border-bottom:1px solid #31435c !important}
+  body.skin-smoke #dupPanel .dup-tools{background:#101b2f !important;background-image:none !important;border-bottom:1px solid #31435c !important}
+  body.skin-smoke #dupPanel .dup-group,body.skin-smoke #dupPanel .dup-cell{background:#15243c !important;background-image:none !important}
+  body.skin-smoke #dupPanel .mini-btn,body.skin-smoke #dupPanel .dup-thr,body.skin-smoke #dupPanel .dup-rule{background:#22334b !important;border-color:#40556f !important}
+  body.skin-smoke #dupPanel .dup-kind{color:#9fe0b2 !important;border-color:#3d6e49 !important}
+  body.skin-smoke #dupPanel .dup-kind.sim{color:#f0c979 !important;border-color:#6b562c !important}
 </style>
-<script src="skins/skin-core.js?v=2288"></script>
+<script src="skins/skin-core.js?v=2360"></script>
 </head>
 <body>
-<div class="dup-panel">
+<div class="dup-panel" id="dupPanel">
   <div class="dup-head" id="dupHead">
     <div class="ops" style="display:flex;align-items:center;gap:8px">
       <div class="light red" onclick="post('dupwinclose')" title="关闭"></div>

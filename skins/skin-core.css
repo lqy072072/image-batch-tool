@@ -464,7 +464,6 @@ body.skin-aurora .dup-panel {
 }
 body.skin-aurora .alb-modal,
 body.skin-aurora .fx-modal > .fx-card,
-body.skin-aurora .skin-menu,
 body.skin-aurora .alb-opt-menu,
 body.skin-aurora .alb-ctx {
   animation: lgPopIn .42s cubic-bezier(.16,.86,.26,1) both;

@@ -163,7 +163,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-css', def.id);
-      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2288';
+      link.href = def.css.indexOf('://') >= 0 ? def.css : base + def.css + '?v=2360';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -173,7 +173,7 @@
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.setAttribute('data-skin-core', '1');
-      link.href = base + 'skin-core.css?v=2288';
+      link.href = base + 'skin-core.css?v=2360';
       document.head.appendChild(link);
     } catch (e) {}
   }
@@ -348,12 +348,16 @@
       if (!window.chrome || !chrome.webview || !chrome.webview.addEventListener) return;
       chrome.webview.addEventListener('message', function (e) {
         var d = e && e.data;
+        // v2.32: 真透明模式会先发 clear，避免沿用上一张静态桌面快照。
+        if (d && d.type === 'glassbg' && d.clear) {
+          document.documentElement.style.removeProperty('--live-glass');
+          document.documentElement.classList.remove('glass-static');
+          return;
+        }
+        // v2.29 静态回退：只接收一帧静态玻璃底图。
         if (d && d.type === 'glassbg' && d.data) {
-          try {
-            var live = 'url("' + d.data + '")';
-            document.documentElement.style.setProperty('--live-glass', live);
-            if (document.body) document.body.style.setProperty('--live-glass', live);
-          } catch (e2) {}
+          document.documentElement.style.setProperty('--live-glass', 'url("' + d.data + '")');
+          document.documentElement.classList.add('glass-static');
           return;
         }
         if (d && d.type === 'skin' && d.skin && normalize(d.skin) !== current)

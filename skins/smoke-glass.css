@@ -1445,3 +1445,57 @@ body.skin-smoke .lut-item .tag,
 body.skin-smoke .output-info { color: var(--lg-muted) !important; }
 body.skin-smoke .left .btn,
 body.skin-smoke .left .mini-btn { color: #f4f9ff !important; }
+
+/* ==========================================================================
+   v2.30 · 可读性补强（只改颜色/不透明度，不改功能与布局）
+   深色玻璃在明亮桌面背景上会被冲淡，顶栏与折叠标题的白字对比不足。
+   这里把顶栏、折叠头和面板底压到稳定深色，保证白字始终可读。
+   ========================================================================== */
+body.skin-smoke .titlebar,
+body.skin-smoke .toolbar,
+body.skin-smoke .bottombar {
+  background: linear-gradient(180deg, rgba(15,27,50,.94) 0%, rgba(8,17,34,.84) 58%, rgba(14,25,47,.90) 100%) !important;
+  border-color: rgba(255,255,255,.22) !important;
+}
+body.skin-smoke .section-header {
+  background: linear-gradient(180deg, rgba(20,35,62,.90) 0%, rgba(10,21,41,.78) 100%) !important;
+  color: #f6faff !important;
+  border-bottom: 1px solid rgba(255,255,255,.16) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.48) !important;
+}
+body.skin-smoke .section-header .arrow,
+body.skin-smoke .section-header .arrow span { color: rgba(224,239,255,.82) !important; }
+body.skin-smoke .left,
+body.skin-smoke .right {
+  background:
+    radial-gradient(120% 62% at 16% -12%, rgba(93,138,202,.28) 0%, rgba(93,138,202,0) 56%),
+    linear-gradient(146deg, rgba(19,33,61,.90) 0%, rgba(9,19,38,.84) 44%, rgba(29,23,58,.88) 100%) !important;
+}
+body.skin-smoke .left-header,
+body.skin-smoke .left-header .count,
+body.skin-smoke .file-item,
+body.skin-smoke .file-item .fsize,
+body.skin-smoke .lut-item,
+body.skin-smoke .lut-group-title,
+body.skin-smoke .output-info,
+body.skin-smoke .bottom-label,
+body.skin-smoke .zoom-label,
+body.skin-smoke .status,
+body.skin-smoke .status-pct,
+body.skin-smoke .hist-labels,
+body.skin-smoke .row-line,
+body.skin-smoke .row-line > span,
+body.skin-smoke .slider-row label,
+body.skin-smoke .slider-row .val,
+body.skin-smoke .chk,
+body.skin-smoke .edx-tip,
+body.skin-smoke .gen-help,
+body.skin-smoke .gen-note {
+  text-shadow: 0 1px 2px rgba(0,0,0,.36) !important;
+}
+body.skin-smoke .file-item.sel,
+body.skin-smoke .lut-item.sel {
+  color: #ffffff !important;
+  background: rgba(72,150,235,.30) !important;
+}
+

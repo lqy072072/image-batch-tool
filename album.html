@@ -553,7 +553,7 @@ body.skin-light .alb-day-h:hover { background:#eaeaf0; color:#111; }
 .alb-cell .favmk { position:absolute; right:6px; top:6px; font-size:14px; line-height:1; color:#ffd15c; text-shadow:0 1px 4px rgba(0,0,0,.8); }
 .alb-cell .ratebar { position:absolute; right:6px; bottom:22px; font-size:9px; color:#ffd15c; background:rgba(0,0,0,.45); border-radius:4px; padding:1px 4px; }
 .alb-cell .dur { position:absolute; right:6px; bottom:6px; font-size:10px; color:#eee; background:rgba(0,0,0,.6); padding:2px 6px; border-radius:4px; }
-.alb-cell .meta { position:absolute; left:0; right:0; bottom:0; padding:14px 6px 4px; font-size:9px; color:#bbb; background:linear-gradient(transparent,rgba(0,0,0,.72)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.alb-cell .meta { position:absolute; left:0; right:0; bottom:0; padding:14px 6px 4px; font-size:10px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.92); background:linear-gradient(transparent,rgba(0,0,0,.82)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .alb-cell .chk { position:absolute; right:6px; top:6px; width:16px; height:16px; display:none; }
 .alb-cell.sel .chk { display:block; }
 .alb-cell.checked { box-shadow:0 0 0 2px #2f7dd1 inset; }
@@ -642,6 +642,39 @@ body.skin-light .bin-dir { color:#777; }
 body.skin-light .bin-btn { background:#eff0f3; color:#333; border-color:#d5d7dd; }
 body.skin-light .bin-cell { background:#fff; border-color:#ddd; }
 body.skin-light .bin-name { color:#222; }
+/* v2.30：新皮肤回收站改成高不透明实体面板，避免缩略图透上来导致标题/文件名看不清 */
+body.skin-aurora .bin-panel,body.skin-frost .bin-panel{background:rgba(250,253,255,.97) !important;background-image:none !important;border-color:#bfcddd !important;box-shadow:0 24px 64px rgba(12,26,48,.35) !important}
+body.skin-aurora #binOverlay .bin-panel,body.skin-frost #binOverlay .bin-panel{background:#f9fcff !important;background-image:none !important}
+body.skin-aurora #binOverlay .bin-head,body.skin-frost #binOverlay .bin-head{background:#fff !important;background-image:none !important}
+body.skin-aurora .bin-title,body.skin-frost .bin-title{color:#14243a !important}
+body.skin-aurora .bin-dir,body.skin-frost .bin-dir{color:#41536a !important}
+body.skin-aurora .bin-btn,body.skin-frost .bin-btn{background:#edf2f8 !important;color:#1d334d !important;border-color:#c2d0e0 !important}
+body.skin-aurora .bin-btn:hover,body.skin-frost .bin-btn:hover{background:#e1eaf5 !important}
+body.skin-aurora .bin-btn.danger,body.skin-frost .bin-btn.danger{background:#b43737 !important;color:#fff !important;border-color:#8f2626 !important}
+body.skin-aurora .bin-cell,body.skin-frost .bin-cell{background:#fff !important;border-color:#d3dde8 !important}
+body.skin-aurora .bin-name,body.skin-frost .bin-name{color:#1b2735 !important}
+body.skin-aurora .bin-sub,body.skin-frost .bin-sub{color:#4b5c70 !important}
+body.skin-aurora .bin-foot,body.skin-frost .bin-foot{background:#f2f6fb !important;border-color:#d7e0ea !important;color:#33445a !important}
+body.skin-aurora .bin-empty,body.skin-frost .bin-empty{color:#5a6a7c !important}
+body.skin-smoke .bin-panel{background:rgba(13,21,38,.96) !important;border-color:rgba(135,165,205,.45) !important;box-shadow:0 24px 64px rgba(0,0,0,.6) !important}
+body.skin-smoke #binOverlay .bin-panel{background:#0d1526 !important;background-image:none !important}
+body.skin-smoke #binOverlay .bin-head{background:#18263d !important;background-image:none !important}
+body.skin-smoke .bin-head{background:#18263d !important;border-color:rgba(135,165,205,.32) !important}
+body.skin-smoke .bin-title{color:#f2f7ff !important}
+body.skin-smoke .bin-dir{color:#b8c8dd !important}
+body.skin-smoke .bin-btn{background:#263750 !important;color:#eaf4ff !important;border-color:#4a6180 !important}
+body.skin-smoke .bin-btn:hover{background:#314763 !important}
+body.skin-smoke .bin-cell{background:#1b2840 !important;border-color:#384b66 !important}
+body.skin-smoke .bin-name{color:#eef6ff !important}
+body.skin-smoke .bin-sub{color:#a8b8cc !important}
+body.skin-smoke .bin-foot{background:#16233a !important;border-color:#34465f !important;color:#c2d2e6 !important}
+body.skin-smoke .bin-empty{color:#9fb1c7 !important}
+/* v2.30：相册角标/时长也统一成深底白字，避免新皮肤浅色玻璃角标在浅照片上看不清 */
+body.skin-aurora .alb-cell .badge.badge,body.skin-frost .alb-cell .badge.badge,body.skin-smoke .alb-cell .badge.badge{background:rgba(8,20,36,.82) !important;background-image:none !important;color:#fff !important;border:1px solid rgba(255,255,255,.22) !important;text-shadow:0 1px 2px rgba(0,0,0,.6) !important}
+body.skin-aurora .alb-cell .dur,body.skin-frost .alb-cell .dur,body.skin-smoke .alb-cell .dur{background:rgba(8,20,36,.82) !important;color:#fff !important;text-shadow:0 1px 2px rgba(0,0,0,.6) !important}
+body.skin-aurora .alb-cell .ratebar,body.skin-frost .alb-cell .ratebar,body.skin-smoke .alb-cell .ratebar{background:rgba(8,20,36,.78) !important;color:#ffd987 !important}
+body.skin-smoke .alb-tab{color:#d3e2f5 !important}
+body.skin-smoke .alb-tab.on{background:#2f7dd1 !important;color:#fff !important;border-color:#62a9f0 !important}
 body.skin-light .bin-sub { color:#777; }
 body.skin-light .bin-foot { background:#f6f6f8; border-color:#e2e2e6; color:#666; }
 /* 路径栏 */
@@ -724,7 +757,7 @@ body.skin-light .alb-pcard .nm { color:#222; }
 body.skin-light .alb-vexif { border-color:#ddd; }
 body.skin-light .alb-vexif .v { color:#222; }
 </style>
-<script src="skins/skin-core.js?v=2288"></script>
+<script src="skins/skin-core.js?v=2360"></script>
 <style>body.mode-album .alb-titlebar .top-right span[onclick*="albOptDo('editor')"]{display:none!important;}</style></head>
 <body>
 

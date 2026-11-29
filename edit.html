@@ -244,6 +244,12 @@ body.skin-light select:focus, body.skin-light input:focus {
 body.skin-light input[type=checkbox] { accent-color:#0969da; }
 body.skin-light #lutSearch { background:#ffffff !important; color:#1d1d1f !important; border-color:#c7c7cc !important; }
 body.skin-light #lutSearch::placeholder { color:#8e8e93; }
+body.skin-smoke .lut-item { color:#e4efff !important; }
+body.skin-smoke .lut-item:hover { background:rgba(255,255,255,.08) !important; }
+body.skin-smoke .lut-item.sel { background:rgba(47,125,209,.30) !important; color:#fff !important; }
+body.skin-smoke .lut-group-title { color:#c5d6ea !important; }
+body.skin-smoke #lutSearch { background:#1b2a42 !important; color:#eef5ff !important; border-color:#40556f !important; }
+body.skin-smoke #lutSearch::placeholder { color:#a9bacf !important; }
 body.skin-light .slider-row input[type=range] {
   background:#c7c7cc !important;
   height:4px;
@@ -680,7 +686,7 @@ body.skin-light .edx-curve-wrap { background:#fff; border-color:#d7d9e0; }
 body.skin-light .edx-hsl-row { color:#444; }
 body.skin-light .edx-xmp input[type=text], body.skin-light .edx-xmp input[type=password], body.skin-light .edx-xmp textarea, body.skin-light .edx-video-row input { background:#fff; color:#222; border-color:#d7d9e0; }
 </style>
-<script src="skins/skin-core.js?v=2288"></script>
+<script src="skins/skin-core.js?v=2360"></script>
 <style>body:not(.mode-album) .top-right span[onclick="openAlbum()"]{display:none!important;}</style></head>
 <body>
 
@@ -849,7 +855,7 @@ window.addEventListener('mouseup', function(e) {
       <div class="tool-btn" onclick="edxUndo()" title="撤销 (Ctrl+Z)">↶</div>
       <div class="tool-btn" onclick="edxRedo()" title="重做 (Ctrl+Shift+Z)">↷</div>
       <div class="tool-btn" onclick="edxVersionMenu()" title="非破坏性编辑版本栈">版本 <span class="edx-badge" id="edxVerBadge">0</span></div>
-      <span class="zoom-label" id="edxPerBadge" title="当前照片的参数独立保存">逐张</span><div class="tool-btn" onclick="proOpen('hdr')" title="HDR/堆栈、AI 修复、专业输出">⚙ 专业</div>
+      <span class="zoom-label" id="edxPerBadge" title="当前照片的参数独立保存">逐张</span>
       <div class="spacer"></div>
       <div class="tool-btn" onclick="zoomOut()">−</div>
       <span class="zoom-label" id="zoomLabel">适应</span>
@@ -890,6 +896,7 @@ window.addEventListener('mouseup', function(e) {
       <span class="edx-gr" data-g="portrait" onclick="edxGroup('portrait')">人像</span>
       <span class="edx-gr" data-g="fx" onclick="edxGroup('fx')">特效</span>
       <span class="edx-gr" data-g="create" onclick="edxGroup('create')">专业</span>
+      <span class="edx-gr" data-g="gen" onclick="edxGroup('gen')">AI</span>
     </div>
     <div class="right-section" id="proHubSection">
       <div class="section-header"><span>专业工作台 <span style="font-weight:400;color:#888;font-size:10px">HDR / AI 修复 / 输出</span></span><span class="arrow">▼</span></div>
@@ -1122,6 +1129,120 @@ window.addEventListener('mouseup', function(e) {
       </div>
     </div>
 
+    <div class="right-section" id="aiToolsSection">
+      <div class="section-header"><span>AI 工具箱 <span class="gen-badge">10 项</span></span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <div class="ai-progress" id="aiProgress" style="display:none"><span class="gen-spin"></span><span id="aiProgressText">处理中…</span></div>
+
+        <div class="ai-group-title">基础增强</div>
+
+        <details class="ai-tool">
+          <summary><b>换背景 / 换天空</b><span class="ai-tag">人像分割</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>模式</span>
+              <select id="aiA1Mode" class="mini-sel">
+                <option value="blur">背景虚化</option>
+                <option value="color" selected>纯色</option>
+                <option value="gradient">渐变</option>
+                <option value="sky">换天空</option>
+                <option value="image">图片背景</option>
+              </select>
+            </div>
+            <div class="ai-line"><span>颜色</span><input type="color" id="aiA1C1" value="#e8f0f8"><input type="color" id="aiA1C2" value="#c6d8ea"><span class="ai-mini-note">纯色用左色，渐变用两色</span></div>
+            <div class="ai-line"><span>背景图</span><span class="ai-path" id="aiA1Bg">未选择</span><button class="mini-btn" onclick="aiPickBg()">选择</button></div>
+            <div class="ai-actions"><button class="ai-run ai-primary-sm" onclick="aiA1()">一键换背景</button></div>
+            <div class="ai-tool-status" id="aiA1Status">适合人像、证件照、商品图；发丝边缘自动羽化。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>面部局部精修</b><span class="ai-tag">FaceParser</span></summary>
+          <div class="ai-tool-body">
+            <div class="slider-row"><span>强度</span><input type="range" id="aiA2Strength" min="20" max="100" value="70" oninput="document.getElementById('aiA2StrengthV').textContent=this.value"><span class="val" id="aiA2StrengthV">70</span></div>
+            <label class="chk"><input type="checkbox" id="aiA2Teeth" checked> 牙齿美白</label>
+            <label class="chk"><input type="checkbox" id="aiA2Oil" checked> 去油光</label>
+            <label class="chk"><input type="checkbox" id="aiA2Blemish" checked> 祛斑/痘印</label>
+            <label class="chk"><input type="checkbox" id="aiA2Redeye" checked> 红眼去色</label>
+            <div class="ai-actions"><button class="ai-run" onclick="aiA2()">精修面部</button></div>
+            <div class="ai-tool-status" id="aiA2Status">只改皮肤、牙齿、眼周与痘印，不换脸、不重塑五官。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>一键打码</b><span class="ai-tag">隐私</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>方式</span><select id="aiA3Style" class="mini-sel"><option value="blur">高斯模糊</option><option value="mosaic">马赛克</option></select></div>
+            <label class="chk"><input type="checkbox" id="aiA3Face" checked> 人脸打码</label>
+            <label class="chk"><input type="checkbox" id="aiA3Plate" checked> 车牌打码</label>
+            <div class="ai-actions"><button class="ai-run" onclick="aiA3()">开始打码</button></div>
+            <div class="ai-tool-status" id="aiA3Status">分享前隐藏路人和车牌，保留主体清晰。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>智能裁切构图</b><span class="ai-tag">人脸优先</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>比例</span><select id="aiA4Ratio" class="mini-sel"><option>1:1</option><option>4:5</option><option>3:4</option><option selected>16:9</option><option>9:16</option><option>3:2</option><option>2:3</option></select></div>
+            <div class="ai-actions"><button class="ai-run" onclick="aiA4()">按主体裁切</button></div>
+            <div class="ai-tool-status" id="aiA4Status">有人脸时保头部与肩线；无脸时按清晰度、饱和度和中心先验找主体。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>照片评分 / 挑片</b><span class="ai-tag">画质</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-actions"><button class="ai-run" onclick="aiA5()">给当前照片评分</button></div>
+            <div class="ai-tool-status" id="aiA5Status">综合清晰度、曝光、对比、色彩、人脸与闭眼检测。</div>
+          </div>
+        </details>
+
+        <div class="ai-group-title">创作增强</div>
+
+        <details class="ai-tool">
+          <summary><b>一键抠图（透明底）</b><span class="ai-tag">发丝级</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-actions"><button class="ai-run" onclick="aiB1()">抠出透明 PNG</button></div>
+            <div class="ai-tool-status" id="aiB1Status">输出带 Alpha 的 PNG，可直接用于海报/电商主图。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>智能消除</b><span class="ai-tag">涂抹 + AI</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-actions"><button class="ai-run ai-primary-sm" onclick="aiB2Mask()">在图上涂抹消除</button><button class="ai-run ai-alt-sm" onclick="aiB2QuickPick()">快速纹理消除</button></div>
+            <div class="ai-tool-status" id="aiB2Status">用画笔直接抹掉路人、电线、垃圾桶等杂物，AI 会按周围纹理、透视和光线补全背景。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>智能扩图</b><span class="ai-tag">本机 · 背景延展</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>方向</span><select id="aiB3Dir" class="mini-sel"><option value="all">四周 · 竖图只扩左右</option><option value="horizontal">左右</option><option value="left">向左</option><option value="right">向右</option><option value="top">向上</option></select></div>
+            <div class="slider-row"><span>扩展</span><input type="range" id="aiB3Pct" min="10" max="50" value="25" oninput="document.getElementById('aiB3PctV').textContent=this.value+'%'"><span class="val" id="aiB3PctV">25%</span></div>
+            <div class="ai-actions"><button class="ai-run" onclick="aiB3()">背景扩图</button></div>
+            <div class="ai-tool-status" id="aiB3Status">只扩大画布并从边缘延展背景，原图人物、脸部、字幕逐像素保留；竖图「四周」只扩左右，不补头顶、不补腿、不重绘身体。近景人像建议用「左右」。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>老照片修复 / 上色</b><span class="ai-tag">GFPGAN</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-actions"><button class="ai-run" onclick="aiB4(0)">修复划痕/人脸</button><button class="ai-run ai-alt-sm" onclick="aiB4(1)">生成式上色</button></div>
+            <div class="ai-tool-status" id="aiB4Status">修复走 GFPGAN + 划痕修补 + 自动影调；上色走 FLUX，保留颗粒与构图。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>去反光 / 去雾</b><span class="ai-tag">FLUX</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-actions"><button class="ai-run" onclick="aiB7()">去除玻璃反光/雾感</button></div>
+            <div class="ai-tool-status" id="aiB7Status">适合玻璃橱窗、车内拍、雾天远景；只去反射与灰雾，不重绘主体。</div>
+          </div>
+        </details>
+
+      </div>
+    </div>
+
     <div class="right-section">
       <div class="section-header"><span>美颜</span><span class="arrow">▼</span></div>
       <div class="section-body">
@@ -1151,6 +1272,54 @@ window.addEventListener('mouseup', function(e) {
           <div class="fx-thumb" onclick="showFx('beauty')" title="美颜前后"><img src="assets/previews/fx_beauty.jpg" alt="美颜"><span>美颜</span></div>
           <div class="fx-thumb" onclick="showFx('liquid')" title="液化：下巴修正"><img src="assets/previews/fx_liquid.jpg" alt="液化"><span>液化</span></div>
         </div>
+      </div>
+    </div>
+
+    <div class="right-section" id="aiPortraitSection">
+      <div class="section-header"><span>人像 AI <span class="gen-badge">FLUX</span></span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <details class="ai-tool">
+          <summary><b>眼神光 / 微笑强化</b><span class="ai-tag">FLUX</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-actions"><button class="ai-run" onclick="aiB5()">自然增强神态</button></div>
+            <div class="ai-tool-status" id="aiB5Status">轻微提亮眼神光、嘴角弧度；不做夸张表情，不改变身份。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>重新打光</b><span class="ai-tag">本地光照</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>光位</span><select id="aiB6Dir" class="mini-sel"><option value="left">左侧光</option><option value="right">右侧光</option><option value="top">顶光</option><option value="back">逆光</option><option value="soft">柔光</option></select></div>
+            <div class="slider-row"><span>冷暖</span><input type="range" id="aiB6Warmth" min="-50" max="50" value="15" oninput="document.getElementById('aiB6WarmthV').textContent=this.value"><span class="val" id="aiB6WarmthV">15</span></div>
+            <div class="ai-actions"><button class="ai-run" onclick="aiB6()">重建光照</button></div>
+            <div class="ai-tool-status" id="aiB6Status">在 LAB 亮度通道重建主光方向，保留肤色与背景结构。</div>
+          </div>
+        </details>
+
+        <details class="ai-tool">
+          <summary><b>人像造型</b><span class="ai-tag">FLUX Portrait</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>造型</span>
+              <select id="aiB8Style" class="mini-sel">
+                <option value="business">商务西装</option>
+                <option value="formal">晚礼服</option>
+                <option value="bridal">婚纱</option>
+                <option value="hanfu">国风汉服</option>
+                <option value="qipao">新中式旗袍</option>
+                <option value="street">街头潮流</option>
+                <option value="hk">复古港风</option>
+                <option value="academic">学院风</option>
+                <option value="y2k">千禧潮流</option>
+                <option value="outdoor">户外机能</option>
+                <option value="korean">韩系清新</option>
+                <option value="art">文艺复古</option>
+              </select>
+            </div>
+            <div class="ai-line"><input type="text" id="aiB8Custom" placeholder="自定义造型，例如：复古机车、飞行员夹克" style="flex:1"></div>
+            <div class="ai-actions"><button class="ai-run" onclick="aiB8()">生成造型</button></div>
+            <div class="ai-tool-status" id="aiB8Status">换服装与妆发，保留脸型、五官和姿势；自定义文字优先于上方预设。</div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -1201,6 +1370,40 @@ window.addEventListener('mouseup', function(e) {
         <div class="fx-row">
           <div class="fx-thumb" onclick="showFx('tilt')" title="移轴：合焦带 + 渐进模糊"><img src="assets/previews/fx_tilt.jpg" alt="移轴"><span>移轴</span></div>
         </div>
+      </div>
+    </div>
+
+    <div class="right-section" id="aiStyleSection">
+      <div class="section-header"><span>风格化 <span class="gen-badge">FLUX</span></span><span class="arrow">▼</span></div>
+      <div class="section-body">
+        <details class="ai-tool" open>
+          <summary><b>风格化生成</b><span class="ai-tag">保留人物与构图</span></summary>
+          <div class="ai-tool-body">
+            <div class="ai-line"><span>风格</span>
+              <select id="aiA7Style" class="mini-sel">
+                <option value="cinematic">电影胶片</option>
+                <option value="anime">日系动漫</option>
+                <option value="oil">古典油画</option>
+                <option value="sketch">铅笔素描</option>
+                <option value="cyber">赛博朋克</option>
+                <option value="water">水彩插画</option>
+                <option value="ink">水墨丹青</option>
+                <option value="pixel">像素艺术</option>
+                <option value="clay">黏土手办</option>
+                <option value="render">3D 渲染</option>
+                <option value="noir">黑白胶片</option>
+                <option value="pop">波普拼贴</option>
+                <option value="fairy">童话插画</option>
+                <option value="fashion">时尚大片</option>
+                <option value="retro">复古胶片</option>
+                <option value="line">极简线稿</option>
+              </select>
+            </div>
+            <div class="ai-line"><input type="text" id="aiA7Custom" placeholder="自定义风格，例如：湿版摄影、青花瓷纹样" style="flex:1"></div>
+            <div class="ai-actions"><button class="ai-run" onclick="aiA7()">风格化生成</button></div>
+            <div class="ai-tool-status" id="aiA7Status">保留人物五官和主要构图，只改色调、笔触与氛围；自定义文字优先于上方预设。</div>
+          </div>
+        </details>
       </div>
     </div>
   </div>
@@ -2359,6 +2562,10 @@ if (window.chrome && chrome.webview) {
       try{ if(window.genHandle) genHandle(m); }catch(e){ try{ post('log|genHandle '+e); }catch(_){} }
       return;
     }
+    if (m.type === 'aitool' || m.type === 'aitool_preview' || m.type === 'aitool_start' || m.type === 'aitool_bgpath' || m.type === 'aitool_maskbase') {
+      try{ if(window.aiHandle) aiHandle(m); }catch(e){ try{ post('log|aiHandle '+e); }catch(_){} }
+      return;
+    }
     if (m.type === 'setparam') {
       const sl = document.getElementById('s_'+m.key);
       const vl = document.getElementById('v_'+m.key);
@@ -2852,6 +3059,7 @@ if (window.chrome && chrome.webview) {
       const sbClear = document.getElementById('statusBox');
       if (sbClear) { sbClear.textContent = '就绪'; sbClear.style.color = ''; }
       drawHist(null);
+      post('glassalpha|238');
     } else if (m.type === 'idpreview') {
       const sbId = document.getElementById('statusBox');
       sbId.textContent = '✓ 证件照预览（导出规格）';
@@ -2866,6 +3074,7 @@ if (window.chrome && chrome.webview) {
       imgId.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
       imgId.onload = function(){ updateGuide(); renderWipe(); };
       imgId.src = m.data;
+      post('glassalpha|250');
       prevId.innerHTML = '';
       prevId.appendChild(imgId);
       if (guideId) prevId.appendChild(guideId);
@@ -2890,6 +3099,7 @@ if (window.chrome && chrome.webview) {
       newImg.style.cssText = 'max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;-webkit-user-drag:none;user-select:none;';
       newImg.onload = function() { updateGuide(); renderWipe(); if(window.edxAfterPreview) edxAfterPreview(); };
       newImg.src = m.data;
+      post('glassalpha|250');
       prev.innerHTML = '';
       prev.appendChild(newImg);
       if (guide) prev.appendChild(guide);
@@ -5717,7 +5927,7 @@ function albPopup(i, cnt){
     '<a href="javascript:void(0)" data-p="'+escAttr(i.p)+'" onclick="albOpenPathEl(this)">查看大图</a></div>';
 }
 </script>
-<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(s.id==='tsPanel') grp='fx'; else if(s.id==='genEditSection'||/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
+<script>function edxGroup(g){ document.querySelectorAll('.right > .right-section').forEach(function(s){ var title=(s.querySelector('.section-header span')||{}).textContent||''; var grp='basic'; if(s.id==='proHubSection') grp='create'; else if(s.id==='tsPanel'||s.id==='aiStyleSection') grp='fx'; else if(s.id==='aiPortraitSection') grp='portrait'; else if(s.id==='genEditSection'||s.id==='aiToolsSection') grp='gen'; else if(/美颜|证件照/.test(title)) grp='portrait'; s.setAttribute('data-edx-group',grp); s.style.display=(grp===g)?'':'none'; }); document.querySelectorAll('.edx-gr').forEach(function(x){ x.classList.toggle('on',x.getAttribute('data-g')===g); }); if(g==='basic'){ try{ if(window.drawHist) drawHist(); }catch(e){} } if(g==='fx'){ try{ if(window.updateGuide) updateGuide(); }catch(e){} } }
 try{ edxGroup('basic'); }catch(e){}
 </script>
 <style>
@@ -5845,6 +6055,95 @@ body.skin-light .gen-result-box,body.skin-frost .gen-result-box,body.skin-aurora
 body.skin-light .gen-result-head,body.skin-frost .gen-result-head,body.skin-aurora .gen-result-head{background:#f4f5f8;border-color:#e3e4e8}
 body.skin-light .gen-result-foot,body.skin-frost .gen-result-foot,body.skin-aurora .gen-result-foot{background:#f4f5f8;border-color:#e3e4e8}
 body.skin-light .gen-result-pane img,body.skin-frost .gen-result-pane img,body.skin-aurora .gen-result-pane img{border-color:#d5d9e0}
+#aiMaskOverlay{position:fixed;inset:0;z-index:10050;background:rgba(4,10,18,.78);display:none;align-items:center;justify-content:center;padding:20px}
+#aiMaskOverlay.on{display:flex}
+.ai-mask-box{width:min(1180px,96vw);max-height:94vh;background:#202328;color:#e7e9ee;border:1px solid #424852;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.ai-mask-head{display:flex;align-items:center;gap:9px;padding:12px 16px;border-bottom:1px solid #363b44;background:#1b1e23}
+.ai-mask-head b{font-size:14px;white-space:nowrap}
+.ai-mask-head span{font-size:10px;color:#a6afbd;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-mask-tools{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #363b44;background:#1d2025;font-size:11px;color:#c4cdd9}
+.ai-mask-tools input[type=range]{width:150px;accent-color:#4ea1ff}
+.ai-mask-tools input[type=text]{flex:1;min-width:160px;max-width:420px;background:#15181d;color:#eff3f8;border:1px solid #45505e;border-radius:5px;padding:5px 7px;font-size:11px}
+.ai-mask-tools .grow{flex:1}
+.ai-mask-body{padding:12px 14px;overflow:auto;min-height:320px;display:flex;align-items:center;justify-content:center}
+.ai-mask-stage{position:relative;display:inline-block;line-height:0;max-width:100%;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.ai-mask-stage img{display:block;max-width:100%;max-height:62vh;object-fit:contain;background:#111}
+.ai-mask-stage canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
+.ai-mask-foot{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid #363b44;background:#1b1e23;font-size:10px;color:#939dab;flex-wrap:wrap}
+.ai-mask-foot .grow{flex:1}
+.ai-mask-foot button{border:1px solid #4b6c93;background:#2f5f8f;color:#fff;border-radius:6px;padding:6px 11px;font-size:11px;cursor:pointer}
+.ai-mask-foot button.alt{background:#3b3f47;border-color:#555b66}
+.ai-mask-foot button.green{background:#2d7a50;border-color:#3e9a66}
+body.skin-light .ai-mask-box,body.skin-frost .ai-mask-box,body.skin-aurora .ai-mask-box{background:#fff;color:#25282e;border-color:#d7d9df}
+body.skin-light .ai-mask-head,body.skin-frost .ai-mask-head,body.skin-aurora .ai-mask-head,body.skin-light .ai-mask-tools,body.skin-frost .ai-mask-tools,body.skin-aurora .ai-mask-tools,body.skin-light .ai-mask-foot,body.skin-frost .ai-mask-foot,body.skin-aurora .ai-mask-foot{background:#f4f5f8;border-color:#dfe3e9;color:#4c5666}
+body.skin-light .ai-mask-tools input[type=text],body.skin-frost .ai-mask-tools input[type=text],body.skin-aurora .ai-mask-tools input[type=text]{background:#fff;color:#222;border-color:#cbd2dc}
+/* AI 工具箱：深色为默认，浅色皮肤单独覆盖，保证表头/正文/状态都看得清 */
+.ai-hint{font-size:11px;line-height:1.65;color:#cfd9e6;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 9px;margin-bottom:7px}
+.ai-topstatus{font-size:11px;line-height:1.55;color:#d7e2ef;margin:5px 0 7px;word-break:break-word}
+.ai-progress{display:flex;align-items:center;gap:7px;font-size:11px;color:#e6effa;background:rgba(65,110,155,.24);border:1px solid rgba(90,140,190,.4);border-radius:6px;padding:7px 8px;margin:6px 0}
+.ai-group-title{font-size:12px;font-weight:600;color:#9fd0ff;margin:11px 0 5px;letter-spacing:.3px}
+.ai-tool{border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(255,255,255,.045);margin:5px 0;overflow:hidden}
+.ai-tool>summary{list-style:none;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 9px;font-size:12px;color:#eaf2fb;cursor:pointer;line-height:1.45}
+.ai-tool>summary::-webkit-details-marker{display:none}
+.ai-tool>summary b{font-weight:600}
+.ai-tool[open]>.ai-tool-body{border-top:1px solid rgba(255,255,255,.1)}
+.ai-tool-body{padding:7px 9px 9px}
+.ai-tag{font-size:9px;font-weight:400;color:#a9d5b8;background:rgba(45,122,80,.25);border:1px solid rgba(99,180,130,.45);border-radius:4px;padding:1px 5px;margin-left:auto}
+.ai-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#d6e1ee;margin:4px 0 6px}
+.ai-line input[type=text]{min-width:0;flex:1;background:#171b20;color:#f2f6fb;border:1px solid #45505e;border-radius:5px;font-size:11px;padding:5px 6px;outline:none}
+.ai-line input[type=text]::placeholder{color:#9caab9}
+.ai-line input[type=color]{width:30px;height:22px;padding:0;border:1px solid #4d5867;border-radius:4px;background:transparent}
+.ai-mini-note{font-size:10px;color:#a8b4c3}
+.ai-path{font-size:10px;color:#aab6c5;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-actions{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 4px}
+.ai-actions button{border:1px solid #4b7fae;background:linear-gradient(180deg,#3b7fb3,#2d628f);color:#fff;border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer}
+.ai-actions button:hover{background:linear-gradient(180deg,#478fc5,#3472a2)}
+.ai-actions button:disabled{opacity:.5;cursor:wait}
+.ai-actions .ai-alt-sm{background:#3b414b;border-color:#586270}
+.ai-tool-status{font-size:11px;line-height:1.6;color:#b9c6d5;margin-top:5px}
+.ai-tool-status.err{color:#ffb4b4}
+.ai-tool-status.ok{color:#9fe0b1}
+.ai-matches{display:flex;flex-direction:column;gap:3px}
+.ai-match{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid rgba(255,255,255,.12);border-radius:5px;background:rgba(255,255,255,.04);cursor:pointer;font-size:10px;color:#dbe6f3}
+.ai-match b{margin-left:auto;color:#9fe0b1}
+.ai-match:hover{border-color:#69a4d4}
+.ai-tool .slider-row{margin:3px 0 5px}
+.ai-tool .chk{margin:3px 0;font-size:11px}
+.ai-boundary{font-size:10px;line-height:1.6;color:#b9c6d5;border:1px dashed rgba(255,255,255,.2);border-radius:6px;padding:6px 8px;margin-top:9px}
+.ai-tool .mini-sel{background:#171b20;color:#eef3f9;border-color:#45505e}
+body.skin-light .ai-hint,body.skin-frost .ai-hint,body.skin-aurora .ai-hint{background:#f5f8fc;border-color:#dde3eb;color:#3f4a59}
+body.skin-light .ai-topstatus,body.skin-frost .ai-topstatus,body.skin-aurora .ai-topstatus{color:#36414f}
+body.skin-light .ai-tool,body.skin-frost .ai-tool,body.skin-aurora .ai-tool{background:#fff;border-color:#d9dfe8}
+body.skin-light .ai-tool>summary,body.skin-frost .ai-tool>summary,body.skin-aurora .ai-tool>summary{color:#222a35}
+body.skin-light .ai-tool>summary b,body.skin-frost .ai-tool>summary b,body.skin-aurora .ai-tool>summary b{color:#1d2733}
+body.skin-light .ai-tag,body.skin-frost .ai-tag,body.skin-aurora .ai-tag{color:#226b41;background:#eaf7ee;border-color:#b9dfc5}
+body.skin-light .ai-line,body.skin-frost .ai-line,body.skin-aurora .ai-line{color:#33404f}
+body.skin-light .ai-line input[type=text],body.skin-frost .ai-line input[type=text],body.skin-aurora .ai-line input[type=text]{background:#fff;color:#1f2630;border-color:#cfd6df}
+body.skin-light .ai-line input[type=text]::placeholder,body.skin-frost .ai-line input[type=text]::placeholder,body.skin-aurora .ai-line input[type=text]::placeholder{color:#6f7b89}
+body.skin-light .ai-mini-note,body.skin-frost .ai-mini-note,body.skin-aurora .ai-mini-note{color:#38485a}
+body.skin-light .ai-path,body.skin-frost .ai-path,body.skin-aurora .ai-path{color:#2f4052}
+body.skin-light .ai-tool-status,body.skin-frost .ai-tool-status,body.skin-aurora .ai-tool-status{color:#22303f}
+body.skin-light .ai-tool-status.ok,body.skin-frost .ai-tool-status.ok,body.skin-aurora .ai-tool-status.ok{color:#14612f}
+body.skin-light .ai-tool-status.err,body.skin-frost .ai-tool-status.err,body.skin-aurora .ai-tool-status.err{color:#a81818}
+body.skin-light .ai-boundary,body.skin-frost .ai-boundary,body.skin-aurora .ai-boundary{color:#2c3a49;border-color:#b8c2cf}
+body.skin-light .ai-match,body.skin-frost .ai-match,body.skin-aurora .ai-match{background:#f7f9fc;border-color:#d5dde7;color:#26313e}
+body.skin-light .ai-match b,body.skin-frost .ai-match b,body.skin-aurora .ai-match b{color:#14612f}
+body.skin-light .ai-group-title,body.skin-frost .ai-group-title,body.skin-aurora .ai-group-title{color:#14527f}
+/* 用 ID 压过皮肤后加载的 !important 规则，保证 AI 工具箱提示文字在浅色皮肤上不发白 */
+body.skin-light #aiToolsSection .ai-hint,body.skin-frost #aiToolsSection .ai-hint,body.skin-aurora #aiToolsSection .ai-hint{color:#3f4a59 !important;background:#f5f8fc !important;border-color:#dde3eb !important}
+body.skin-light #aiToolsSection .ai-topstatus,body.skin-frost #aiToolsSection .ai-topstatus,body.skin-aurora #aiToolsSection .ai-topstatus{color:#36414f !important}
+body.skin-light #aiToolsSection .ai-tool-status,body.skin-frost #aiToolsSection .ai-tool-status,body.skin-aurora #aiToolsSection .ai-tool-status{color:#22303f !important}
+body.skin-light #aiToolsSection .ai-tool-status.ok,body.skin-frost #aiToolsSection .ai-tool-status.ok,body.skin-aurora #aiToolsSection .ai-tool-status.ok{color:#14612f !important}
+body.skin-light #aiToolsSection .ai-tool-status.err,body.skin-frost #aiToolsSection .ai-tool-status.err,body.skin-aurora #aiToolsSection .ai-tool-status.err{color:#a81818 !important}
+body.skin-light #aiToolsSection .ai-boundary,body.skin-frost #aiToolsSection .ai-boundary,body.skin-aurora #aiToolsSection .ai-boundary{color:#2c3a49 !important;border-color:#b8c2cf !important}
+body.skin-light .ai-tool .mini-sel,body.skin-frost .ai-tool .mini-sel,body.skin-aurora .ai-tool .mini-sel{background:#fff;color:#222;border-color:#cfd6df}
+body.skin-light .ai-progress,body.skin-frost .ai-progress,body.skin-aurora .ai-progress{background:#eef6ff;border-color:#c9def2;color:#31516d}
+body.skin-light #genEditSection .chk,body.skin-frost #genEditSection .chk,body.skin-aurora #genEditSection .chk{color:#1c2733 !important}
+body.skin-light #genEditSection .gen-help,body.skin-frost #genEditSection .gen-help,body.skin-aurora #genEditSection .gen-help{color:#33404f !important}
+body.skin-light #aiToolsSection .ai-actions button,body.skin-frost #aiToolsSection .ai-actions button,body.skin-aurora #aiToolsSection .ai-actions button{background:linear-gradient(180deg,#2f7fc4,#24649c) !important;border:1px solid #205c91 !important;color:#fff !important;text-shadow:0 1px 1px rgba(0,0,0,.18);box-shadow:0 1px 2px rgba(20,50,80,.22)}
+body.skin-light #aiToolsSection .ai-actions .ai-alt-sm,body.skin-frost #aiToolsSection .ai-actions .ai-alt-sm,body.skin-aurora #aiToolsSection .ai-actions .ai-alt-sm{background:linear-gradient(180deg,#eef2f7,#dfe6ee) !important;border-color:#b9c4d1 !important;color:#22303f !important;text-shadow:none}
+/* 透明底结果用棋盘格背景，避免误以为白底 */
+.gen-result-pane img.alpha{background-color:#2a2d31;background-image:linear-gradient(45deg,#3a3e43 25%,transparent 25%,transparent 75%,#3a3e43 75%,#3a3e43),linear-gradient(45deg,#3a3e43 25%,transparent 25%,transparent 75%,#3a3e43 75%,#3a3e43);background-size:16px 16px;background-position:0 0,8px 8px}
 </style>
 <div id="proOverlay" onclick="if(event.target===this)proClose()">
   <div class="pro-box" role="dialog" aria-modal="true" aria-label="专业工具">
@@ -5923,9 +6222,37 @@ body.skin-light .gen-result-pane img,body.skin-frost .gen-result-pane img,body.s
   </div>
 </div>
 
+<div id="aiMaskOverlay" onclick="if(event.target===this)aiMaskClose()">
+  <div class="ai-mask-box" role="dialog" aria-modal="true" aria-label="智能消除涂抹">
+    <div class="ai-mask-head">
+      <b>智能消除</b><span>用画笔涂抹要消除的区域，红色覆盖处会被 AI 补全</span>
+      <button class="gen-result-close" onclick="aiMaskClose()" title="关闭">×</button>
+    </div>
+    <div class="ai-mask-tools">
+      <span>画笔</span><input type="range" id="aiMaskSize" min="8" max="120" value="34" oninput="document.getElementById('aiMaskSizeV').textContent=this.value"><span class="val" id="aiMaskSizeV">34</span>
+      <button class="mini-btn" id="aiMaskEraseBtn" onclick="aiMaskErase()">橡皮</button>
+      <button class="mini-btn" onclick="aiMaskClear()">清空</button>
+      <span class="grow"></span>
+      <input type="text" id="aiMaskHint" placeholder="补充说明（可选），例如：去掉路人、电线" maxlength="80">
+    </div>
+    <div class="ai-mask-body">
+      <div class="ai-mask-stage" id="aiMaskStage">
+        <img id="aiMaskImg" alt="待消除图片">
+        <canvas id="aiMaskView"></canvas>
+      </div>
+      <canvas id="aiMaskData" style="display:none"></canvas>
+    </div>
+    <div class="ai-mask-foot">
+      <span id="aiMaskMeta">按住鼠标涂抹，滚轮可调画笔大小</span><span class="grow"></span>
+      <button class="alt" onclick="aiMaskClose()">取消</button>
+      <button class="alt" onclick="aiMaskRun('quick')">快速纹理消除</button>
+      <button class="green" onclick="aiMaskRun('ai')">AI 消除</button>
+    </div>
+  </div>
+</div>
 <div id="genOverlay" onclick="if(event.target===this)genClose()">
   <div class="gen-result-box" role="dialog" aria-modal="true" aria-label="生成式修图结果">
-    <div class="gen-result-head"><b>生成式修图结果</b><span class="sub" id="genResultSub">FLUX.2 Klein 4B</span><button class="gen-result-close" onclick="genClose()" title="关闭">×</button></div>
+    <div class="gen-result-head"><b id="genResultTitle">AI 处理结果</b><span class="sub" id="genResultSub">FLUX.2 Klein 4B</span><button class="gen-result-close" onclick="genClose()" title="关闭">×</button></div>
     <div class="gen-result-body">
       <div class="gen-result-pane"><span>原图 / 当前裁切</span><img id="genOrigImg" alt="原图"></div>
       <div class="gen-result-pane"><span>生成结果</span><img id="genResultImg" alt="生成结果"></div>
@@ -5990,7 +6317,7 @@ body.skin-light .gen-result-pane img,body.skin-frost .gen-result-pane img,body.s
   };
   window.genRandomSeed=function(){ var s=el('genSeed'); if(s)s.value=String(Math.floor(Math.random()*2147483647)); };
   window.genRun=function(){
-    if(GEN.busy){ toast('正在生成，请等这一张完成'); return; }
+    if(GEN.busy || (window._ai && window._ai.busy)){ toast('正在处理，请等这一张完成'); return; }
     var p=el('genPrompt'); var prompt=(p?p.value:'')||'';
     prompt=prompt.trim();
     if(!prompt){ toast('先写一句想怎么修，或点一个预设'); if(p)p.focus(); return; }
@@ -6054,6 +6381,7 @@ body.skin-light .gen-result-pane img,body.skin-frost .gen-result-pane img,body.s
       if(oi)oi.src=m.orig||'';
       if(ri)ri.src=m.result||'';
       var sub=el('genResultSub'); if(sub)sub.textContent=(GEN.lastCfg&&GEN.lastCfg.mode==='portrait'?'人像模式':'修图模式')+' · FLUX.2 Klein 4B';
+      var ti=el('genResultTitle'); if(ti)ti.textContent='生成式修图结果';
       var meta=el('genResultMeta'); if(meta)meta.textContent=GEN.lastMeta||'生成完成';
       var ov=el('genOverlay'); if(ov)ov.classList.add('on');
       GEN.busy=false; var b=el('genRunBtn'); if(b){b.disabled=false;b.textContent='生成修图';}
@@ -6077,6 +6405,312 @@ body.skin-light .gen-result-pane img,body.skin-frost .gen-result-pane img,body.s
   };
   document.addEventListener('DOMContentLoaded', function(){ genMode('edit'); setTimeout(genStatus, 420); });
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') genClose(); });
+})();
+</script>
+<script>
+(function(){
+  var AI = window._ai = { busy:false, bgPath:'', last:null, op:'', statusId:'', label:'', maskMode:'ai', lastMaskData:null };
+  function el(id){ return document.getElementById(id); }
+  function toast(s){ try{ toastMsg(s); }catch(e){ console.log(s); } }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function files(){ return (window._files||[]).map(function(f){ return (typeof f==='object')?(f.path||f.name):f; }).filter(Boolean); }
+  function dirOf(p){ p=String(p||'').replace(/\\/g,'/'); var i=p.lastIndexOf('/'); return i>=0?p.slice(0,i):''; }
+  function top(msg,err){ var e=el('aiTopStatus'); if(!e)return; e.textContent=msg||''; e.style.color=err?'#ffb4b4':'#d7e2ef'; }
+  function st(id,msg,kind){ var e=el(id); if(!e)return; e.textContent=msg||''; e.className='ai-tool-status'+(kind?(' '+kind):''); }
+  function prog(on,txt){ var p=el('aiProgress'); if(p)p.style.display=on?'flex':'none'; var t=el('aiProgressText'); if(t&&txt)t.textContent=txt; }
+  function lock(on){ document.querySelectorAll('.ai-run').forEach(function(b){ b.disabled=on; }); }
+  function begin(label,statusId){
+    if(AI.busy){ toast('上一项 AI 任务还在处理'); return false; }
+    if(window._gen && window._gen.busy){ toast('生成式任务正在跑，等它完成再试'); return false; }
+    AI.busy=true; AI.statusId=statusId||''; AI.label=label||'';
+    lock(true); prog(true,(label||'处理中')+'…'); top((label||'处理中')+'…',false);
+    if(statusId) st(statusId,(label||'处理中')+'…');
+    return true;
+  }
+  function done(statusId,msg,kind){
+    AI.busy=false; lock(false); prog(false); top(msg||'完成',kind==='err'); if(statusId) st(statusId,msg||'完成',kind);
+  }
+  function needFile(){ var fs=files(); if(!fs.length){ toast('请先添加照片'); return false; } if(window._selIdx<0){ toast('先在左侧选中一张图片'); return false; } return true; }
+  function send(cfg,label,statusId){
+    AI.op=cfg.op||'';
+    try{ post('aitool|'+edxB64(JSON.stringify(cfg))); }catch(e){ done(statusId,'请求发送失败：'+e,'err'); }
+  }
+  window.aiCv=function(op,cfg,statusId,label){
+    if(!begin(label,statusId))return;
+    cfg=cfg||{}; cfg.op=op; cfg.engine='cv'; send(cfg,label,statusId);
+  };
+  window.aiFlux=function(op,prompt,opt,statusId,label){
+    opt=opt||{};
+    if(!window._gen || !window._gen.ready){ toast('FLUX 模型还没就绪，先在下方「AI 生成式修图」里检测/下载模型'); if(window.genStatus)genStatus(); return; }
+    if(!begin(label,statusId))return;
+    var cfg={op:op,engine:'flux',mode:opt.mode||'edit',prompt:prompt,steps:opt.steps||4,
+      strength:(typeof opt.strength==='number'?opt.strength:0.78),max_side:opt.max_side||parseInt((el('genMaxSide')||{}).value||'0',10)||1024,seed:-1,
+      protect_face:!!opt.protect_face};
+    if(opt.task) cfg.task=opt.task;
+    if(opt.mask_data) cfg.mask_data=opt.mask_data;
+    if(opt.direction) cfg.direction=opt.direction;
+    if(opt.expand_percent) cfg.expand_percent=opt.expand_percent;
+    send(cfg,label,statusId);
+  };
+  window.aiPickBg=function(){ post('aitool_pickbg'); };
+  window.aiA1=function(){
+    if(!needFile())return;
+    var mode=(el('aiA1Mode')||{}).value||'color';
+    var cfg={bg_mode:mode,bg_color:(el('aiA1C1')||{}).value||'#e8f0f8',bg_color2:(el('aiA1C2')||{}).value||'#c6d8ea'};
+    if(mode==='image'){ if(!AI.bgPath){ toast('先点「选择」挑一张背景图'); return; } cfg.bg_image=AI.bgPath; }
+    aiCv('a1_bg',cfg,'aiA1Status','换背景');
+  };
+  window.aiA2=function(){
+    if(!needFile())return;
+    aiCv('a2_retouch',{strength:(parseInt((el('aiA2Strength')||{}).value||'70',10))/100,
+      teeth:!!(el('aiA2Teeth')&&el('aiA2Teeth').checked),oil:!!(el('aiA2Oil')&&el('aiA2Oil').checked),
+      blemish:!!(el('aiA2Blemish')&&el('aiA2Blemish').checked),redeye:!!(el('aiA2Redeye')&&el('aiA2Redeye').checked)},'aiA2Status','面部精修');
+  };
+  window.aiA3=function(){
+    if(!needFile())return;
+    aiCv('a3_privacy',{style:(el('aiA3Style')||{}).value||'blur',face:!!(el('aiA3Face')&&el('aiA3Face').checked),
+      plate:!!(el('aiA3Plate')&&el('aiA3Plate').checked)},'aiA3Status','人脸/车牌打码');
+  };
+  window.aiA4=function(){
+    if(!needFile())return;
+    aiCv('a4_crop',{ratio:(el('aiA4Ratio')||{}).value||'1:1'},'aiA4Status','智能裁切');
+  };
+  window.aiA5=function(){
+    if(!needFile())return;
+    aiCv('a5_score',{},'aiA5Status','画质评分');
+  };
+  window.aiA7=function(){
+    if(!needFile())return;
+    var map={cinematic:'电影胶片质感，柔和青橙色调，细腻胶片颗粒，保留人物五官和构图',
+      anime:'日系动漫插画风格，干净线条，通透色彩，保留人物特征和主要构图',
+      oil:'古典油画风格，厚涂笔触，暖色光感，保留人物五官与构图',
+      sketch:'铅笔素描风格，纸张纹理，明暗排线，保留人物五官与构图',
+      cyber:'赛博朋克风格，霓虹洋红与青蓝光，湿润地面反光，保留人物和构图',
+      water:'水彩插画风格，透明水色晕染，纸张纤维纹理，保留人物五官和主要构图',
+      ink:'中国水墨丹青风格，墨色浓淡与留白，宣纸纹理，保留人物轮廓和主要构图',
+      pixel:'复古像素艺术风格，有限色板与清晰像素块，保留人物特征和构图',
+      clay:'黏土手办风格，柔软圆润的体积感，细腻手工纹理，保留人物五官和构图',
+      render:'精细 3D 渲染风格，柔和全局光与真实材质，保留人物五官和构图',
+      noir:'黑白胶片摄影风格，高对比银盐颗粒，戏剧化光影，保留人物和构图',
+      pop:'波普艺术拼贴风格，高饱和撞色与网点印刷纹理，保留人物轮廓和构图',
+      fairy:'童话绘本插画风格，柔和粉彩与梦幻光晕，保留人物五官和主要构图',
+      fashion:'高端时尚杂志大片风格，精致棚拍光与克制配色，保留人物五官和构图',
+      retro:'九十年代复古胶片风格，暖黄褪色与轻微漏光，保留人物五官和构图',
+      line:'极简线稿风格，干净单色线条与大面积留白，保留人物特征和主要构图'};
+    var custom=((el('aiA7Custom')||{}).value||'').trim();
+    var v=(el('aiA7Style')||{}).value||'cinematic';
+    var prompt=custom?('按用户描述的风格重绘：'+custom+'。保留人物五官、身份特征和主要构图，只改变画风、色调与笔触。'):(map[v]||map.cinematic);
+    aiFlux('a7_style',prompt,{mode:'edit',strength:0.86},'aiA7Status','风格化');
+  };
+  window.aiB1=function(){ if(!needFile())return; aiCv('b1_matte',{},'aiB1Status','抠透明底'); };
+  window.aiB2Mask=function(){
+    if(!needFile())return;
+    AI.maskMode='ai';
+    post('aitool_maskbase');
+  };
+  window.aiB2QuickPick=function(){
+    if(!needFile())return;
+    AI.maskMode='quick';
+    post('aitool_maskbase');
+  };
+  window.aiB2MaskRun=function(mode){
+    if(!AI.lastMaskData){ toast('请先在图上涂抹要消除的区域'); return; }
+    var hint=((el('aiMaskHint')||{}).value||'').trim();
+    var mask=AI.lastMaskData;
+    if(mode==='quick'){
+      aiCv('b2_mask_quick',{mask_data:mask},'aiB2Status','纹理消除');
+      return;
+    }
+    if(!window._gen || !window._gen.ready){
+      toast('FLUX 模型未就绪，已改用本地快速纹理消除');
+      aiCv('b2_mask_quick',{mask_data:mask},'aiB2Status','纹理消除');
+      return;
+    }
+    var p='只重绘被涂抹的区域，去掉其中的杂物，并按周围纹理、透视、光线和色彩完整补全背景；涂抹区域以外保持原样，不要新增物体、文字或重复人物。';
+    if(hint) p+='要消除的内容：'+hint+'。';
+    aiFlux('b2_mask',p,{mode:'edit',strength:0.9,task:'inpaint',mask_data:mask},'aiB2Status','AI 消除');
+  };
+  window.aiB3=function(){
+    if(!needFile())return;
+    var pct=parseInt((el('aiB3Pct')||{}).value||'25',10)||25;
+    aiCv('b3_extend',{direction:(el('aiB3Dir')||{}).value||'all',expand_percent:pct},'aiB3Status','智能扩图');
+  };
+  window.aiB4=function(colorize){
+    if(!needFile())return;
+    if(colorize){
+      aiFlux('b4_colorize','给这张黑白老照片自然上色，色彩真实克制；保留原有颗粒、划痕、人物五官和构图，不美化不变形。',
+        {mode:'edit',strength:0.9,task:'colorize'},'aiB4Status','老照片上色');
+    } else {
+      aiCv('b4_restore',{mode:'old',strength:0.75},'aiB4Status','老照片修复');
+    }
+  };
+  window.aiB5=function(){
+    if(!needFile())return;
+    aiFlux('b5_expression','轻微增强眼神光，让眼睛更有神；嘴角自然上扬一点，保留原本脸型、五官比例、身份特征和皮肤纹理，不做夸张表情。',
+      {mode:'portrait',strength:0.55,protect_face:true},'aiB5Status','神态增强');
+  };
+  window.aiB6=function(){
+    if(!needFile())return;
+    var w=parseInt((el('aiB6Warmth')||{}).value||'15',10)||0;
+    aiCv('b6_relight',{direction:(el('aiB6Dir')||{}).value||'left',strength:0.55,warmth:w/100},'aiB6Status','重新打光');
+  };
+  window.aiB7=function(){
+    if(!needFile())return;
+    aiFlux('b7_deglare','去掉玻璃反光、镜面高光和灰雾，恢复被遮挡区域的真实纹理与色彩；保留主体、构图、清晰度和现场光线，不要换背景或加物体。',
+      {mode:'edit',strength:0.78},'aiB7Status','去反光/去雾');
+  };
+  window.aiB8=function(){
+    if(!needFile())return;
+    var map={business:'换成合身深色商务西装和白衬衫，妆发干净利落，保留脸型、五官、姿势和背景',
+      formal:'换成剪裁利落的晚礼服与精致晚宴妆发，柔和棚拍光，保留脸型、五官、姿势和身份特征',
+      bridal:'换成简洁白色婚纱与自然新娘妆发，柔和棚拍光，保留脸型、五官、姿势和身份特征',
+      hanfu:'换成素雅国风汉服与盘发，含蓄东方妆容，保留脸型、五官、姿势和背景结构',
+      qipao:'换成新中式旗袍与低盘发，克制东方妆容，保留脸型、五官、姿势和身份特征',
+      street:'换成街头潮流穿搭与利落发型，自然城市光，保留脸型、五官、姿势和身份特征',
+      hk:'换成九十年代复古港风造型与妆发，暖调胶片光，保留脸型、五官和姿势',
+      academic:'换成学院风针织衫、衬衫与干净学生妆发，自然窗光，保留脸型、五官和姿势',
+      y2k:'换成千禧 Y2K 潮流穿搭与俏皮妆发，明亮彩色光，保留脸型、五官、姿势和身份特征',
+      outdoor:'换成户外机能外套与清爽妆发，自然日光，保留脸型、五官、姿势和背景',
+      korean:'换成韩系清新穿搭与通透裸妆，柔和自然光，保留脸型、五官、姿势和身份特征',
+      art:'换成文艺复古针织与宽松外套，低饱和胶片色，保留脸型、五官、姿势和背景'};
+    var custom=((el('aiB8Custom')||{}).value||'').trim();
+    var v=(el('aiB8Style')||{}).value||'business';
+    var prompt=custom?('换成用户描述的造型：'+custom+'。保留脸型、五官、身份特征、姿势和背景，只改服装、妆发与整体气质。'):(map[v]||map.business);
+    aiFlux('b8_styling',prompt,{mode:'portrait',strength:0.8,protect_face:true},'aiB8Status','人像造型');
+  };
+  window.aiReveal=function(p){ var d=dirOf(p); if(d) post('proopenfolder|'+edxB64(d)); };
+  var LABELS={a1_bg:'换背景',a2_retouch:'面部精修',a3_privacy:'打码',a4_crop:'智能裁切',a5_score:'画质评分',
+    a7_style:'风格化',b1_matte:'透明抠图',b2_remove:'智能消除',b2_mask:'AI 消除',b2_mask_quick:'纹理消除',b3_outpaint:'智能扩图',b3_extend:'智能扩图',
+    b4_restore:'老照片修复',b4_colorize:'老照片上色',b5_expression:'神态增强',b6_relight:'重新打光',
+    b7_deglare:'去反光/去雾',b8_styling:'人像造型'};
+  function renderScore(d){
+    var m=d.metrics||{};
+    st(AI.statusId,'评分 '+d.score+' · '+(d.label||'')+'　清晰 '+m.sharpness+' · 曝光 '+m.exposure+' · 对比 '+m.contrast+' · 色彩 '+m.color+' · 人脸 '+(m.faces||0)+(m.closed_eyes?(' · 闭眼 '+m.closed_eyes):''),'ok');
+    top('评分 '+d.score+' · '+(d.label||''),false);
+  }
+  function renderMatches(d){
+    var ms=d.matches||[];
+    if(!ms.length){ st(AI.statusId,'没有匹配到，换个说法试试。','err'); return; }
+    var html='<div class="ai-matches">';
+    ms.forEach(function(x){
+      html+='<div class="ai-match" data-p="'+esc(x.path)+'" onclick="aiReveal(this.getAttribute(\'data-p\'))">'+
+        '<span>'+esc(String(x.path).replace(/\\/g,'/').split('/').pop())+'</span><b>'+Math.round((x.score||0)*100)+'%</b></div>';
+    });
+    html+='</div>';
+    var e=el(AI.statusId); if(e){ e.className='ai-tool-status ok'; e.innerHTML=html; }
+    top('找到 '+ms.length+' 张，按语义相关度排序',false);
+  }
+  window.aiHandle=function(m){
+    var t=m.type;
+    if(t==='aitool_start'){ prog(true,'正在准备底图并启动处理…'); return; }
+    if(t==='aitool_maskbase'){
+      if(window.aiMaskOpen) window.aiMaskOpen(m.orig||'', m.width||0, m.height||0, AI.maskMode||'ai');
+      return;
+    }
+    if(t==='aitool_bgpath'){
+      AI.bgPath=m.path||''; var p=el('aiA1Bg'); if(p){ p.textContent=AI.bgPath?AI.bgPath.split(/[\\/]/).pop():'未选择'; p.title=AI.bgPath||''; }
+      var sel=el('aiA1Mode'); if(sel&&AI.bgPath) sel.value='image';
+      return;
+    }
+    if(t==='aitool'){
+      var d=m.data||{}; AI.last=d;
+      var lab=LABELS[m.op]||m.op||'AI 工具';
+      if(!d.ok){ done(AI.statusId,(d.error||'处理失败'),'err'); toast(lab+'失败：'+(d.error||'未知错误')); return; }
+      if(m.op==='a5_score'){ AI.busy=false; lock(false); prog(false); renderScore(d); return; }
+      if(m.op==='a6_search'){ AI.busy=false; lock(false); prog(false); renderMatches(d); return; }
+      done(AI.statusId,lab+'完成 · '+(d.elapsed!=null?(d.elapsed+'s'):'已生成结果')+(d.width?(' · '+d.width+'×'+d.height):''),'ok');
+      return;
+    }
+    if(t==='aitool_preview'){
+      if(!m.path) return;
+      window._gen.lastResult=m.path; window._gen.lastCfg={};
+      var oi=el('genOrigImg'), ri=el('genResultImg');
+      if(oi)oi.src=m.orig||''; if(ri){ ri.src=m.result||''; ri.className=(AI.op==='b1_matte'?'alpha':''); }
+      var ti=el('genResultTitle'); if(ti)ti.textContent='AI 处理结果';
+      var sub=el('genResultSub'); if(sub)sub.textContent=(LABELS[AI.op]||'AI 工具')+' · 本机处理';
+      var meta=el('genResultMeta'); if(meta)meta.textContent=(AI.last&&AI.last.width?AI.last.width+'×'+AI.last.height+' · ':'')+(AI.last&&AI.last.elapsed!=null?AI.last.elapsed+'s':'已生成')+' · '+m.path.split(/[\\/]/).pop();
+      var ov=el('genOverlay'); if(ov)ov.classList.add('on');
+      AI.busy=false; lock(false); prog(false);
+      return;
+    }
+  };
+  var MK={painted:false,erase:false,drawing:false,last:null,w:0,h:0,mode:'ai'};
+  function mkEl(id){ return document.getElementById(id); }
+  function mkCtx(c){ return c.getContext('2d'); }
+  function mkPos(e){
+    var c=mkEl('aiMaskView'), r=c.getBoundingClientRect();
+    var dx=(e.clientX-r.left), dy=(e.clientY-r.top);
+    return {x:dx*(MK.w/r.width||1), y:dy*(MK.h/r.height||1)};
+  }
+  function mkLine(a,b){
+    var size=parseInt((mkEl('aiMaskSize')||{}).value||'34',10)||34;
+    var r=mkEl('aiMaskView').getBoundingClientRect();
+    var lw=Math.max(1,size*(MK.w/(r.width||1)));
+    var vc=mkCtx(mkEl('aiMaskView')), dc=mkCtx(mkEl('aiMaskData'));
+    [vc,dc].forEach(function(c){
+      c.lineWidth=lw; c.lineCap='round'; c.lineJoin='round';
+      c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke();
+    });
+  }
+  function mkDot(p){
+    mkLine(p,{x:p.x+.01,y:p.y+.01});
+  }
+  function mkStroke(a,b){
+    var vc=mkCtx(mkEl('aiMaskView')), dc=mkCtx(mkEl('aiMaskData'));
+    if(MK.erase){
+      vc.globalCompositeOperation='destination-out'; vc.strokeStyle='rgba(0,0,0,1)';
+      dc.globalCompositeOperation='source-over'; dc.strokeStyle='#000';
+    } else {
+      vc.globalCompositeOperation='source-over'; vc.strokeStyle='rgba(255,62,72,.58)';
+      dc.globalCompositeOperation='source-over'; dc.strokeStyle='#fff';
+      MK.painted=true;
+    }
+    mkLine(a,b);
+    vc.globalCompositeOperation='source-over'; dc.globalCompositeOperation='source-over';
+    var meta=mkEl('aiMaskMeta'); if(meta) meta.textContent='已涂抹，可继续加笔或点「AI 消除」';
+  }
+  window.aiMaskOpen=function(src,w,h,mode){
+    var ov=mkEl('aiMaskOverlay'), img=mkEl('aiMaskImg'); if(!ov||!img) return;
+    MK.painted=false; MK.erase=false; MK.drawing=false; MK.mode=mode||'ai'; AI.lastMaskData=null;
+    var eb=mkEl('aiMaskEraseBtn'); if(eb) eb.textContent='橡皮';
+    var hint=mkEl('aiMaskHint'); if(hint) hint.value='';
+    var meta=mkEl('aiMaskMeta'); if(meta) meta.textContent='按住鼠标涂抹，红色覆盖处会被消除';
+    var size=mkEl('aiMaskSize'); if(size) mkEl('aiMaskSizeV').textContent=size.value;
+    img.onload=function(){
+      var nw=img.naturalWidth||w||1000, nh=img.naturalHeight||h||1000;
+      var stage=mkEl('aiMaskStage'); var vc=mkEl('aiMaskView'), dc=mkEl('aiMaskData');
+      if(!nw||!nh) return;
+      MK.w=vc.width=dc.width=nw; MK.h=vc.height=dc.height=nh;
+      var vctx=mkCtx(vc), dctx=mkCtx(dc);
+      vctx.clearRect(0,0,nw,nh);
+      dctx.globalCompositeOperation='source-over'; dctx.fillStyle='#000'; dctx.fillRect(0,0,nw,nh);
+    };
+    img.src=src||'';
+    ov.classList.add('on');
+    var c=mkEl('aiMaskView');
+    c.onpointerdown=function(e){ if(!MK.w)return; e.preventDefault(); MK.drawing=true; MK.last=mkPos(e); mkStroke(MK.last,MK.last); try{c.setPointerCapture(e.pointerId);}catch(x){} };
+    c.onpointermove=function(e){ if(!MK.drawing)return; e.preventDefault(); var p=mkPos(e); mkStroke(MK.last,p); MK.last=p; };
+    c.onpointerup=function(e){ MK.drawing=false; MK.last=null; try{c.releasePointerCapture(e.pointerId);}catch(x){} };
+    c.onpointercancel=function(){ MK.drawing=false; MK.last=null; };
+    c.onwheel=function(e){ e.preventDefault(); var s=mkEl('aiMaskSize'); var v=parseInt(s.value||'34',10)+ (e.deltaY<0?4:-4); v=Math.max(8,Math.min(120,v)); s.value=String(v); mkEl('aiMaskSizeV').textContent=String(v); };
+  };
+  window.aiMaskClose=function(){ var ov=mkEl('aiMaskOverlay'); if(ov) ov.classList.remove('on'); MK.drawing=false; MK.last=null; };
+  window.aiMaskErase=function(){ MK.erase=!MK.erase; var b=mkEl('aiMaskEraseBtn'); if(b) b.textContent=MK.erase?'画笔':'橡皮'; };
+  window.aiMaskClear=function(){
+    var vc=mkCtx(mkEl('aiMaskView')), dc=mkCtx(mkEl('aiMaskData'));
+    vc.clearRect(0,0,MK.w,MK.h); dc.globalCompositeOperation='source-over'; dc.fillStyle='#000'; dc.fillRect(0,0,MK.w,MK.h);
+    MK.painted=false; MK.erase=false; var b=mkEl('aiMaskEraseBtn'); if(b)b.textContent='橡皮';
+    var meta=mkEl('aiMaskMeta'); if(meta) meta.textContent='已清空，重新涂抹要消除的区域';
+  };
+  window.aiMaskRun=function(mode){
+    if(!MK.painted){ toast('请先在图上涂抹要消除的区域'); return; }
+    var dc=mkEl('aiMaskData'); if(!dc||!MK.w){ toast('图片还没有准备好'); return; }
+    AI.lastMaskData=dc.toDataURL('image/png');
+    window.aiMaskClose();
+    window.aiB2MaskRun(mode);
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){ prog(false); });
 })();
 </script>
 <script>
